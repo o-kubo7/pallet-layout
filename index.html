@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#111827">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="パレット配置">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<title>パレット配置図 自動作成（プロトタイプ）</title>
+<style>
+  :root{--bg:#f5f6f8;--card:#fff;--line:#d0d5dd;--ink:#1f2937;--muted:#6b7280;--accent:#2563eb;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+       background:var(--bg);color:var(--ink);font-size:14px;line-height:1.6}
+  header{background:#111827;color:#fff;padding:14px 18px}
+  header h1{margin:0;font-size:17px}
+  header p{margin:4px 0 0;font-size:12px;color:#cbd5e1}
+  .wrap{max-width:1240px;margin:0 auto;padding:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px}
+  .card h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .badge{font-size:11px;background:#eef2ff;color:#3730a3;border-radius:99px;padding:2px 8px}
+  table{border-collapse:collapse;width:100%}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:center}
+  th{background:#f3f4f6;font-weight:600;font-size:12px}
+  td input,td select{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;font-size:13px;text-align:center;background:#fff}
+  td.pallet-cell{font-weight:700;font-size:13px;color:#111827;background:#f8fafc}
+  td.pallet-cell.warn-cell{color:#b45309;background:#fffbeb}
+  .btn{border:0;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-ghost{background:#eef2f7;color:#374151}
+  .btn-on{background:#fde68a;color:#7c2d12}
+  .btn-mini{background:#fee2e2;color:#b91c1c;border-radius:6px;padding:3px 9px;font-size:12px;cursor:pointer;border:0}
+  .row-actions{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  label.chk{font-size:13px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+  .legend{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+  .legend span{display:inline-flex;align-items:center;gap:5px;font-size:12px;background:#f3f4f6;border-radius:6px;padding:3px 8px}
+  .swatch{width:13px;height:13px;border-radius:3px;border:1px solid rgba(0,0,0,.2)}
+  .zone-title{font-weight:700;margin:6px 0;padding:4px 10px;border-radius:6px;display:inline-block}
+  .zone-near{background:#e8f5e9;color:#1b5e20}
+  .zone-far{background:#fff3e0;color:#8a5300}
+  .spaces{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+  .space .name{font-size:12px;font-weight:700;margin-bottom:4px;color:var(--muted)}
+  .grid{display:flex;gap:5px;align-items:flex-end}
+  .grid.top{align-items:flex-start}
+  .grid-h{display:flex;flex-direction:column;gap:5px}
+  .col{display:flex;flex-direction:column-reverse;gap:2px;border:2px solid #111;padding:3px;border-radius:4px;background:#fafafa}
+  .col.top{flex-direction:column}
+  .hline{display:flex;align-items:center;gap:8px}
+  .hrow{display:flex;gap:2px;border:2px solid #111;padding:3px;border-radius:4px;background:#fafafa}
+  .colwrap.aisle .col,.colwrap.aisle .hrow{border:2px dashed #9ca3af;background:#f1f2f4}
+  .colwrap.editable{cursor:pointer}
+  .colwrap.editable:hover .col,.colwrap.editable:hover .hrow{outline:2px solid var(--accent)}
+  .cell{width:30px;height:30px;border:1px solid #cbd5e1;border-radius:2px;background:#fff;overflow:hidden;
+        display:flex;align-items:center;justify-content:center;font-size:9px;color:#1f2937;font-weight:600}
+  .colwrap.blockgap{margin-left:16px}
+  .cell.aisle-empty{background:#e5e7eb}
+  .cell.segline{border-top:2px dashed #374151}
+  .cell.segline-h{border-left:2px dashed #374151}
+  .colcap{font-size:9px;color:#9ca3af;text-align:center;margin-top:2px}
+  .msg{padding:8px 12px;border-radius:8px;font-size:13px;margin-bottom:10px}
+  .msg.ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
+  .msg.warn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
+  .summary{font-size:12px;color:var(--muted);margin-top:8px}
+  .cfg textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:6px;padding:8px;font-family:ui-monospace,monospace;font-size:12px}
+  .hint{font-size:11px;color:var(--muted)}
+  .note{font-size:11px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+  .note b{color:#374151}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px}
+  .tab{border:0;background:none;padding:10px 18px;font-size:14px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .tab .dot{display:inline-block;margin-left:6px;font-size:11px;background:#eef2ff;color:#3730a3;border-radius:99px;padding:1px 7px;font-weight:700}
+  .regcount{font-size:12px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+  .regcount.warn{color:#b45309}
+  .savestat{font-size:11px;color:#9ca3af;margin:-6px 0 12px}
+  .savestat.warn{color:#b45309}
+  #updateBar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:50;background:#111827;color:#fff;
+             padding:11px 16px;font-size:13px;display:none;align-items:center;gap:12px;justify-content:center}
+  #updateBar button{border:0;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;
+                    background:#fbbf24;color:#111827;cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <h1>パレット配置図 自動作成 <span style="font-size:12px;color:#93c5fd">プロトタイプ</span></h1>
+  <p>出荷伝票の個数からパレット数を自動計算（切り上げ）／ 仕掛品=倉庫内・商品=倉庫外 ／ 1列1品目・21超は通路へ・満杯時は混載 ／ 品名＋ロットが違えば別物として配置</p>
+</header>
+
+<div class="wrap">
+
+  <div class="tabs">
+    <button class="tab active" id="tabbtn-place" onclick="switchTab('place')">配置</button>
+    <button class="tab" id="tabbtn-settings" onclick="switchTab('settings')">設定<span class="dot" id="regDot">0</span></button>
+  </div>
+
+  <!-- ===== 配置タブ ===== -->
+  <div id="tab-place" class="tabpanel">
+
+    <div id="regInfo" class="regcount"></div>
+    <div id="saveStatus" class="savestat"></div>
+
+    <div class="card">
+      <h2>荷物の入力 <span class="badge">品名・ロット・個数（→パレット数を自動計算）</span></h2>
+      <table id="lotTable">
+        <thead>
+          <tr><th style="width:74px">種別</th><th>品名</th><th>ロット</th><th style="width:96px">個数</th><th style="width:88px">パレット数</th><th style="width:50px"></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <datalist id="nameOptions"></datalist>
+      <div class="row-actions">
+        <button class="btn btn-ghost" onclick="addRow();saveLots()">＋ 行を追加</button>
+        <button class="btn btn-ghost" onclick="clearLots()">入力をクリア</button>
+        <button class="btn btn-ghost" onclick="loadSample('basic')">基本サンプル</button>
+        <button class="btn btn-ghost" onclick="loadSample('mix')">混載デモ</button>
+        <label class="chk"><input type="checkbox" id="mixChk" checked> 満杯時に混載を許可</label>
+        <button class="btn btn-primary" onclick="run()">▶ 自動配置を作成</button>
+      </div>
+      <div class="note">
+        <span><b>ルール:</b> 仕掛品→倉庫内 / 商品→倉庫外</span>
+        <span>原則 1列＝1品目（列はまとめて配置）</span>
+        <span>1ブロック=3列×7=21P。21超は<b>通路</b>へはみ出し</span>
+        <span>通常列が満杯のときのみ<b>混載</b>（列に複数品目）</span>
+        <span>パレット数＝<b>切り上げ</b>(個数 ÷ 個数/パレット)</span>
+        <span><b>品名＋ロット</b>が違えば別物として配置</span>
+      </div>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none">
+      <h2>配置図
+        <button id="editBtn" class="btn btn-ghost" style="margin-left:auto" onclick="toggleEdit()">通路を編集</button>
+      </h2>
+      <div id="editHint" class="hint" style="display:none;margin-bottom:8px">✏ 編集モード：マスをクリックするとその列が「通路（灰・破線）」⇔「通常」に切り替わります。もう一度ボタンで終了。</div>
+      <div id="messages"></div>
+      <div id="legend" class="legend"></div>
+
+      <div class="zone-title zone-far">倉庫外（収納庫から遠い）</div>
+      <div class="spaces" id="zone-far"></div>
+
+      <div class="zone-title zone-near" style="margin-top:14px">倉庫内（収納庫に近い）</div>
+      <div class="spaces" id="zone-near"></div>
+
+      <div class="note" style="margin-top:10px">
+        <span><b>越</b>＝通路へはみ出したマス</span>
+        <span><b>混</b>＝混載（破線の境目で品目が分かれる）</span>
+        <span>灰色＝通路（空きのまま）</span>
+      </div>
+      <div class="summary" id="summary"></div>
+    </div>
+
+  </div>
+
+  <!-- ===== 設定タブ ===== -->
+  <div id="tab-settings" class="tabpanel" style="display:none">
+
+    <div class="card">
+      <h2>品目マスタ <span class="badge">品名 → 個数/パレット</span></h2>
+      <table id="masterTable">
+        <thead>
+          <tr><th>品名</th><th style="width:150px">個数/パレット</th><th style="width:50px"></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="row-actions">
+        <button class="btn btn-ghost" onclick="addMasterRow()">＋ 品目を追加</button>
+        <button class="btn btn-ghost" onclick="loadMaster()">サンプル品目を読込</button>
+      </div>
+      <div class="hint" style="margin-top:8px">各品目の「1パレットあたりの個数」を登録します。荷物入力では品名を選び、出荷伝票の<b>個数</b>を入れると<b>パレット数を自動計算</b>します（端数は切り上げ）。<br>※このマスタは画面内でのみ保持され、再読み込みで消えます（永続保存は今後の対応）。</div>
+    </div>
+
+    <div class="card cfg">
+      <h2>スペース設定 <span class="badge">微調整用・保存されません</span></h2>
+      <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near=倉庫内/far=倉庫外) | 向き(v=縦列/h=横行) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路)</b><br>
+        例）<code>④ | near | v | 3 | 6*,7,7,7,7,7,7,7,7,7,5*</code> ／ 上に書いた順が「収納庫に近い順」。</div>
+      <textarea id="cfgText"></textarea>
+      <div class="row-actions">
+        <button class="btn btn-ghost" onclick="applyConfig()">設定を反映</button>
+        <button class="btn btn-ghost" onclick="resetConfig()">画像の初期値に戻す</button>
+      </div>
+      <div class="summary" id="capacity"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<div id="updateBar">
+  <span>新しいバージョンがあります</span>
+  <button onclick="applyUpdate()">更新する</button>
+</div>
+
+<script>
+/* ===== スペース定義（配列の順＝収納庫に近い順）=====
+   cols: {h:高さ, aisle:通路か}  block: 1ロットが使える最大列数(=ブロック幅) */
+const DEFAULT_SPACES = [
+  {name:"④", zone:"near", orient:"v", block:3, align:"top", cols:[
+     {h:6,aisle:true},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:5,aisle:true}]},
+  {name:"③", zone:"near", orient:"v", block:99, cols:[{h:8},{h:4}]},
+  {name:"①", zone:"far",  orient:"v", block:99, cols:[{h:4},{h:4}]},
+  {name:"②", zone:"far",  orient:"h", block:99, cols:[{h:11},{h:11},{h:8}]},
+];
+
+/* ===== 品目マスタ（品名 → 個数/パレット）===== */
+const DEFAULT_MASTER = (function(){
+  const m=[
+    {name:"部品A",upp:10},{name:"部品B",upp:10},{name:"部品C",upp:10},
+    {name:"部品D",upp:10},{name:"部品E",upp:10},
+    {name:"製品X",upp:10},{name:"製品Y",upp:10},{name:"製品Z",upp:10},{name:"製品W",upp:10},
+  ];
+  for(let i=1;i<=14;i++) m.push({name:"部品"+i,upp:10});
+  return m;
+})();
+
+/* ===== 入力サンプル（個数ベース。パレット数はマスタから自動計算）===== */
+const SAMPLES = {
+  basic:[
+    {type:"仕掛品",name:"部品C",lot:"L-103",qty:245}, // 245/10=24.5 → 切り上げ 25P
+    {type:"仕掛品",name:"部品A",lot:"L-101",qty:120}, // 12P
+    {type:"仕掛品",name:"部品B",lot:"L-102",qty:70},  // 7P
+    {type:"仕掛品",name:"部品D",lot:"L-104",qty:140}, // 14P
+    {type:"仕掛品",name:"部品E",lot:"L-105",qty:60},  // 6P
+    {type:"商品",  name:"製品X",lot:"P-201",qty:60},  // 6P
+    {type:"商品",  name:"製品Y",lot:"P-202",qty:90},  // 9P
+    {type:"商品",  name:"製品Z",lot:"P-203",qty:110}, // 11P
+    {type:"商品",  name:"製品W",lot:"P-204",qty:80},  // 8P
+  ],
+  mix:(function(){const a=[];let n=1;
+    for(let i=0;i<9;i++)a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),qty:60}); // 6P×9
+    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),qty:60}); // 部品10 6P
+    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),qty:50}); // 部品11 5P
+    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),qty:80}); // 部品12 8P
+    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),qty:40}); // 部品13 4P
+    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),qty:70}); // 部品14 7P
+    a.push({type:"商品",name:"製品X",lot:"P-201",qty:100}); // 10P
+    return a;})(),
+};
+
+const PALETTE=["#93c5fd","#fca5a5","#86efac","#fcd34d","#c4b5fd","#f9a8d4","#7dd3fc","#fdba74",
+  "#a7f3d0","#d8b4fe","#f0abfc","#bef264","#67e8f9","#fda4af","#a5b4fc","#5eead4","#fbcfe8","#bae6fd"];
+
+let SPACES = clone(DEFAULT_SPACES);
+let MASTER = [];
+let editMode=false;
+let lastLots=null, lastColor=null;
+
+/* ---------- タブ切替 ---------- */
+function switchTab(name){
+  document.getElementById("tab-place").style.display    = name==="place"?"":"none";
+  document.getElementById("tab-settings").style.display = name==="settings"?"":"none";
+  document.getElementById("tabbtn-place").classList.toggle("active", name==="place");
+  document.getElementById("tabbtn-settings").classList.toggle("active", name==="settings");
+}
+function updateRegCount(){
+  const n=MASTER.length;
+  const dot=document.getElementById("regDot"); if(dot)dot.textContent=n;
+  const info=document.getElementById("regInfo");
+  if(info){
+    info.innerHTML = n===0
+      ? `⚠ 品目が未登録です。「設定」タブの品目マスタで登録してください。`
+      : `登録品目 <b>${n}件</b> ／ 個数/パレットの編集は「設定」タブの品目マスタで`;
+    info.className="regcount"+(n===0?" warn":"");
+  }
+}
+
+/* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots"};
+let storageOK=true;
+const memStore={};
+(function(){ // 利用可否を判定
+  try{ const k="palletApp.__t"; localStorage.setItem(k,"1"); localStorage.removeItem(k); }
+  catch(e){ storageOK=false; }
+})();
+function saveData(key,obj){
+  const s=JSON.stringify(obj);
+  if(storageOK){ try{ localStorage.setItem(key,s); return true; }catch(e){ storageOK=false; } }
+  memStore[key]=s; updateSaveStatus(); return false;
+}
+function loadData(key){
+  try{
+    const s = storageOK ? localStorage.getItem(key) : memStore[key];
+    return s ? JSON.parse(s) : null;
+  }catch(e){ return null; }
+}
+function updateSaveStatus(){
+  const el=document.getElementById("saveStatus"); if(!el)return;
+  el.textContent = storageOK ? "自動保存中（このブラウザに保存）" : "この環境では保存されません（HTMLをダウンロードして開くと保存されます）";
+  el.className = "savestat"+(storageOK?"":" warn");
+}
+function saveMaster(){ saveData(STORE_KEY.master, MASTER); }
+function saveLots(){
+  const rows=[...document.querySelectorAll("#lotTable tbody tr")].map(tr=>{
+    const c=tr.querySelectorAll("select,input");
+    return {type:c[0].value, name:c[1].value, lot:c[2].value, qty:c[3].value};
+  });
+  saveData(STORE_KEY.lots, rows);
+}
+
+/* ---------- 品目マスタ ---------- */
+function addMasterRow(d){
+  d=d||{name:"",upp:""};
+  const tb=document.querySelector("#masterTable tbody");
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+    <td><input value="${d.name}" placeholder="品名" oninput="onMasterChange()"></td>
+    <td><input type="number" min="1" value="${d.upp}" placeholder="個数/パレット" oninput="onMasterChange()"></td>
+    <td><button class="btn-mini" onclick="this.closest('tr').remove();onMasterChange()">削除</button></td>`;
+  tb.appendChild(tr);
+}
+function readMaster(){
+  const rows=[...document.querySelectorAll("#masterTable tbody tr")];
+  const list=[];
+  rows.forEach(tr=>{
+    const c=tr.querySelectorAll("input");
+    const name=c[0].value.trim(); const upp=parseInt(c[1].value)||0;
+    if(name && upp>0) list.push({name,upp});
+  });
+  return list;
+}
+function unitsPerPallet(name){
+  const n=(name||"").trim();
+  // 同名が複数あれば最後の登録を優先
+  for(let i=MASTER.length-1;i>=0;i--) if(MASTER[i].name===n) return MASTER[i].upp;
+  return null;
+}
+function onMasterChange(){
+  MASTER=readMaster();
+  refreshNameOptions();
+  recalcAllRows();
+  updateRegCount();
+  saveMaster();
+}
+function refreshNameOptions(){
+  const dl=document.getElementById("nameOptions");
+  dl.innerHTML=MASTER.map(m=>`<option value="${m.name}">${m.upp}個/P</option>`).join("");
+}
+function loadMaster(){
+  document.querySelector("#masterTable tbody").innerHTML="";
+  DEFAULT_MASTER.forEach(addMasterRow);
+  onMasterChange();
+}
+
+/* ---------- 入力テーブル ---------- */
+function addRow(d){
+  d=d||{type:"仕掛品",name:"",lot:"",qty:""};
+  const tb=document.querySelector("#lotTable tbody");
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+    <td><select onchange="recalcRow(this.closest('tr'));saveLots()">
+      <option ${d.type==="仕掛品"?"selected":""}>仕掛品</option>
+      <option ${d.type==="商品"?"selected":""}>商品</option>
+    </select></td>
+    <td><input list="nameOptions" value="${d.name}" placeholder="品名" oninput="recalcRow(this.closest('tr'));saveLots()"></td>
+    <td><input value="${d.lot}" placeholder="ロット" oninput="saveLots()"></td>
+    <td><input type="number" min="1" value="${d.qty}" placeholder="個数" oninput="recalcRow(this.closest('tr'));saveLots()"></td>
+    <td class="pallet-cell">-</td>
+    <td><button class="btn-mini" onclick="this.closest('tr').remove();saveLots()">削除</button></td>`;
+  tb.appendChild(tr);
+  recalcRow(tr);
+}
+function clearLots(){
+  if(!confirm("荷物の入力をすべてクリアします。よろしいですか？（品目マスタは残ります）"))return;
+  document.querySelector("#lotTable tbody").innerHTML="";
+  addRow();
+  saveLots();
+  document.getElementById("resultCard").style.display="none";
+  lastLots=null;
+}
+function recalcRow(tr){
+  const c=tr.querySelectorAll("select,input");
+  const name=c[1].value.trim();
+  const qty=parseInt(c[3].value)||0;
+  const cell=tr.querySelector(".pallet-cell");
+  if(!name){cell.textContent="-";cell.className="pallet-cell";return;}
+  const upp=unitsPerPallet(name);
+  if(upp==null){cell.textContent="未登録";cell.className="pallet-cell warn-cell";return;}
+  if(qty<=0){cell.textContent="0P";cell.className="pallet-cell";return;}
+  cell.textContent=Math.ceil(qty/upp)+"P";
+  cell.className="pallet-cell";
+}
+function recalcAllRows(){
+  [...document.querySelectorAll("#lotTable tbody tr")].forEach(recalcRow);
+}
+function readLots(){
+  const rows=[...document.querySelectorAll("#lotTable tbody tr")];
+  const lots=[], unknown=[];
+  rows.forEach((tr,i)=>{
+    const c=tr.querySelectorAll("select,input");
+    const name=c[1].value.trim();
+    const lot=c[2].value.trim();
+    const qty=parseInt(c[3].value)||0;
+    if(qty<=0) return;
+    const upp=unitsPerPallet(name);
+    if(upp==null || upp<=0){ unknown.push({name,lot,qty}); return; }
+    lots.push({
+      id:lots.length, type:c[0].value, name, lot, qty, upp,
+      code:lot||name||("行"+(i+1)),
+      pallets:Math.ceil(qty/upp)
+    });
+  });
+  return {lots, unknown};
+}
+function loadSample(which){
+  document.querySelector("#lotTable tbody").innerHTML="";
+  SAMPLES[which].forEach(addRow);
+  saveLots();
+  run();
+}
+
+/* ---------- 配置アルゴリズム ---------- */
+function used(c){return c.fills.reduce((a,f)=>a+f.count,0);}
+function buildWork(){
+  return SPACES.map(s=>({
+    name:s.name, zone:s.zone, orient:s.orient||"v", block:s.block||99, align:s.align||"bottom",
+    cols:s.cols.map(c=>({h:c.h, aisle:!!c.aisle, fills:[]}))
+  }));
+}
+// 通常列(ブロック上限まで)→空き通路 の順で置く
+function fillNormalAisle(lot,sp,rem){
+  let colsUsed=0;
+  for(const c of sp.cols){
+    if(rem<=0)break;
+    if(c.aisle||c.fills.length>0)continue;
+    if(colsUsed>=sp.block)break;
+    const put=Math.min(rem,c.h); c.fills.push({id:lot.id,count:put}); rem-=put; colsUsed++;
+  }
+  if(rem<=0)return rem;
+  // 通路(灰)は「1ブロック(21P)を埋め切った大口の余り」だけに使う。
+  // 通常列が満杯で置けなかった荷物は通路を使わず、次のスペース(③)へまとめて流す。
+  if(colsUsed<sp.block) return rem;
+  for(const c of sp.cols){ // 大口の余りのみ空き通路へはみ出し
+    if(rem<=0)break;
+    if(!c.aisle||c.fills.length>0)continue;
+    const put=Math.min(rem,c.h); c.fills.push({id:lot.id,count:put,ov:true}); rem-=put;
+  }
+  return rem;
+}
+// 混載：通常列の余りマスに詰める（通路は使わない）
+function fillMix(lot,sp,rem){
+  for(const c of sp.cols){
+    if(rem<=0)break;
+    if(c.aisle)continue;
+    const free=c.h-used(c); if(free<=0)continue;
+    const put=Math.min(rem,free); c.fills.push({id:lot.id,count:put,mix:true}); rem-=put;
+  }
+  return rem;
+}
+function place(lots,allowMix){
+  const sp=buildWork();
+  const near=sp.filter(s=>s.zone==="near"), far=sp.filter(s=>s.zone==="far");
+  const tgt=l=>l.type==="仕掛品"?near:far;
+  for(const lot of lots){ let rem=lot.pallets;
+    for(const s of tgt(lot)){ rem=fillNormalAisle(lot,s,rem); if(rem<=0)break; } lot.rem=rem; }
+  if(allowMix){ for(const lot of lots){ if(lot.rem<=0)continue; let rem=lot.rem;
+    for(const s of tgt(lot)){ rem=fillMix(lot,s,rem); if(rem<=0)break; } lot.rem=rem; } }
+  return sp;
+}
+
+/* ---------- 実行 ---------- */
+function run(){
+  const {lots, unknown}=readLots();
+  if(lots.length===0 && unknown.length===0){alert("荷物を1件以上入力してください。");return;}
+
+  const m=document.getElementById("messages");
+  document.getElementById("resultCard").style.display="block";
+
+  let warnHtml="";
+  if(unknown.length){
+    warnHtml=`<div class="msg warn">⚠ マスタ未登録の品名があり、パレット数を計算できません：${
+      unknown.map(u=>`${u.name||"(品名なし)"}${u.lot?"／"+u.lot:""}（個数${u.qty}）`).join(" / ")
+    }。「設定」タブの品目マスタに登録してください。</div>`;
+  }
+
+  if(lots.length===0){
+    m.innerHTML=warnHtml;
+    document.getElementById("legend").innerHTML="";
+    document.getElementById("zone-far").innerHTML="";
+    document.getElementById("zone-near").innerHTML="";
+    document.getElementById("summary").textContent="";
+    return;
+  }
+
+  const allowMix=document.getElementById("mixChk").checked;
+  const sp=place(lots,allowMix);
+
+  const colorOf={}; lots.forEach((l,i)=>colorOf[l.id]=PALETTE[i%PALETTE.length]);
+  lastLots=lots; lastColor=colorOf;
+
+  const over=lots.filter(l=>l.rem>0);
+  const usedAisle=sp.some(s=>s.cols.some(c=>c.aisle&&c.fills.length));
+  const usedMix=sp.some(s=>s.cols.some(c=>c.fills.length>1));
+  if(over.length){
+    m.innerHTML=warnHtml+`<div class="msg warn">⚠ 入りきらない荷物があります：${over.map(l=>`${l.name}(${l.code}) 残${l.rem}P`).join(" / ")}</div>`;
+  }else{
+    let notes=[]; if(usedAisle)notes.push("通路へのはみ出しあり"); if(usedMix)notes.push("混載あり");
+    m.innerHTML=warnHtml+`<div class="msg ok">✅ すべてのパレットを配置しました。${notes.length?"（"+notes.join("・")+"）":""}</div>`;
+  }
+
+  document.getElementById("legend").innerHTML=lots.map(l=>
+    `<span><i class="swatch" style="background:${colorOf[l.id]}"></i>${l.name} / ${l.lot||"—"}　${l.pallets}P</span>`).join("");
+
+  drawZone("zone-far", sp.filter(s=>s.zone==="far").sort(byName), colorOf);
+  drawZone("zone-near", sp.filter(s=>s.zone==="near").sort(byName), colorOf);
+
+  const total=lots.reduce((a,b)=>a+b.pallets,0);
+  const rem=over.reduce((a,b)=>a+b.rem,0);
+  const totalQty=lots.reduce((a,b)=>a+b.qty,0);
+  document.getElementById("summary").textContent=`合計 ${totalQty}個 → ${total}P ／ 配置済 ${total-rem}P ／ あふれ ${rem}P`;
+}
+const byName=(a,b)=>a.name.localeCompare(b.name);
+
+/* ---------- 描画 ---------- */
+function cellsOf(col){ // r=0 起点。各セルの {id, seg(境目), label}
+  const arr=Array.from({length:col.h},()=>({id:null,seg:false,label:""}));
+  let r=0;
+  col.fills.forEach((f,fi)=>{
+    for(let k=0;k<f.count;k++){ if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),label:""}; r++; } }
+    if(r-1>=0) arr[r-1].label = f.id;
+  });
+  return arr;
+}
+function drawZone(elId, spaces, colorOf){
+  const el=document.getElementById(elId); el.innerHTML="";
+  spaces.forEach(sp=>{
+    const horizontal = sp.orient==="h";
+    const topAlign = sp.align==="top" && !horizontal;
+    const wrap=document.createElement("div"); wrap.className="space";
+    let lines="";
+    // ブロックごとに区切る（block幅ごとの通常列の先頭に余白）。①②③など block>=列数 は区切らない
+    const grouping = sp.block>0 && sp.block<sp.cols.length;
+    let nonAisleSeen=0;
+    sp.cols.forEach((col,ci)=>{
+      const blockStart = grouping && !col.aisle && nonAisleSeen>0 && (nonAisleSeen % sp.block===0);
+      if(!col.aisle) nonAisleSeen++;
+      const arr=cellsOf(col);
+      let cells="";
+      arr.forEach(a=>{
+        const filled=a.id!=null;
+        const bg=filled?colorOf[a.id]:"";
+        const cls=["cell"];
+        if(!filled&&col.aisle)cls.push("aisle-empty");
+        if(a.seg)cls.push(horizontal?"segline-h":"segline");
+        const label=filled?(codeShort(a.label)):"";
+        cells+=`<div class="${cls.join(' ')}" style="${bg?'background:'+bg:''}">${label}</div>`;
+      });
+      const inner = horizontal ? `<div class="hrow">${cells}</div>` : `<div class="col${topAlign?' top':''}">${cells}</div>`;
+      const cap = `<div class="colcap">${used(col)}/${col.h}${col.aisle?' 通':''}</div>`;
+      const editCls = editMode? " editable":"";
+      const gapCls = blockStart? " blockgap":"";
+      lines+=`<div class="colwrap${col.aisle?' aisle':''}${editCls}${gapCls}" data-space="${sp.name}" data-col="${ci}">${inner}${cap}</div>`;
+    });
+    wrap.innerHTML=`<div class="name">${sp.name}</div><div class="${horizontal?'grid-h':'grid'}${topAlign?' top':''}">${lines}</div>`;
+    el.appendChild(wrap);
+  });
+}
+function codeShort(id){ const l=lastLots&&lastLots.find(x=>x.id===id); return l?l.code:''; }
+
+/* ---------- 通路編集 ---------- */
+function toggleEdit(){
+  editMode=!editMode;
+  document.getElementById("editBtn").className = "btn "+(editMode?"btn-on":"btn-ghost");
+  document.getElementById("editBtn").textContent = editMode?"編集を終了":"通路を編集";
+  document.getElementById("editHint").style.display = editMode?"block":"none";
+  if(lastLots) run(); // 再描画で編集クラス反映
+}
+document.addEventListener("click",e=>{
+  if(!editMode)return;
+  const w=e.target.closest(".colwrap"); if(!w)return;
+  const sName=w.dataset.space, ci=parseInt(w.dataset.col);
+  const sp=SPACES.find(s=>s.name===sName); if(!sp)return;
+  sp.cols[ci].aisle=!sp.cols[ci].aisle;
+  document.getElementById("cfgText").value=spacesToText();
+  showCapacity(); run();
+});
+
+/* ---------- スペース設定 ---------- */
+function spacesToText(){
+  return SPACES.map(s=>{
+    const cols=s.cols.map(c=>c.h+(c.aisle?"*":"")).join(",");
+    return `${s.name} | ${s.zone} | ${s.orient||"v"} | ${s.block||99} | ${cols}`;
+  }).join("\n");
+}
+function applyConfig(){
+  const lines=document.getElementById("cfgText").value.split("\n").map(l=>l.trim()).filter(Boolean);
+  const out=[];
+  for(const ln of lines){
+    const p=ln.split("|").map(x=>x.trim());
+    if(p.length<5){alert("形式が不正な行があります（5項目必要）:\n"+ln);return;}
+    if(!["near","far"].includes(p[1])){alert("区分は near か far:\n"+ln);return;}
+    const orient=p[2]==="h"?"h":"v";
+    const block=parseInt(p[3])||99;
+    const cols=p[4].split(",").map(x=>x.trim()).filter(Boolean).map(x=>{
+      const aisle=x.endsWith("*"); const h=parseInt(x); return {h, aisle};
+    }).filter(c=>c.h>0);
+    if(!cols.length){alert("列の指定がありません:\n"+ln);return;}
+    const prev=SPACES.find(s=>s.name===p[0]);
+    out.push({name:p[0], zone:p[1], orient, block, align:prev?prev.align:undefined, cols});
+  }
+  SPACES=out; showCapacity();
+  if(lastLots) run();
+  alert("設定を反映しました。");
+}
+function resetConfig(){
+  SPACES=clone(DEFAULT_SPACES);
+  document.getElementById("cfgText").value=spacesToText();
+  showCapacity(); if(lastLots) run();
+}
+function showCapacity(){
+  const sum=(z,f)=>SPACES.filter(s=>s.zone===z).reduce((a,s)=>a+s.cols.filter(f).reduce((x,c)=>x+c.h,0),0);
+  const nN=sum("near",c=>!c.aisle), nA=sum("near",c=>c.aisle);
+  const fN=sum("far",c=>!c.aisle), fA=sum("far",c=>c.aisle);
+  document.getElementById("capacity").textContent=
+    `収容能力 — 倉庫内: 通常${nN}P＋通路${nA}P ／ 倉庫外: 通常${fN}P＋通路${fA}P`;
+}
+
+/* ---------- utils ---------- */
+function clone(o){return JSON.parse(JSON.stringify(o));}
+
+/* ---------- init ---------- */
+document.getElementById("cfgText").value=spacesToText();
+showCapacity();
+updateSaveStatus();
+
+// 品目マスタ：保存があれば復元、初回のみサンプル投入
+(function initMaster(){
+  const saved=loadData(STORE_KEY.master);
+  document.querySelector("#masterTable tbody").innerHTML="";
+  if(Array.isArray(saved) && saved.length){
+    saved.forEach(m=>addMasterRow(m));
+    MASTER=readMaster(); refreshNameOptions(); updateRegCount();
+  }else{
+    DEFAULT_MASTER.forEach(addMasterRow);
+    onMasterChange(); // 保存も走る
+  }
+})();
+
+// 荷物入力：前回の入力を復元（A案）。無ければ基本サンプル
+(function initLots(){
+  const saved=loadData(STORE_KEY.lots);
+  if(Array.isArray(saved) && saved.length){
+    document.querySelector("#lotTable tbody").innerHTML="";
+    saved.forEach(r=>addRow(r));
+    run();
+  }else{
+    loadSample('basic');
+  }
+})();
+
+/* ---------- PWA: Service Worker 登録と更新検知 ---------- */
+let waitingSW=null;
+function applyUpdate(){
+  if(waitingSW){ waitingSW.postMessage("SKIP_WAITING"); }
+  else { location.reload(); }
+}
+if("serviceWorker" in navigator && location.protocol.startsWith("http")){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("./sw.js").then(reg=>{
+      // 新バージョンが待機状態になったらバナーを表示
+      function check(){
+        if(reg.waiting){
+          waitingSW=reg.waiting;
+          document.getElementById("updateBar").style.display="flex";
+        }
+      }
+      check();
+      reg.addEventListener("updatefound",()=>{
+        const nw=reg.installing;
+        if(nw) nw.addEventListener("statechange",()=>{ if(nw.state==="installed") check(); });
+      });
+    }).catch(()=>{ /* 登録失敗でもアプリは通常動作 */ });
+
+    let reloaded=false;
+    navigator.serviceWorker.addEventListener("controllerchange",()=>{
+      if(!reloaded){ reloaded=true; location.reload(); }
+    });
+  });
+}
+</script>
+</body>
+</html>
