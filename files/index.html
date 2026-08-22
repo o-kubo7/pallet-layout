@@ -814,6 +814,30 @@ function cardDelete(i){ const tr=trAt(i); if(!tr)return; tr.remove(); syncCards(
 
 /* ---------- 配置アルゴリズム ---------- */
 function used(c){return c.fills.reduce((a,f)=>a+f.count,0);}
+
+/* 連続した空き列で rem パレットが丸ごと入る窓を探す。
+   cols     : buildWork() が作った作業用の列配列
+   rem      : 置きたいパレット数
+   useAisle : true なら通路列も窓に含める
+   戻り値   : 丸ごと入る最初の窓 [開始index, 終了index]。無ければ null */
+function findRun(cols, rem, useAisle){
+  const usable = i => {
+    const c = cols[i];
+    if(c.fills.length > 0) return false;     // 使用済みの列は窓を分断する
+    if(c.aisle && !useAisle) return false;   // 通路を使わない段では通路も分断する
+    return true;
+  };
+  for(let s=0; s<cols.length; s++){
+    if(!usable(s)) continue;
+    let cap = 0;
+    for(let e=s; e<cols.length; e++){
+      if(!usable(e)) break;
+      cap += cols[e].h;
+      if(cap >= rem) return [s, e];
+    }
+  }
+  return null;
+}
 function buildWork(){
   return SPACES.map(s=>({
     name:s.name, zone:s.zone, orient:s.orient||"v", block:s.block||99, align:s.align||"bottom",
