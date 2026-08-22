@@ -212,7 +212,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `findRun(cols, rem, useAisle)`、`AREA_GROUPS`、`buildWork()`、`used(c)`
-- Produces: `areaCandidates(sp)` → `[{cols, map, useAisle}]`、`placeLot(lot, cands)` → 残パレット数、`place(lots, allowMix)` → 作業用スペース配列（戻り値の形は従来どおり）
+- Produces: `areaCandidates(sp)` → `[{cols, useAisle}]`、`placeLot(lot, cands)` → 残パレット数、`place(lots, allowMix)` → 作業用スペース配列（戻り値の形は従来どおり）
 
 - [ ] **Step 1: `fillNormalAisle` を削除し、新しい3関数を書く**
 
@@ -227,10 +227,10 @@ function areaCandidates(sp){
   const byName={}; sp.forEach(s=>byName[s.name]=s);
   const done=new Set(), out=[];
   const push=members=>{
-    const cols=[], map=[];              // map[i] = 連結後のindex → 元のスペースと列番号
-    members.forEach(s=>s.cols.forEach((c,ci)=>{ cols.push(c); map.push({sp:s, ci}); }));
-    out.push({cols, map, useAisle:false});
-    if(cols.some(c=>c.aisle)) out.push({cols, map, useAisle:true});
+    const cols=[];
+    members.forEach(s=>s.cols.forEach(c=>cols.push(c)));
+    out.push({cols, useAisle:false});
+    if(cols.some(c=>c.aisle)) out.push({cols, useAisle:true});
   };
   sp.forEach(s=>{
     if(done.has(s.name)) return;
