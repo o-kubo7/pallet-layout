@@ -235,7 +235,7 @@
 <body>
 <header>
   <h1>パレット配置図 自動作成</h1>
-  <p>個数 ÷ SNP でパレット数を自動計算（切り上げ）／ 仕掛品=倉庫内・商品=倉庫外</p>
+  <p>個数 ÷ SNP でパレット数を自動計算（切り上げ）／ ロットごとにまとめて配置</p>
 </header>
 
 <div class="tabs">
@@ -299,9 +299,11 @@
       </div>
 
       <div class="note">
-        <span><b>ルール:</b> 仕掛品→倉庫内 / 商品→倉庫外</span>
+        <span><b>ルール:</b> メイン → 軒下 → PC横・EV横 の順に配置</span>
         <span>原則 1列＝1品目</span>
-        <span>④の通路は大口の余りのみ使用</span>
+        <span><b>ロット単位</b>で連続した列にまとめる</span>
+        <span>通路はメインが埋まってから使用</span>
+        <span>仕掛品を先に配置（メインが競合したとき仕掛品を優先）</span>
         <span>パレット数＝<b>切り上げ</b>(個数 ÷ SNP)</span>
         <span><b>品名＋ロット</b>が違えば別物として配置</span>
       </div>
@@ -974,6 +976,16 @@ function run(goMap){
   const over=lots.filter(l=>l.rem>0);
   const usedAisle=sp.some(s=>s.cols.some(c=>c.aisle&&c.fills.length));
   const usedMix=sp.some(s=>s.cols.some(c=>c.fills.length>1));
+  // 配置図の表は上段4欄・下段7欄しかない。載りきらないロットは黙って消えるので知らせる。
+  const overTop=sheetEntries(SHEET_TOP,null).length-4;
+  const overBottom=sheetEntries(SHEET_BOTTOM,"メイン").length-7;
+  if(overTop>0 || overBottom>0){
+    const parts=[];
+    if(overTop>0) parts.push(`軒下 ${overTop}件`);
+    if(overBottom>0) parts.push(`倉庫内 ${overBottom}件`);
+    warnHtml+=`<div class="msg warn">⚠ 配置図の表に載りきらないロットがあります：${parts.join(" / ")}。ブロック図で確認してください。</div>`;
+  }
+
   if(over.length){
     m.innerHTML=warnHtml+`<div class="msg warn">⚠ 入りきらない荷物があります：${over.map(l=>`${l.name}(${l.code}) 残${l.rem}P`).join(" / ")}</div>`;
   }else{
