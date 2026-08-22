@@ -1194,26 +1194,41 @@ function applySheetZoom(){
 }
 window.addEventListener("resize", ()=>{ if(sheetMode && sheetZoom==="auto") applySheetZoom(); });
 
-// 各スペースに置かれた荷物を、置かれた順に取り出す
-function lotsInSpace(spName){
-  const sp=lastSp && lastSp.find(s=>s.name===spName);
-  if(!sp) return [];
-  const seen=[], out=[];
-  sp.cols.forEach(c=>c.fills.forEach(f=>{
-    if(!seen.includes(f.id)){ seen.push(f.id); out.push(lastLots.find(l=>l.id===f.id)); }
-  }));
-  return out.filter(Boolean);
+/* 配置図の表の欄をロット単位で作る。
+   同じロットが同じ段の複数エリアにまたがっても1欄にまとめ、
+   パレット数はその段での合計にする。
+   names    : この段に含めるエリア名（先に書いたエリアから順に見る）
+   baseArea : 注釈を出さない基準エリア。null ならこの段は注釈なし */
+function sheetEntries(names, baseArea){
+  if(!lastSp || !lastLots) return [];
+  const order=[], byId={};
+  names.forEach(n=>{
+    const sp=lastSp.find(s=>s.name===n);
+    if(!sp) return;
+    sp.cols.forEach(c=>c.fills.forEach(f=>{
+      let e=byId[f.id];
+      if(!e){
+        const lot=lastLots.find(l=>l.id===f.id);
+        if(!lot) return;
+        e=byId[f.id]={lot, pallets:0, areas:[]};
+        order.push(e);
+      }
+      e.pallets+=f.count;
+      if(!e.areas.includes(n)) e.areas.push(n);
+    }));
+  });
+  return order.map(e=>{
+    const extra = baseArea ? e.areas.filter(n=>n!==baseArea) : [];
+    return {lot:e.lot, pallets:e.pallets, note: extra.length ? ("※"+extra.join("・")) : ""};
+  });
 }
 function renderSheet(){
   const host=document.getElementById("sheetView");
   if(!hasResult || !lastSp){ host.innerHTML=""; return; }
 
-  // 上段：軒下（①→②の順） / 下段：メイン→PC横→EV横
-  const top=[];
-  SHEET_TOP.forEach(n=>lotsInSpace(n).forEach(l=>top.push({lot:l})));
-  const bottom=[];
-  SHEET_BOTTOM.forEach(n=>lotsInSpace(n).forEach(l=>
-    bottom.push({lot:l, note:(n==="メイン"?"":"※"+n)})));
+  // 上段：軒下（①→②の順・注釈なし） / 下段：メイン→PC横→EV横（メイン以外を注釈に）
+  const top=sheetEntries(SHEET_TOP, null);
+  const bottom=sheetEntries(SHEET_BOTTOM, "メイン");
   const numOf={}; bottom.forEach((e,i)=>{ numOf[e.lot.id]=i+1; });
 
   const d=headDate?new Date(headDate+"T00:00:00"):null;
@@ -1273,7 +1288,7 @@ function slotCells(entries,count,kind,extra){
     let v="", cls="slot";
     if(kind==="name")        v=l?l.name:"";
     else if(kind==="lot")    v=l?l.lot:"";
-    else if(kind==="pallet") v=l?(l.pallets+"P"):"";
+    else if(kind==="pallet") v=e?(e.pallets+"P"):"";
     else if(kind==="note"){  v=e&&e.note?e.note:""; cls="none snote"; }
     if(extra && kind!=="note"){
       cls+=" "+extra;
