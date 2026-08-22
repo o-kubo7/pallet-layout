@@ -1,0 +1,1381 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#111827">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="パレット配置">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<title>パレット配置図 自動作成</title>
+<style>
+  :root{--bg:#f5f6f8;--card:#fff;--line:#d0d5dd;--ink:#1f2937;--muted:#6b7280;--accent:#2563eb;--cell:30px;--safe:env(safe-area-inset-bottom,0px);}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+       background:var(--bg);color:var(--ink);font-size:14px;line-height:1.6;
+       -webkit-text-size-adjust:100%}
+  header{background:#111827;color:#fff;padding:12px 16px}
+  header h1{margin:0;font-size:16px}
+  header p{margin:3px 0 0;font-size:11px;color:#cbd5e1}
+  .wrap{max-width:1240px;margin:0 auto;padding:14px 16px calc(96px + var(--safe))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+  .card h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .badge{font-size:11px;background:#eef2ff;color:#3730a3;border-radius:99px;padding:2px 8px}
+
+  /* ---- タブ ---- */
+  .tabs{display:flex;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
+  .tab{flex:1;border:0;background:none;padding:13px 6px;font-size:14px;font-weight:700;color:var(--muted);
+       cursor:pointer;border-bottom:3px solid transparent;min-height:48px}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .tab .dot{display:inline-block;margin-left:5px;font-size:11px;background:#eef2ff;color:#3730a3;
+            border-radius:99px;padding:1px 7px;font-weight:700}
+
+  /* ---- テーブル（PC） ---- */
+  table{border-collapse:collapse;width:100%}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:center}
+  th{background:#f3f4f6;font-weight:600;font-size:12px}
+  td input,td select{width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 5px;
+                     font-size:16px;text-align:center;background:#fff;min-height:40px}
+  td.pallet-cell{font-weight:700;font-size:14px;color:#111827;background:#f8fafc;white-space:nowrap}
+  td.pallet-cell.warn-cell{color:#b45309;background:#fffbeb}
+
+  /* ---- ボタン ---- */
+  .btn{border:0;border-radius:8px;padding:11px 16px;font-size:14px;font-weight:600;cursor:pointer;min-height:44px}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-ghost{background:#eef2f7;color:#374151}
+  .btn-on{background:#fde68a;color:#7c2d12}
+  .btn-mini{background:#fee2e2;color:#b91c1c;border-radius:8px;padding:8px 12px;font-size:13px;
+            cursor:pointer;border:0;min-height:40px;min-width:44px}
+  .row-actions{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  label.chk{font-size:14px;display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
+            min-height:44px;padding:0 4px}
+  label.chk input{width:20px;height:20px}
+
+  /* ---- 下部固定バー ---- */
+  .actionbar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(255,255,255,.96);
+             border-top:1px solid var(--line);padding:10px 16px calc(10px + var(--safe));
+             backdrop-filter:blur(6px);display:none}
+  .actionbar .btn{width:100%;font-size:15px;min-height:50px}
+
+  /* ---- 配置図 ---- */
+  .legend{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+  .legend span{display:inline-flex;align-items:center;gap:5px;font-size:12px;background:#f3f4f6;border-radius:6px;padding:4px 8px}
+  .swatch{width:13px;height:13px;border-radius:3px;border:1px solid rgba(0,0,0,.2);flex:none}
+  .zone-title{font-weight:700;margin:6px 0;padding:4px 10px;border-radius:6px;display:inline-block;font-size:13px}
+  .zone-near{background:#e8f5e9;color:#1b5e20}
+  .zone-far{background:#fff3e0;color:#8a5300}
+  .scroller{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;
+            background:linear-gradient(90deg,#fff 30%,rgba(255,255,255,0)),
+                       linear-gradient(90deg,rgba(255,255,255,0),#fff 70%) 100% 0,
+                       radial-gradient(farthest-side at 0 50%,rgba(0,0,0,.16),transparent),
+                       radial-gradient(farthest-side at 100% 50%,rgba(0,0,0,.16),transparent) 100% 0;
+            background-repeat:no-repeat;background-size:32px 100%,32px 100%,14px 100%,14px 100%;
+            background-attachment:local,local,scroll,scroll}
+  /* 実際の倉庫と同じ位置関係で並べるフロア図 */
+  .floor{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fcfcfd}
+  .floor .zone-title{margin-top:0}
+  .fl-wall{height:12px;background:#434343;border-radius:2px;margin:14px 0;position:relative}
+  .fl-wall span{position:absolute;right:6px;top:-1px;font-size:9px;color:#fff;letter-spacing:.3em}
+  .spaces{display:grid;grid-auto-flow:row;gap:16px 26px;
+          align-items:start;justify-items:start;width:max-content;padding:2px}
+  .space .name{font-size:12px;font-weight:700;margin-bottom:4px;color:var(--muted)}
+  .grid{display:flex;gap:5px;align-items:flex-end}
+  .grid.top{align-items:flex-start}
+  .grid-h{display:flex;flex-direction:column;gap:5px}
+  /* PC横・EV横：実際の図と同じく短い段が上・右寄せ */
+  .space.flip .grid-h{flex-direction:column-reverse;align-items:flex-end}
+  .col{display:flex;flex-direction:column-reverse;gap:2px;border:2px solid #111;padding:3px;border-radius:4px;background:#fafafa}
+  .col.top{flex-direction:column}
+  .hrow{display:flex;gap:2px;border:2px solid #111;padding:3px;border-radius:4px;background:#fafafa}
+  .colwrap.aisle .col,.colwrap.aisle .hrow{border:2px dashed #9ca3af;background:#f1f2f4}
+  .colwrap.blockgap{margin-left:16px}
+  .colwrap.editable{cursor:pointer}
+  .colwrap.editable:hover .col,.colwrap.editable:hover .hrow{outline:2px solid var(--accent)}
+  .cell{width:var(--cell);height:var(--cell);border:1px solid #cbd5e1;border-radius:2px;background:#fff;overflow:hidden;
+        display:flex;align-items:center;justify-content:center;font-weight:600;color:#1f2937;
+        font-size:calc(var(--cell) * .3);line-height:1}
+  .cell.aisle-empty{background:#e5e7eb}
+  .cell.segline{border-top:2px dashed #374151}
+  .cell.segline-h{border-left:2px dashed #374151}
+  .colcap{font-size:10px;color:#9ca3af;text-align:center;margin-top:2px}
+  .sizectl{display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+  .sizectl .lbl{font-size:12px;color:var(--muted)}
+  .sizebtn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 14px;font-size:13px;
+           cursor:pointer;min-height:40px;color:#374151}
+  .sizebtn.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+
+  .msg{padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:10px}
+  .msg.ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
+  .msg.warn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
+  .summary{font-size:12px;color:var(--muted);margin-top:8px}
+  .cfg textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:6px;padding:8px;
+                font-family:ui-monospace,monospace;font-size:13px}
+  .hint{font-size:12px;color:var(--muted)}
+  .note{font-size:11px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+  .note b{color:#374151}
+  .regcount{font-size:12px;color:var(--muted);margin-bottom:4px}
+  .regcount.warn{color:#b45309}
+  .savestat{font-size:11px;color:#9ca3af;margin:0 0 12px}
+  .savestat.warn{color:#b45309}
+  .empty{padding:26px 10px;text-align:center;color:var(--muted);font-size:13px}
+
+  /* ---- 入力カード（スマホ） ---- */
+  .fld2{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+  .fld2 label{width:62px;flex:none;font-size:12px;color:var(--muted);font-weight:700}
+  .fld2 input[type=date]{border:1px solid var(--line);border-radius:8px;padding:9px 10px;
+                         font-size:16px;min-height:44px;background:#fff;color:#1f2937}
+  .lotcards{display:none}
+  .lotcard{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:#fff}
+  .lotcard .top{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:1}
+  .seg button{flex:1;border:0;background:#fff;padding:10px 4px;font-size:14px;color:#374151;
+              cursor:pointer;min-height:44px}
+  .seg button.on{background:var(--accent);color:#fff;font-weight:700}
+  .fld{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .fld label{width:52px;flex:none;font-size:12px;color:var(--muted);font-weight:700}
+  .fld input{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:10px;
+             font-size:16px;min-height:44px;background:#fff}
+  .fld select{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:10px;
+              font-size:16px;min-height:44px;background:#fff;color:#1f2937}
+  .hyph{border:1px solid var(--line);background:#f8fafc;border-radius:8px;min-width:46px;min-height:44px;
+        font-size:18px;font-weight:700;color:#374151;cursor:pointer;flex:none}
+  .nextbtn{border:1px dashed var(--accent);background:#eff6ff;color:#1d4ed8;border-radius:8px;
+           width:100%;min-height:44px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px}
+  .lotcard .foot{display:flex;justify-content:flex-end;align-items:baseline;gap:6px;
+                 border-top:1px dashed var(--line);margin-top:10px;padding-top:8px}
+  .lotcard .foot .val{font-size:22px;font-weight:800}
+  .lotcard .foot .val.warn{color:#b45309;font-size:15px}
+
+  @media (max-width:600px){
+    .wrap{padding:12px 12px calc(96px + var(--safe))}
+    .card{padding:12px;border-radius:12px}
+    #lotTableWrap{display:none}
+    .lotcards{display:block}
+    .actionbar{display:block}
+    #runBtnInline{display:none}
+    .note{gap:8px}
+  }
+
+
+  /* ---- 配置図の表（手書き用紙と同じレイアウト） ---- */
+  /* 倍率は CSS 変数で当てる。印刷用の zoom を上書きしないよう style 属性には書かない */
+  .sheet{background:#fff;color:#000;padding:10px;overflow-x:auto;width:max-content;max-width:100%;
+         zoom:var(--sheet-zoom,1)}
+  /* 1列 48px×14＝672px。ロット（最大9文字）が区画セル（2列＝96px）に収まる幅 */
+  .sheet table{border-collapse:collapse;table-layout:fixed;
+               width:672px;min-width:672px;max-width:672px;margin:0}
+  .sheet td{border:1px solid #000;text-align:center;font-size:11px;padding:1px;
+            height:26px;background:#fff;color:#000;overflow:hidden}
+  .sheet td.none{border:0;background:transparent}
+  .sheet td.hd{font-weight:700;font-size:13px}
+  .sheet td.ttl{font-size:15px;font-weight:800;letter-spacing:.2em}
+  .sheet td.dow{height:28px}
+  /* 上段の3行：用紙と同じく「品名欄がいちばん高い」 */
+  .sheet tr.r1 td{height:32px}
+  .sheet tr.r2 td{height:28px}
+  .sheet tr.r3 td{height:26px}
+  /* 記入欄（月日・総P）は用紙どおり内側に縦線を引かない。
+     td の border をいじると table-layout:fixed の colspan 幅計算が崩れるので、
+     1セルにまとめて中身を grid で列に割り付ける */
+  .sheet .fldrow{display:grid;align-items:center;line-height:1}
+  .sheet .fldrow.c5{grid-template-columns:repeat(5,1fr);font-size:20px}
+  .sheet .fldrow.c3{grid-template-columns:repeat(3,1fr);font-size:30px}
+  .sheet .fldrow span:first-child{grid-column:1/3}
+  /* 月の数字は曜日「火」の真上（2列目）に置く */
+  .sheet .fldrow.c5 span:first-child{grid-column:2}
+  /* 用紙の太罫（2px）＝品名欄の外周・上下段の区切り */
+  .sheet td.bt2{border-top:2px solid #000}
+  .sheet td.bb2{border-bottom:2px solid #000}
+  .sheet td.bl2{border-left:2px solid #000}
+  .sheet td.br2{border-right:2px solid #000}
+  .sheet .ring{display:inline-flex;align-items:center;justify-content:center;
+               box-sizing:border-box;min-width:22px;max-width:100%;height:22px;
+               padding:0 3px;white-space:nowrap;
+               border:2px solid #000;border-radius:999px;font-size:11px;font-weight:700}
+  .sheet td.slot{font-size:10px;line-height:1.2;height:26px;word-break:break-all}
+  .sheet tr.gap td{height:11px;border:0;background:transparent}
+  .sheet tr.gap td.sep{border-bottom:2px solid #000}
+  /* 注記行（グローバルの .note と衝突させないため別名） */
+  .sheet td.snote{display:table-cell;font-size:10px;color:#333;height:24px;
+                  border:0;background:transparent}
+  .sheet td.g{height:30px;position:relative;padding:0}
+  .sheet td.g.aisle{background:#d9d9d9}
+  .sheet td.g .mk{display:inline-flex;align-items:center;justify-content:center;
+                  width:22px;height:22px;border:2px solid #000;border-radius:50%;
+                  font-size:11px;font-weight:700}
+  .sheet td.g .num{position:absolute;top:0;left:2px;font-size:9px;font-weight:700}
+  .sheet td.g.bt{border-top:3px solid #000}
+  .sheet td.g.bb{border-bottom:3px solid #000}
+  .sheet td.g.bl{border-left:3px solid #000}
+  .sheet td.g.br{border-right:3px solid #000}
+  .sheet td.lab{border:0;font-size:11px;color:#333}
+  .sheet td.colno{border:0;font-size:11px;height:20px}
+
+  @media print{
+    @page{size:A4 landscape;margin:8mm}
+    header,.tabs,.actionbar,#updateBar,.sizectl,#mapBody,#messages,#regInfo,#saveStatus,.note{display:none !important}
+    .wrap{padding:0;max-width:none}
+    .card{border:0;padding:0;margin:0}
+    .card h2{display:none}
+    /* 表は 675×469px 固定。A4横・余白8mm の印刷領域は 281×194mm＝約1062×733px。
+       1.5倍で 1012×703px＝268×186mm。用紙の高さを 96% 使い、
+       ブラウザごとの余白差で2ページに割れない範囲に収める */
+    .sheet{padding:0;overflow:visible;max-width:none;zoom:1.5;page-break-inside:avoid}
+    body{background:#fff}
+  }
+  #updateBar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:#111827;color:#fff;
+             padding:11px 16px calc(11px + var(--safe));font-size:13px;display:none;
+             align-items:center;gap:12px;justify-content:center}
+  #updateBar button{border:0;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:700;
+                    background:#fbbf24;color:#111827;cursor:pointer;min-height:40px}
+</style>
+</head>
+<body>
+<header>
+  <h1>パレット配置図 自動作成</h1>
+  <p>個数 ÷ SNP でパレット数を自動計算（切り上げ）／ 仕掛品=倉庫内・商品=倉庫外</p>
+</header>
+
+<div class="tabs">
+  <button class="tab active" id="tabbtn-input" onclick="switchTab('input')">入力</button>
+  <button class="tab" id="tabbtn-map" onclick="switchTab('map')">配置図</button>
+  <button class="tab" id="tabbtn-settings" onclick="switchTab('settings')">設定<span class="dot" id="regDot">0</span></button>
+</div>
+
+<div class="wrap">
+
+  <!-- ===== 入力タブ ===== -->
+  <div id="tab-input" class="tabpanel">
+    <div id="regInfo" class="regcount"></div>
+    <div id="saveStatus" class="savestat"></div>
+
+    <div class="card">
+      <h2>搬入日と納品タイミング <span class="badge">配置図の表に反映</span></h2>
+      <div class="fld2">
+        <label>搬入日</label>
+        <input type="date" id="dateInput" onchange="onHeadChange()">
+        <span class="hint" id="dowHint"></span>
+      </div>
+      <div class="fld2">
+        <label>納品</label>
+        <div class="seg" style="max-width:240px">
+          <button id="tmAM" onclick="setTiming('あさ')">あさ</button>
+          <button id="tmPM" onclick="setTiming('ひる')">ひる</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>荷物の入力 <span class="badge">個数 ÷ SNP → パレット数</span></h2>
+
+      <!-- スマホ: カード -->
+      <div class="lotcards" id="lotCards"></div>
+
+      <!-- PC: テーブル -->
+      <div id="lotTableWrap">
+        <table id="lotTable">
+          <thead>
+            <tr><th style="width:86px">種別</th><th>品名</th><th>ロット</th>
+                <th style="width:92px">SNP</th><th style="width:92px">個数</th>
+                <th style="width:86px">パレット数</th><th style="width:56px"></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <datalist id="nameOptions"></datalist>
+
+      <div class="row-actions">
+        <button class="btn btn-ghost" onclick="addRow();syncCards();saveLots()">＋ 行を追加</button>
+        <button class="btn btn-ghost" onclick="clearLots()">入力をクリア</button>
+        <label class="chk"><input type="checkbox" id="mixChk" checked> 満杯時に混載を許可</label>
+        <label class="chk"><input type="checkbox" id="fracChk" onchange="toggleFrac()"> 端数を「半」で表示</label>
+        <button class="btn btn-primary" id="runBtnInline" onclick="run(true)">▶ 自動配置を作成</button>
+      </div>
+      <div class="row-actions">
+        <button class="btn btn-ghost" onclick="loadSample('basic')">基本サンプル</button>
+        <button class="btn btn-ghost" onclick="loadSample('mix')">混載デモ</button>
+      </div>
+
+      <div class="note">
+        <span><b>ルール:</b> 仕掛品→倉庫内 / 商品→倉庫外</span>
+        <span>原則 1列＝1品目</span>
+        <span>④の通路は大口の余りのみ使用</span>
+        <span>パレット数＝<b>切り上げ</b>(個数 ÷ SNP)</span>
+        <span><b>品名＋ロット</b>が違えば別物として配置</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 配置図タブ ===== -->
+  <div id="tab-map" class="tabpanel" style="display:none">
+    <div class="card" id="resultCard">
+      <h2>配置図
+        <button id="editBtn" class="btn btn-ghost" style="margin-left:auto" onclick="toggleEdit()">通路を編集</button>
+      </h2>
+      <div id="editHint" class="hint" style="display:none;margin-bottom:8px">✏ 編集モード：マスをタップするとその列が「通路（灰・破線）」⇔「通常」に切り替わります。</div>
+
+      <div class="sizectl">
+        <span class="lbl">表示</span>
+        <button class="sizebtn on" data-view="sheet" onclick="setView('sheet')">配置図の表</button>
+        <button class="sizebtn" data-view="block" onclick="setView('block')">ブロック図</button>
+        <button class="btn btn-ghost" style="margin-left:auto" onclick="window.print()">🖨 印刷</button>
+      </div>
+
+      <div class="sizectl" id="zoomCtl">
+        <span class="lbl">表示倍率</span>
+        <button class="sizebtn on" data-zoom="auto" onclick="setSheetZoom('auto')">自動</button>
+        <button class="sizebtn" data-zoom="1" onclick="setSheetZoom('1')">100%</button>
+        <button class="sizebtn" data-zoom="1.5" onclick="setSheetZoom('1.5')">150%</button>
+        <button class="sizebtn" data-zoom="2" onclick="setSheetZoom('2')">200%</button>
+        <span class="lbl" id="zoomNow"></span>
+      </div>
+
+      <div id="sheetView"></div>
+
+      <div class="sizectl" id="sizeCtl" style="display:none">
+        <span class="lbl">マスの大きさ</span>
+        <button class="sizebtn" data-size="20" onclick="setCellSize(20)">小</button>
+        <button class="sizebtn on" data-size="30" onclick="setCellSize(30)">中</button>
+        <button class="sizebtn" data-size="42" onclick="setCellSize(42)">大</button>
+      </div>
+
+      <div id="messages"></div>
+      <div id="mapBody">
+        <div id="legend" class="legend"></div>
+
+        <div class="floor">
+          <div class="zone-title zone-far">倉庫外（収納庫から遠い）</div>
+          <div class="scroller"><div class="spaces" id="zone-far"></div></div>
+
+          <div class="fl-wall"><span>壁</span></div>
+
+          <div class="zone-title zone-near">倉庫内（収納庫に近い）</div>
+          <div class="scroller"><div class="spaces" id="zone-near"></div></div>
+        </div>
+
+        <div class="note" style="margin-top:10px">
+          <span><b>越</b>＝通路へはみ出し</span>
+          <span><b>混</b>＝混載（破線で品目が分かれる）</span>
+          <span>灰色＝通路（空き）</span>
+          <span>横にスクロールできます</span>
+        </div>
+        <div class="summary" id="summary"></div>
+      </div>
+      <div class="empty" id="mapEmpty">「入力」タブで荷物を入れて<br>「自動配置を作成」を押してください</div>
+    </div>
+  </div>
+
+  <!-- ===== 設定タブ ===== -->
+  <div id="tab-settings" class="tabpanel" style="display:none">
+    <div class="card">
+      <h2>品目マスタ <span class="badge">品名 → SNP</span></h2>
+      <table id="masterTable">
+        <thead>
+          <tr><th>品名</th><th style="width:110px">SNP</th><th style="width:56px"></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="row-actions">
+        <button class="btn btn-ghost" onclick="addMasterRow();onMasterChange()">＋ 品目を追加</button>
+        <button class="btn btn-ghost" onclick="loadMaster()">サンプル品目を読込</button>
+      </div>
+      <div class="hint" style="margin-top:8px">品名を入力するとSNPが自動で入ります。<b>同じ品名でSNPが違うものは、複数行に分けて登録</b>できます（入力時に候補から選べます）。伝票のSNPが登録と違う場合は、入力欄で直接書き換えれば、その値で計算されます。</div>
+    </div>
+
+    <div class="card cfg">
+      <h2>スペース設定 <span class="badge">微調整用・保存されません</span></h2>
+      <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路)</b></div>
+      <textarea id="cfgText"></textarea>
+      <div class="row-actions">
+        <button class="btn btn-ghost" onclick="applyConfig()">設定を反映</button>
+        <button class="btn btn-ghost" onclick="resetConfig()">初期値に戻す</button>
+      </div>
+      <div class="summary" id="capacity"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="actionbar" id="actionBar">
+  <button class="btn btn-primary" onclick="run(true)">▶ 自動配置を作成</button>
+</div>
+
+<div id="updateBar">
+  <span>新しいバージョンがあります</span>
+  <button onclick="applyUpdate()">更新する</button>
+</div>
+
+<script>
+/* ===== スペース定義（配列の順＝収納庫に近い順）===== */
+const DEFAULT_SPACES = [
+  // 倉庫内（収納庫に近い順）。EV横は超過時の受け皿なので最後
+  {name:"メイン", zone:"near", orient:"v", block:3, align:"top", cols:[
+     {h:6,aisle:true},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:5,aisle:true}]},
+  {name:"PC横", zone:"near", orient:"h", block:99, cols:[{h:8},{h:4}]},
+  {name:"EV横", zone:"near", orient:"h", block:99, cols:[{h:6},{h:4}]},
+  // 倉庫外
+  {name:"軒下②", zone:"far", orient:"v", block:99, cols:[{h:4},{h:4}]},
+  {name:"軒下①", zone:"far", orient:"h", block:99, cols:[{h:11},{h:11},{h:8}]},
+];
+// 実際の倉庫の位置関係（ブロック図の並び）。列・行はフロア図のマス目
+//   倉庫外: 軒下②＝左 ／ 軒下①＝右
+//   倉庫内: メイン＝右上 ／ PC横＝左下 ／ EV横＝右下
+// flip＝実際の図と同じく短い段を上・右寄せにする
+const FLOOR_POS = {
+  "軒下②":{c:1,r:1}, "軒下①":{c:2,r:1},
+  "メイン":{c:2,r:1}, "PC横":{c:1,r:2,flip:true}, "EV横":{c:2,r:2,flip:true},
+};
+// 「配置図の表」での欄の割り当て
+const SHEET_TOP = ["軒下①","軒下②"];        // 上段4区画
+const SHEET_BOTTOM = ["メイン","PC横","EV横"]; // 下段7区画（メイン以外は注記を付ける）
+
+/* ===== 品目マスタ（品名 → SNP。同じ品名で複数SNP可）===== */
+const DEFAULT_MASTER = (function(){
+  const m=[
+    {name:"部品A",snp:10},{name:"部品B",snp:10},{name:"部品C",snp:10},
+    {name:"部品C",snp:20},
+    {name:"部品D",snp:10},{name:"部品E",snp:10},
+    {name:"製品X",snp:10},{name:"製品Y",snp:10},{name:"製品Z",snp:10},{name:"製品W",snp:10},
+  ];
+  for(let i=1;i<=14;i++) m.push({name:"部品"+i,snp:10});
+  return m;
+})();
+
+const SAMPLES = {
+  basic:[
+    {type:"仕掛品",name:"部品C",lot:"L-103",snp:10,qty:245},
+    {type:"仕掛品",name:"部品A",lot:"L-101",snp:10,qty:120},
+    {type:"仕掛品",name:"部品B",lot:"L-102",snp:10,qty:70},
+    {type:"仕掛品",name:"部品D",lot:"L-104",snp:10,qty:140},
+    {type:"仕掛品",name:"部品E",lot:"L-105",snp:10,qty:60},
+    {type:"商品",  name:"製品X",lot:"P-201",snp:10,qty:60},
+    {type:"商品",  name:"製品Y",lot:"P-202",snp:10,qty:90},
+    {type:"商品",  name:"製品Z",lot:"P-203",snp:10,qty:110},
+    {type:"商品",  name:"製品W",lot:"P-204",snp:10,qty:80},
+  ],
+  mix:(function(){const a=[];let n=1;
+    for(let i=0;i<9;i++)a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),snp:10,qty:60});
+    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),snp:10,qty:60});
+    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),snp:10,qty:50});
+    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),snp:10,qty:80});
+    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),snp:10,qty:40});
+    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),snp:10,qty:70});
+    a.push({type:"商品",name:"製品X",lot:"P-201",snp:10,qty:100});
+    return a;})(),
+};
+
+const PALETTE=["#93c5fd","#fca5a5","#86efac","#fcd34d","#c4b5fd","#f9a8d4","#7dd3fc","#fdba74",
+  "#a7f3d0","#d8b4fe","#f0abfc","#bef264","#67e8f9","#fda4af","#a5b4fc","#5eead4","#fbcfe8","#bae6fd"];
+
+let SPACES = clone(DEFAULT_SPACES);
+let MASTER = [];
+let editMode=false;
+let lastLots=null, lastColor=null, lastSp=null;
+let hasResult=false;
+let fracMode=false;   // true なら「満載数P 半」表記
+let sheetMode=true;  // 配置図タブの表示（true=配置図の表 / false=ブロック図）
+
+/* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", view:"palletApp.view", zoom:"palletApp.zoom"};
+let storageOK=true;
+const memStore={};
+(function(){
+  try{ const k="palletApp.__t"; localStorage.setItem(k,"1"); localStorage.removeItem(k); }
+  catch(e){ storageOK=false; }
+})();
+function saveData(key,obj){
+  const s=JSON.stringify(obj);
+  if(storageOK){ try{ localStorage.setItem(key,s); return true; }catch(e){ storageOK=false; } }
+  memStore[key]=s; updateSaveStatus(); return false;
+}
+function loadData(key){
+  try{
+    const s = storageOK ? localStorage.getItem(key) : memStore[key];
+    return s ? JSON.parse(s) : null;
+  }catch(e){ return null; }
+}
+function updateSaveStatus(){
+  const el=document.getElementById("saveStatus"); if(!el)return;
+  el.textContent = storageOK ? "自動保存中（この端末に保存）" : "この環境では保存されません";
+  el.className = "savestat"+(storageOK?"":" warn");
+}
+function saveMaster(){ saveData(STORE_KEY.master, MASTER); }
+function saveLots(){ saveData(STORE_KEY.lots, readRowData()); }
+
+/* ---------- 品目マスタ ---------- */
+function addMasterRow(d){
+  d=d||{name:"",snp:""};
+  const tb=document.querySelector("#masterTable tbody");
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+    <td><input value="${esc(d.name)}" placeholder="品名" oninput="onMasterChange()"></td>
+    <td><input type="number" inputmode="numeric" min="1" value="${esc(d.snp)}" placeholder="SNP" oninput="onMasterChange()"></td>
+    <td><button class="btn-mini" onclick="this.closest('tr').remove();onMasterChange()">削除</button></td>`;
+  tb.appendChild(tr);
+}
+function readMaster(){
+  const list=[];
+  document.querySelectorAll("#masterTable tbody tr").forEach(tr=>{
+    const c=tr.querySelectorAll("input");
+    const name=c[0].value.trim(); const snp=parseInt(c[1].value)||0;
+    if(name && snp>0) list.push({name,snp});
+  });
+  return list;
+}
+// その品名に登録されたSNPの一覧（重複除去）
+function snpsOf(name){
+  const n=(name||"").trim(); if(!n)return [];
+  const out=[]; MASTER.forEach(m=>{ if(m.name===n && !out.includes(m.snp)) out.push(m.snp); });
+  return out;
+}
+function onMasterChange(){
+  MASTER=readMaster();
+  refreshNameOptions();
+  recalcAllRows();
+  updateRegCount();
+  saveMaster();
+}
+function refreshNameOptions(){
+  const names=[]; MASTER.forEach(m=>{ if(!names.includes(m.name)) names.push(m.name); });
+  document.getElementById("nameOptions").innerHTML =
+    names.map(n=>`<option value="${esc(n)}">SNP ${snpsOf(n).join(" / ")}</option>`).join("");
+}
+function loadMaster(){
+  document.querySelector("#masterTable tbody").innerHTML="";
+  DEFAULT_MASTER.forEach(addMasterRow);
+  onMasterChange();
+}
+function updateRegCount(){
+  const names=new Set(MASTER.map(m=>m.name));
+  document.getElementById("regDot").textContent=names.size;
+  const info=document.getElementById("regInfo");
+  info.innerHTML = names.size===0
+    ? "⚠ 品目が未登録です。「設定」タブで登録するか、SNPを直接入力してください。"
+    : `登録品目 <b>${names.size}件</b>（SNPの編集は「設定」タブ）`;
+  info.className="regcount"+(names.size===0?" warn":"");
+}
+
+/* ---------- 入力（PCテーブル） ---------- */
+function addRow(d){
+  d=d||{type:"仕掛品",name:"",lot:"",snp:"",qty:""};
+  const tb=document.querySelector("#lotTable tbody");
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+    <td><select onchange="rowChanged(this)">
+      <option ${d.type==="仕掛品"?"selected":""}>仕掛品</option>
+      <option ${d.type==="商品"?"selected":""}>商品</option>
+    </select></td>
+    <td><input list="nameOptions" value="${esc(d.name)}" placeholder="品名" oninput="nameChanged(this)"></td>
+    <td><input inputmode="tel" value="${esc(d.lot)}" placeholder="ロット" oninput="rowChanged(this)"></td>
+    <td><input type="number" inputmode="numeric" min="1" value="${esc(d.snp)}" placeholder="SNP" oninput="rowChanged(this)"></td>
+    <td><input type="number" inputmode="numeric" min="1" value="${esc(d.qty)}" placeholder="個数" oninput="rowChanged(this)"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();addNextRow(rowIndexOf(this));}"></td>
+    <td class="pallet-cell">-</td>
+    <td><button class="btn-mini" onclick="removeRow(this)">削除</button></td>`;
+  tb.appendChild(tr);
+  recalcRow(tr);
+}
+function removeRow(btn){ btn.closest("tr").remove(); syncCards(); saveLots(); }
+function rowChanged(el){ const tr=el.closest("tr"); recalcRow(tr); syncCards(); saveLots(); }
+// 品名を変えたとき、SNPが空 or 旧候補のままなら自動で入れる
+function nameChanged(el){
+  const tr=el.closest("tr");
+  const c=tr.querySelectorAll("select,input");
+  const list=snpsOf(c[1].value);
+  const cur=c[3].value.trim();
+  if(list.length && (cur==="" || !list.includes(parseInt(cur)))){
+    if(list.length===1) c[3].value=list[0];
+    else if(cur==="") c[3].value=list[0];
+  }
+  rowChanged(el);
+}
+function rowValues(tr){
+  const c=tr.querySelectorAll("select,input");
+  return {type:c[0].value, name:c[1].value.trim(), lot:c[2].value.trim(),
+          snp:parseInt(c[3].value)||0, qty:parseInt(c[4].value)||0, cells:c};
+}
+// パレット数の表示文字列。fracMode=true なら「満載数P 半」形式
+function palletText(qty,snp){
+  if(snp<=0) return {text:"SNP未入力", warn:true};
+  if(qty<=0) return {text:"-", warn:false};
+  if(!fracMode) return {text:Math.ceil(qty/snp)+"P", warn:false};
+  const full=Math.floor(qty/snp), rem=qty%snp;
+  return {text: rem>0 ? full+"P 半" : full+"P", warn:false};
+}
+function toggleFrac(){
+  fracMode=document.getElementById("fracChk").checked;
+  saveData(STORE_KEY.frac, fracMode);
+  recalcAllRows();
+}
+function recalcRow(tr){
+  const v=rowValues(tr);
+  const cell=tr.querySelector(".pallet-cell");
+  const p=palletText(v.qty,v.snp);
+  cell.textContent=p.text;
+  cell.className="pallet-cell"+(p.warn?" warn-cell":"");
+}
+function recalcAllRows(){
+  document.querySelectorAll("#lotTable tbody tr").forEach(recalcRow);
+  syncCards();
+}
+function readRowData(){
+  return [...document.querySelectorAll("#lotTable tbody tr")].map(tr=>{
+    const c=tr.querySelectorAll("select,input");
+    return {type:c[0].value, name:c[1].value, lot:c[2].value, snp:c[3].value, qty:c[4].value};
+  });
+}
+// 分納（同一品名・同一ロットが複数行）は1つの荷物としてまとめる。
+// パレット数は伝票（行）ごとに切り上げてから合計する。
+function readLots(){
+  const rows=[...document.querySelectorAll("#lotTable tbody tr")];
+  const lots=[], unknown=[], byKey={}, typeMix=[];
+  rows.forEach((tr,i)=>{
+    const v=rowValues(tr);
+    if(v.qty<=0) return;
+    if(v.snp<=0){ unknown.push(v); return; }
+    const pallets=Math.ceil(v.qty/v.snp);
+    const half = (v.qty % v.snp)>0 ? 1 : 0;   // 端数のある伝票の数だけ「半」になる
+    // 品名もロットも空の行はまとめない（別々の荷物として扱う）
+    const key = (v.name||v.lot) ? (v.name+"\u0000"+v.lot) : ("__row"+i);
+    if(byKey[key]!=null){
+      const g=lots[byKey[key]];
+      g.qty+=v.qty; g.pallets+=pallets; g.parts++; g.half+=half;
+      if(g.type!==v.type && !typeMix.includes(g.code)) typeMix.push(g.code);
+    }else{
+      byKey[key]=lots.length;
+      lots.push({ id:lots.length, type:v.type, name:v.name, lot:v.lot, qty:v.qty, snp:v.snp,
+                  code:v.lot||v.name||("行"+(i+1)), pallets:pallets, parts:1, half:half });
+    }
+  });
+  return {lots, unknown, typeMix};
+}
+function clearLots(){
+  if(!confirm("荷物の入力をすべてクリアします。よろしいですか？（品目マスタは残ります）"))return;
+  document.querySelector("#lotTable tbody").innerHTML="";
+  addRow(); syncCards(); saveLots();
+  hasResult=false; lastLots=null; showMapState();
+}
+function loadSample(which){
+  document.querySelector("#lotTable tbody").innerHTML="";
+  SAMPLES[which].forEach(addRow);
+  syncCards(); saveLots(); run(true);
+}
+
+/* ---------- 入力（スマホカード：テーブルと同期） ---------- */
+function syncCards(){
+  const host=document.getElementById("lotCards");
+  const rows=[...document.querySelectorAll("#lotTable tbody tr")];
+  host.innerHTML = rows.map((tr,i)=>{
+    const v=rowValues(tr);
+    const list=snpsOf(v.name);
+    const p=palletText(v.qty,v.snp);
+    const warn = p.warn ? " warn" : "";
+    // 候補が2つ以上あり、かつ「追加入力中」でなければプルダウン
+    const custom = tr.dataset.snpCustom==="1";
+    const useSelect = list.length>=2 && !custom;
+    let snpField;
+    if(useSelect){
+      const opts=list.map(s=>`<option value="${s}" ${s===v.snp?"selected":""}>${s}</option>`).join("");
+      const cur = list.includes(v.snp) ? "" : `<option value="${v.snp}" selected>${v.snp}</option>`;
+      snpField=`<select onchange="cardSnpSelect(${i},this.value)">${cur}${opts}</select>`;
+    }else{
+      snpField=`<input type="number" inputmode="numeric" min="1" value="${v.snp||""}" placeholder="SNP"
+                       oninput="cardEdit(${i},3,this.value)" onchange="snpEntered(${i})">`;
+    }
+    // SNP欄の右のボタン：追加入力中は取り消し、それ以外は「＋（SNPを追加）」
+    const snpBtn = custom
+      ? `<button class="hyph" onclick="snpCancel(${i})" title="追加をやめる">↩</button>`
+      : `<button class="hyph" onclick="snpAdd(${i})" title="SNPを追加">＋</button>`;
+    return `<div class="lotcard" data-i="${i}">
+      <div class="top">
+        <div class="seg">
+          <button class="${v.type==="仕掛品"?"on":""}" onclick="cardType(${i},'仕掛品')">仕掛品</button>
+          <button class="${v.type==="商品"?"on":""}" onclick="cardType(${i},'商品')">商品</button>
+        </div>
+        <button class="btn-mini" onclick="cardDelete(${i})">削除</button>
+      </div>
+      <div class="fld" data-f="name"><label>品名</label>
+        <input list="nameOptions" value="${esc(v.name)}" placeholder="品名" oninput="cardEdit(${i},1,this.value)"></div>
+      <div class="fld" data-f="lot"><label>ロット</label>
+        <input inputmode="tel" value="${esc(v.lot)}" placeholder="ロット" oninput="cardEdit(${i},2,this.value)">
+        <button class="hyph" onclick="addHyphen(${i})" title="ハイフンを入力">−</button></div>
+      <div class="fld" data-f="snp"><label>SNP</label>${snpField}${snpBtn}</div>
+      <div class="fld" data-f="qty"><label>個数</label>
+        <input type="number" inputmode="numeric" min="1" value="${v.qty||""}" placeholder="個数"
+               oninput="cardEdit(${i},4,this.value)"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();addNextRow(${i});}"></div>
+      <div class="foot"><span class="hint">パレット数</span><span class="val${warn}">${p.text}</span></div>
+      <button class="nextbtn" onclick="addNextRow(${i})">＋ 次の荷物</button>
+    </div>`;
+  }).join("");
+}
+// SNPプルダウンの選択
+function cardSnpSelect(i,val){
+  const tr=trAt(i); if(!tr)return;
+  tr.querySelectorAll("select,input")[3].value=val;
+  delete tr.dataset.snpCustom;
+  recalcRow(tr); saveLots(); syncCards();
+}
+// 「＋」= 新しいSNPを入力する状態にする
+function snpAdd(i){
+  const tr=trAt(i); if(!tr)return;
+  const c=tr.querySelectorAll("select,input");
+  tr.dataset.snpPrev=c[3].value;   // 取り消し用に元の値を控える
+  tr.dataset.snpCustom="1";
+  c[3].value="";
+  recalcRow(tr); syncCards();
+  focusField(i,"snp");
+}
+// 「↩」= 追加をやめて元の値に戻す
+function snpCancel(i){
+  const tr=trAt(i); if(!tr)return;
+  const c=tr.querySelectorAll("select,input");
+  c[3].value = tr.dataset.snpPrev || "";
+  delete tr.dataset.snpCustom; delete tr.dataset.snpPrev;
+  recalcRow(tr); saveLots(); syncCards();
+}
+function focusField(i,f){
+  const inp=document.querySelector(`.lotcard[data-i="${i}"] .fld[data-f="${f}"] input`);
+  if(inp){ inp.focus(); try{ inp.setSelectionRange(inp.value.length,inp.value.length); }catch(e){} }
+  return inp;
+}
+// 追加入力したSNPを品目マスタへ登録
+function snpEntered(i){
+  const tr=trAt(i); if(!tr)return;
+  const v=rowValues(tr);
+  if(v.snp<=0){ snpCancel(i); return; }   // 空のまま確定したら元に戻す
+  if(v.name && !snpsOf(v.name).includes(v.snp)){
+    addMasterRow({name:v.name, snp:v.snp});
+    onMasterChange(); // マスタ保存・候補更新・再描画
+  }
+  delete tr.dataset.snpCustom; delete tr.dataset.snpPrev;
+  saveLots(); syncCards();
+}
+// ロット欄にハイフンを追加（iOSのテンキー対策）
+function addHyphen(i){
+  const tr=trAt(i); if(!tr)return;
+  const c=tr.querySelectorAll("select,input");
+  c[2].value = c[2].value + "-";
+  saveLots(); syncCards();
+  focusField(i,"lot");
+}
+// 個数のEnter / 「次の荷物」ボタン → 行を追加して品名へ
+function rowIndexOf(el){
+  return [...document.querySelectorAll("#lotTable tbody tr")].indexOf(el.closest("tr"));
+}
+function addNextRow(i){
+  const rows=document.querySelectorAll("#lotTable tbody tr");
+  const last=rows[rows.length-1];
+  // 末尾が空行ならそこへ移動、そうでなければ追加
+  if(!last || rowValues(last).qty>0 || rowValues(last).name){ addRow(); }
+  syncCards(); saveLots();
+  const cards=document.querySelectorAll(".lotcard");
+  const target=cards[cards.length-1];
+  if(target){
+    target.scrollIntoView({behavior:"smooth", block:"center"});
+    const inp=target.querySelector('.fld[data-f="name"] input');
+    if(inp) inp.focus();
+  }
+}
+function trAt(i){ return document.querySelectorAll("#lotTable tbody tr")[i]; }
+function cardEdit(i,idx,val){
+  const tr=trAt(i); if(!tr)return;
+  const c=tr.querySelectorAll("select,input");
+  c[idx].value=val;
+  if(idx===1){ // 品名変更 → SNP自動補完
+    const list=snpsOf(val); const cur=c[3].value.trim();
+    if(list.length && (cur==="" || !list.includes(parseInt(cur)))){
+      if(list.length===1 || cur==="") c[3].value=list[0];
+    }
+  }
+  recalcRow(tr); saveLots(); updateCardFoot(i);
+}
+function updateCardFoot(i){ // 入力中のフォーカスを保つため、必要箇所だけ更新
+  const tr=trAt(i), card=document.querySelector(`.lotcard[data-i="${i}"]`);
+  if(!tr||!card)return;
+  const v=rowValues(tr);
+  const el=card.querySelector(".foot .val");
+  el.textContent = v.snp>0 && v.qty>0 ? Math.ceil(v.qty/v.snp)+"P" : (v.snp<=0?"SNP未入力":"—");
+  el.className = "val"+(v.snp<=0?" warn":"");
+  const snpInput=card.querySelectorAll(".fld input")[2];
+  if(snpInput && document.activeElement!==snpInput) snpInput.value=v.snp||"";
+}
+function cardType(i,t){
+  const tr=trAt(i); if(!tr)return;
+  tr.querySelector("select").value=t;
+  recalcRow(tr); saveLots(); syncCards();
+}
+function cardDelete(i){ const tr=trAt(i); if(!tr)return; tr.remove(); syncCards(); saveLots(); }
+
+/* ---------- 配置アルゴリズム ---------- */
+function used(c){return c.fills.reduce((a,f)=>a+f.count,0);}
+function buildWork(){
+  return SPACES.map(s=>({
+    name:s.name, zone:s.zone, orient:s.orient||"v", block:s.block||99, align:s.align||"bottom",
+    cols:s.cols.map(c=>({h:c.h, aisle:!!c.aisle, fills:[]}))
+  }));
+}
+function fillNormalAisle(lot,sp,rem){
+  let colsUsed=0;
+  for(const c of sp.cols){
+    if(rem<=0)break;
+    if(c.aisle||c.fills.length>0)continue;
+    if(colsUsed>=sp.block)break;
+    const put=Math.min(rem,c.h); c.fills.push({id:lot.id,count:put}); rem-=put; colsUsed++;
+  }
+  if(rem<=0)return rem;
+  // 通路(灰)は「1ブロックを埋め切った大口の余り」だけに使う。
+  if(colsUsed<sp.block) return rem;
+  for(const c of sp.cols){
+    if(rem<=0)break;
+    if(!c.aisle||c.fills.length>0)continue;
+    const put=Math.min(rem,c.h); c.fills.push({id:lot.id,count:put,ov:true}); rem-=put;
+  }
+  return rem;
+}
+function fillMix(lot,sp,rem){
+  for(const c of sp.cols){
+    if(rem<=0)break;
+    if(c.aisle)continue;
+    const free=c.h-used(c); if(free<=0)continue;
+    const put=Math.min(rem,free); c.fills.push({id:lot.id,count:put,mix:true}); rem-=put;
+  }
+  return rem;
+}
+function place(lots,allowMix){
+  const sp=buildWork();
+  const near=sp.filter(s=>s.zone==="near"), far=sp.filter(s=>s.zone==="far");
+  const tgt=l=>l.type==="仕掛品"?near:far;
+  for(const lot of lots){ let rem=lot.pallets;
+    for(const s of tgt(lot)){ rem=fillNormalAisle(lot,s,rem); if(rem<=0)break; } lot.rem=rem; }
+  if(allowMix){ for(const lot of lots){ if(lot.rem<=0)continue; let rem=lot.rem;
+    for(const s of tgt(lot)){ rem=fillMix(lot,s,rem); if(rem<=0)break; } lot.rem=rem; } }
+  return sp;
+}
+
+/* ---------- 実行 ---------- */
+function run(goMap){
+  const {lots, unknown, typeMix}=readLots();
+  if(lots.length===0 && unknown.length===0){ alert("荷物を1件以上入力してください。"); return; }
+
+  const m=document.getElementById("messages");
+  let warnHtml="";
+  if(typeMix && typeMix.length){
+    warnHtml+=`<div class="msg warn">⚠ 同じ品名・ロットで種別（仕掛品／商品）が違う行があります：${
+      typeMix.join(" / ")}。先に入力した行の種別でまとめています。</div>`;
+  }
+  if(unknown.length){
+    warnHtml=`<div class="msg warn">⚠ SNPが未入力のため計算できない荷物があります：${
+      unknown.map(u=>`${u.name||"(品名なし)"}${u.lot?"／"+u.lot:""}（個数${u.qty}）`).join(" / ")
+    }</div>`;
+  }
+
+  if(lots.length===0){
+    hasResult=false; lastLots=null;
+    m.innerHTML=warnHtml; showMapState();
+    document.getElementById("mapEmpty").style.display="none";
+    document.getElementById("mapBody").style.display="block";
+    document.getElementById("legend").innerHTML="";
+    document.getElementById("zone-far").innerHTML="";
+    document.getElementById("zone-near").innerHTML="";
+    document.getElementById("summary").textContent="";
+    if(goMap) switchTab('map');
+    return;
+  }
+
+  const allowMix=document.getElementById("mixChk").checked;
+  const sp=place(lots,allowMix);
+  lastSp=sp;
+
+  const colorOf={}; lots.forEach((l,i)=>colorOf[l.id]=PALETTE[i%PALETTE.length]);
+  lastLots=lots; lastColor=colorOf; hasResult=true;
+
+  const over=lots.filter(l=>l.rem>0);
+  const usedAisle=sp.some(s=>s.cols.some(c=>c.aisle&&c.fills.length));
+  const usedMix=sp.some(s=>s.cols.some(c=>c.fills.length>1));
+  if(over.length){
+    m.innerHTML=warnHtml+`<div class="msg warn">⚠ 入りきらない荷物があります：${over.map(l=>`${l.name}(${l.code}) 残${l.rem}P`).join(" / ")}</div>`;
+  }else{
+    let notes=[]; if(usedAisle)notes.push("通路へのはみ出しあり"); if(usedMix)notes.push("混載あり");
+    m.innerHTML=warnHtml+`<div class="msg ok">✅ すべてのパレットを配置しました。${notes.length?"（"+notes.join("・")+"）":""}</div>`;
+  }
+
+  document.getElementById("legend").innerHTML=lots.map(l=>
+    `<span><i class="swatch" style="background:${colorOf[l.id]}"></i>${esc(l.name)} / ${esc(l.lot)||"—"}　${l.pallets}P${l.parts>1?`（${l.parts}件）`:""}</span>`).join("");
+
+  drawZone("zone-far", sp.filter(s=>s.zone==="far"), colorOf);
+  drawZone("zone-near", sp.filter(s=>s.zone==="near"), colorOf);
+
+  const total=lots.reduce((a,b)=>a+b.pallets,0);
+  const rem=over.reduce((a,b)=>a+b.rem,0);
+  const totalQty=lots.reduce((a,b)=>a+b.qty,0);
+  document.getElementById("summary").textContent=`合計 ${totalQty}個 → ${total}P ／ 配置済 ${total-rem}P ／ あふれ ${rem}P`;
+
+  showMapState();
+  if(goMap) switchTab('map');
+}
+
+/* ---------- 描画 ---------- */
+function cellsOf(col){
+  const arr=Array.from({length:col.h},()=>({id:null,seg:false,label:""}));
+  let r=0;
+  col.fills.forEach((f,fi)=>{
+    for(let k=0;k<f.count;k++){ if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),label:""}; r++; } }
+    if(r-1>=0) arr[r-1].label = f.id;
+  });
+  return arr;
+}
+function drawZone(elId, spaces, colorOf){
+  const el=document.getElementById(elId); el.innerHTML="";
+  spaces.forEach(sp=>{
+    const horizontal = sp.orient==="h";
+    const topAlign = sp.align==="top" && !horizontal;
+    const wrap=document.createElement("div"); wrap.className="space";
+    // 実際の倉庫の位置関係に合わせて置く（未登録のスペースは自動配置）
+    const pos=FLOOR_POS[sp.name];
+    if(pos){
+      wrap.style.gridColumn=pos.c; wrap.style.gridRow=pos.r;
+      if(pos.flip) wrap.classList.add("flip");
+    }
+    let lines="";
+    const grouping = sp.block>0 && sp.block<sp.cols.length;
+    let nonAisleSeen=0;
+    sp.cols.forEach((col,ci)=>{
+      const blockStart = grouping && !col.aisle && nonAisleSeen>0 && (nonAisleSeen % sp.block===0);
+      if(!col.aisle) nonAisleSeen++;
+      const arr=cellsOf(col);
+      let cells="";
+      arr.forEach(a=>{
+        const filled=a.id!=null;
+        const bg=filled?colorOf[a.id]:"";
+        const cls=["cell"];
+        if(!filled&&col.aisle)cls.push("aisle-empty");
+        if(a.seg)cls.push(horizontal?"segline-h":"segline");
+        const label=filled?(codeShort(a.label)):"";
+        cells+=`<div class="${cls.join(' ')}" style="${bg?'background:'+bg:''}">${label}</div>`;
+      });
+      const inner = horizontal ? `<div class="hrow">${cells}</div>` : `<div class="col${topAlign?' top':''}">${cells}</div>`;
+      const cap = `<div class="colcap">${used(col)}/${col.h}${col.aisle?' 通':''}</div>`;
+      const editCls = editMode? " editable":"";
+      const gapCls = blockStart? " blockgap":"";
+      lines+=`<div class="colwrap${col.aisle?' aisle':''}${editCls}${gapCls}" data-space="${sp.name}" data-col="${ci}">${inner}${cap}</div>`;
+    });
+    wrap.innerHTML=`<div class="name">${sp.name}</div><div class="${horizontal?'grid-h':'grid'}${topAlign?' top':''}">${lines}</div>`;
+    el.appendChild(wrap);
+  });
+}
+function codeShort(id){ const l=lastLots&&lastLots.find(x=>x.id===id); return l?esc(l.code):''; }
+
+/* ---------- タブ / 表示状態 ---------- */
+function switchTab(name){
+  ["input","map","settings"].forEach(t=>{
+    document.getElementById("tab-"+t).style.display = (t===name)?"":"none";
+    document.getElementById("tabbtn-"+t).classList.toggle("active", t===name);
+  });
+  document.getElementById("actionBar").style.display = (name==="input")?"":"none";
+  window.scrollTo(0,0);
+  // 表は表示されて初めて幅が測れるので、タブに来たタイミングで倍率を決める
+  if(name==="map") applySheetZoom();
+}
+function showMapState(){
+  document.getElementById("mapEmpty").style.display = hasResult?"none":"block";
+  document.getElementById("mapBody").style.display  = (hasResult&&!sheetMode)?"block":"none";
+  document.getElementById("sheetView").style.display= sheetMode?"":"none";
+  document.getElementById("sizeCtl").style.display  = sheetMode?"none":"flex";
+  if(hasResult&&sheetMode) renderSheet(); else if(!hasResult) document.getElementById("sheetView").innerHTML="";
+}
+function setCellSize(px){
+  document.documentElement.style.setProperty("--cell", px+"px");
+  document.querySelectorAll(".sizebtn").forEach(b=>
+    b.classList.toggle("on", parseInt(b.dataset.size)===px));
+  saveData(STORE_KEY.cell, px);
+}
+
+/* ---------- 通路編集 ---------- */
+function toggleEdit(){
+  editMode=!editMode;
+  const b=document.getElementById("editBtn");
+  b.className = "btn "+(editMode?"btn-on":"btn-ghost");
+  b.textContent = editMode?"編集を終了":"通路を編集";
+  document.getElementById("editHint").style.display = editMode?"block":"none";
+  if(lastLots) run(false);
+}
+document.addEventListener("click",e=>{
+  if(!editMode)return;
+  const w=e.target.closest(".colwrap"); if(!w)return;
+  const sp=SPACES.find(s=>s.name===w.dataset.space); if(!sp)return;
+  sp.cols[parseInt(w.dataset.col)].aisle=!sp.cols[parseInt(w.dataset.col)].aisle;
+  document.getElementById("cfgText").value=spacesToText();
+  showCapacity(); run(false);
+});
+
+/* ---------- スペース設定 ---------- */
+function spacesToText(){
+  return SPACES.map(s=>{
+    const cols=s.cols.map(c=>c.h+(c.aisle?"*":"")).join(",");
+    return `${s.name} | ${s.zone} | ${s.orient||"v"} | ${s.block||99} | ${cols}`;
+  }).join("\n");
+}
+function applyConfig(){
+  const lines=document.getElementById("cfgText").value.split("\n").map(l=>l.trim()).filter(Boolean);
+  const out=[];
+  for(const ln of lines){
+    const p=ln.split("|").map(x=>x.trim());
+    if(p.length<5){alert("形式が不正な行があります（5項目必要）:\n"+ln);return;}
+    if(!["near","far"].includes(p[1])){alert("区分は near か far:\n"+ln);return;}
+    const orient=p[2]==="h"?"h":"v";
+    const block=parseInt(p[3])||99;
+    const cols=p[4].split(",").map(x=>x.trim()).filter(Boolean).map(x=>{
+      const aisle=x.endsWith("*"); const h=parseInt(x); return {h, aisle};
+    }).filter(c=>c.h>0);
+    if(!cols.length){alert("列の指定がありません:\n"+ln);return;}
+    const prev=SPACES.find(s=>s.name===p[0]);
+    out.push({name:p[0], zone:p[1], orient, block, align:prev?prev.align:undefined, cols});
+  }
+  SPACES=out; showCapacity();
+  if(lastLots) run(false);
+  alert("設定を反映しました。");
+}
+function resetConfig(){
+  SPACES=clone(DEFAULT_SPACES);
+  document.getElementById("cfgText").value=spacesToText();
+  showCapacity(); if(lastLots) run(false);
+}
+function showCapacity(){
+  const sum=(z,f)=>SPACES.filter(s=>s.zone===z).reduce((a,s)=>a+s.cols.filter(f).reduce((x,c)=>x+c.h,0),0);
+  document.getElementById("capacity").textContent=
+    `収容能力 — 倉庫内: 通常${sum("near",c=>!c.aisle)}P＋通路${sum("near",c=>c.aisle)}P ／ `+
+    `倉庫外: 通常${sum("far",c=>!c.aisle)}P＋通路${sum("far",c=>c.aisle)}P`;
+}
+
+
+/* ==========================================================
+   配置図の表（手書き用紙と同じレイアウト）
+   ========================================================== */
+const DOW=["日","月","火","水","木","金","土"];
+let headDate="", headTiming="あさ";
+
+function onHeadChange(){
+  headDate=document.getElementById("dateInput").value;
+  const d=headDate?new Date(headDate+"T00:00:00"):null;
+  document.getElementById("dowHint").textContent = d?`（${DOW[d.getDay()]}曜日）`:"";
+  saveData(STORE_KEY.head,{date:headDate,timing:headTiming});
+  if(hasResult) renderSheet();
+}
+function setTiming(t){
+  headTiming=t;
+  document.getElementById("tmAM").classList.toggle("on",t==="あさ");
+  document.getElementById("tmPM").classList.toggle("on",t==="ひる");
+  saveData(STORE_KEY.head,{date:headDate,timing:headTiming});
+  if(hasResult) renderSheet();
+}
+function setView(v){
+  sheetMode=(v==="sheet");
+  document.querySelectorAll(".sizebtn[data-view]").forEach(b=>
+    b.classList.toggle("on", b.dataset.view===v));
+  document.getElementById("sheetView").style.display = sheetMode?"":"none";
+  document.getElementById("mapBody").style.display   = (!sheetMode && hasResult)?"block":"none";
+  document.getElementById("sizeCtl").style.display   = sheetMode?"none":"flex";
+  document.getElementById("zoomCtl").style.display   = sheetMode?"flex":"none";
+  saveData(STORE_KEY.view, v);
+  if(sheetMode && hasResult) renderSheet();
+}
+
+/* ---------- 配置図の表の表示倍率 ---------- */
+// 表の実寸（.sheet の padding 10px×2 を含む）
+const SHEET_W=675+20, SHEET_H=469+20;
+let sheetZoom="auto";   // "auto" または倍率の文字列
+
+function setSheetZoom(z){
+  sheetZoom=z;
+  document.querySelectorAll(".sizebtn[data-zoom]").forEach(b=>
+    b.classList.toggle("on", b.dataset.zoom===z));
+  saveData(STORE_KEY.zoom, z);
+  applySheetZoom();
+}
+// 「自動」はウィンドウの空きに合わせて拡大する（縮小はせず横スクロールに任せる）
+function autoSheetZoom(){
+  const host=document.getElementById("sheetView");
+  const availW=(host.clientWidth||host.parentElement.clientWidth)-4;
+  if(availW<=0) return null;          // タブ非表示中は測れないので据え置き
+  const availH=window.innerHeight-host.getBoundingClientRect().top-24;
+  const s=Math.min(availW/SHEET_W, Math.max(320,availH)/SHEET_H, 3);
+  return Math.max(1, Math.floor(s*100)/100);
+}
+function applySheetZoom(){
+  const el=document.querySelector("#sheetView .sheet");
+  if(!el) return;
+  const z=(sheetZoom==="auto")?autoSheetZoom():(parseFloat(sheetZoom)||1);
+  if(z==null) return;
+  el.style.setProperty("--sheet-zoom", z);
+  const now=document.getElementById("zoomNow");
+  if(now) now.textContent = (sheetZoom==="auto")?`（${Math.round(z*100)}%）`:"";
+}
+window.addEventListener("resize", ()=>{ if(sheetMode && sheetZoom==="auto") applySheetZoom(); });
+
+// 各スペースに置かれた荷物を、置かれた順に取り出す
+function lotsInSpace(spName){
+  const sp=lastSp && lastSp.find(s=>s.name===spName);
+  if(!sp) return [];
+  const seen=[], out=[];
+  sp.cols.forEach(c=>c.fills.forEach(f=>{
+    if(!seen.includes(f.id)){ seen.push(f.id); out.push(lastLots.find(l=>l.id===f.id)); }
+  }));
+  return out.filter(Boolean);
+}
+function renderSheet(){
+  const host=document.getElementById("sheetView");
+  if(!hasResult || !lastSp){ host.innerHTML=""; return; }
+
+  // 上段：軒下（①→②の順） / 下段：メイン→PC横→EV横
+  const top=[];
+  SHEET_TOP.forEach(n=>lotsInSpace(n).forEach(l=>top.push({lot:l})));
+  const bottom=[];
+  SHEET_BOTTOM.forEach(n=>lotsInSpace(n).forEach(l=>
+    bottom.push({lot:l, note:(n==="メイン"?"":"※"+n)})));
+  const numOf={}; bottom.forEach((e,i)=>{ numOf[e.lot.id]=i+1; });
+
+  const d=headDate?new Date(headDate+"T00:00:00"):null;
+  const mm=d?d.getMonth()+1:"", dd=d?d.getDate():"", dw=d?DOW[d.getDay()]:"";
+  const totalP=lastLots.reduce((a,l)=>a+l.pallets,0);
+  const ring=(v,on)=>on?`<span class="ring">${v}</span>`:v;
+  const E='<td class="none"></td>';
+
+  // 全体を14列（雛形のB〜O列）の1つの表にして、列を揃える
+  let rows="";
+
+  // 行1：月日（列1から）＋ タイトル（下は太罫）
+  rows+=`<tr><td class="hd" colspan="5"><div class="fldrow c5">`
+      + `<span>${mm}</span><span>月</span><span>${dd}</span><span>日</span></div></td>${E}`
+      + `<td class="ttl bb2" colspan="8">軒下</td></tr>`;
+
+  // 行2：曜日 ＋ 上段の品名（品名欄は太枠で囲う）
+  rows+=`<tr class="r1">${["月","火","水","木","金"].map(x=>`<td class="dow">${ring(x,x===dw)}</td>`).join("")}`
+      + `${E}${slotCells(top,4,"name","bb2")}</tr>`;
+
+  // 行3：総パレット数・あさ／ひる ＋ 上段のロット
+  //      左ブロックは用紙どおり行4まで（2行ぶん）ぶち抜き
+  rows+=`<tr class="r2"><td class="hd" colspan="3" rowspan="2"><div class="fldrow c3">`
+      + `<span>${totalP}</span><span>P</span></div></td>`
+      + `<td class="dow" rowspan="2">${ring("あさ",headTiming==="あさ")}</td>`
+      + `<td class="dow" rowspan="2">${ring("ひる",headTiming==="ひる")}</td>${E}`
+      + `${slotCells(top,4,"lot")}</tr>`;
+
+  // 行4：上段のパレット数（左5列は上の行の rowspan で埋まっている）
+  rows+=`<tr class="r3">${E}${slotCells(top,4,"pallet")}</tr>`;
+
+  // 上下段の区切り（用紙では太罫1本）
+  rows+=`<tr class="gap"><td class="none sep" colspan="14"></td></tr>`;
+
+  // 下段（7区画）：品名／ロット／パレット数／注記
+  rows+=`<tr>${slotCells(bottom,7,"name","bb2")}</tr>`;
+  rows+=`<tr>${slotCells(bottom,7,"lot")}</tr>`;
+  rows+=`<tr>${slotCells(bottom,7,"pallet")}</tr>`;
+  rows+=`<tr class="note-row">${slotCells(bottom,7,"note")}</tr>`;
+  rows+=`<tr class="gap"><td class="none" colspan="14"></td></tr>`;
+
+  // グリッド（メイン）
+  rows+=gridRows(numOf);
+
+  host.innerHTML=`<div class="sheet"><table>
+    <colgroup>${Array(14).fill('<col style="width:48px">').join("")}</colgroup>
+    ${rows}</table></div>`;
+  applySheetZoom();
+}
+
+// 区画セル（2列ぶんの幅）。kind: name / lot / pallet / pallet2 / note
+// extra: 全セルに足すクラス（品名行の太罫など）。品名行は左右の端も太罫にする
+function slotCells(entries,count,kind,extra){
+  let out="";
+  for(let i=0;i<count;i++){
+    const e=entries[i], l=e&&e.lot;
+    let v="", cls="slot";
+    if(kind==="name")        v=l?l.name:"";
+    else if(kind==="lot")    v=l?l.lot:"";
+    else if(kind==="pallet") v=l?(l.pallets+"P"):"";
+    else if(kind==="note"){  v=e&&e.note?e.note:""; cls="none snote"; }
+    if(extra && kind!=="note"){
+      cls+=" "+extra;
+      if(i===0)       cls+=" bl2";
+      if(i===count-1) cls+=" br2";
+    }
+    out+=`<td class="${cls}" colspan="2">${esc(v)}</td>`;
+  }
+  // 4区画のときは左半分（6列）を空ける
+  return out;
+}
+
+// メインのグリッド行（○／半／太枠／番号）
+function gridRows(numOf){
+  const sp=lastSp.find(s=>s.name==="メイン");
+  if(!sp) return "";
+  // 各列の中身（上詰め）
+  const colCells=sp.cols.map(col=>{
+    const arr=Array(col.h).fill(null); let r=0;
+    col.fills.forEach(f=>{ for(let k=0;k<f.count;k++){ if(r<col.h) arr[r++]={id:f.id}; } });
+    return arr;
+  });
+  // 荷物ごとのマス一覧（通常列と通路列を分ける）
+  const norm={}, aisle={};
+  colCells.forEach((arr,ci)=>arr.forEach((c,ri)=>{
+    if(!c)return;
+    const key=ci+"_"+ri;
+    (sp.cols[ci].aisle ? (aisle[c.id]=aisle[c.id]||[]) : (norm[c.id]=norm[c.id]||[])).push(key);
+  }));
+  // 「半」の位置：通路にはみ出しているならその通路のマス、なければ通常列の最後
+  const isHalf={};
+  const ids=new Set([...Object.keys(norm),...Object.keys(aisle)]);
+  ids.forEach(id=>{
+    const lot=lastLots.find(l=>l.id==id); const n=lot?(lot.half||0):0;
+    if(n<=0) return;
+    const list = (aisle[id]&&aisle[id].length) ? aisle[id] : (norm[id]||[]);
+    list.slice(-n).forEach(k=>{ isHalf[k]=true; });
+  });
+
+  const at=(ci,ri)=>(colCells[ci]&&colCells[ci][ri])?colCells[ci][ri].id:null;
+  // 14列の並び：通路 | 1-3 | 段番号 | 4-6 | 段番号 | 7-9 | 通路 | 段番号
+  const order=[{c:0,aisle:true},{c:1},{c:2},{c:3},{lab:true},{c:4},{c:5},{c:6},{lab:true},
+               {c:7},{c:8},{c:9},{c:10,aisle:true},{lab:true}];
+  const circled=["①","②","③","④","⑤","⑥","⑦"];
+
+  let rows="";
+  for(let ri=0;ri<7;ri++){
+    let tds="";
+    order.forEach(o=>{
+      if(o.lab){ tds+=`<td class="lab">${circled[ri]||""}</td>`; return; }
+      const col=sp.cols[o.c];
+      if(ri>=col.h){ tds+=`<td class="none"></td>`; return; }
+      const id=at(o.c,ri);
+      const cls=["g"]; if(o.aisle)cls.push("aisle");
+      if(id!=null){
+        if(at(o.c,ri-1)!==id) cls.push("bt");
+        if(at(o.c,ri+1)!==id) cls.push("bb");
+        if(at(o.c-1,ri)!==id) cls.push("bl");
+        if(at(o.c+1,ri)!==id) cls.push("br");
+      }
+      const half=isHalf[o.c+"_"+ri];
+      const showNum = id!=null && at(o.c,ri-1)!==id && numOf[id];
+      tds+=`<td class="${cls.join(" ")}">`
+         + (showNum?`<span class="num">${numOf[id]}</span>`:"")
+         + (id!=null?`<span class="mk">${half?"半":""}</span>`:"")
+         + `</td>`;
+    });
+    rows+=`<tr>${tds}</tr>`;
+  }
+  // 列番号
+  let nums="";
+  order.forEach(o=>{ nums+=`<td class="colno">${(o.lab||o.aisle)?"":o.c}</td>`; });
+  return rows+`<tr>${nums}</tr>`;
+}
+
+/* ---------- utils ---------- */
+function clone(o){return JSON.parse(JSON.stringify(o));}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+/* ---------- init ---------- */
+document.getElementById("cfgText").value=spacesToText();
+showCapacity();
+updateSaveStatus();
+
+// 品目マスタ：保存があれば復元（旧形式 upp → snp に移行）
+(function initMaster(){
+  const saved=loadData(STORE_KEY.master);
+  document.querySelector("#masterTable tbody").innerHTML="";
+  if(Array.isArray(saved) && saved.length){
+    saved.forEach(m=>addMasterRow({name:m.name, snp:(m.snp!=null?m.snp:m.upp)}));
+    MASTER=readMaster(); refreshNameOptions(); updateRegCount(); saveMaster();
+  }else{
+    DEFAULT_MASTER.forEach(addMasterRow);
+    onMasterChange();
+  }
+})();
+
+// 荷物入力：前回の入力を復元。SNPが無い旧データはマスタから補完
+(function initLots(){
+  const saved=loadData(STORE_KEY.lots);
+  document.querySelector("#lotTable tbody").innerHTML="";
+  if(Array.isArray(saved) && saved.length){
+    saved.forEach(r=>{
+      let snp=r.snp;
+      if(snp==null || snp===""){ const l=snpsOf(r.name); snp = l.length?l[0]:""; }
+      addRow({type:r.type, name:r.name, lot:r.lot, snp:snp, qty:r.qty});
+    });
+    syncCards(); saveLots(); run(false);
+  }else{
+    SAMPLES.basic.forEach(addRow);
+    syncCards(); saveLots(); run(false);
+  }
+})();
+
+// マスの大きさ：保存があれば復元
+(function initCell(){
+  const px=loadData(STORE_KEY.cell);
+  if(px) setCellSize(px);
+})();
+
+// 搬入日・納品タイミング：保存があれば復元。無ければ翌日を既定に
+(function initHead(){
+  const s=loadData(STORE_KEY.head)||{};
+  if(s.date){ headDate=s.date; }
+  else{ const t=new Date(); t.setDate(t.getDate()+1); headDate=t.toISOString().slice(0,10); }
+  headTiming = s.timing || "あさ";
+  document.getElementById("dateInput").value=headDate;
+  const d=new Date(headDate+"T00:00:00");
+  document.getElementById("dowHint").textContent=`（${DOW[d.getDay()]}曜日）`;
+  document.getElementById("tmAM").classList.toggle("on",headTiming==="あさ");
+  document.getElementById("tmPM").classList.toggle("on",headTiming==="ひる");
+})();
+
+// 配置図タブの表示モード
+(function initView(){
+  const v=loadData(STORE_KEY.view);
+  if(v){ sheetMode=(v==="sheet"); }
+  document.querySelectorAll(".sizebtn[data-view]").forEach(b=>
+    b.classList.toggle("on", b.dataset.view===(sheetMode?"sheet":"block")));
+  document.getElementById("sizeCtl").style.display = sheetMode?"none":"flex";
+  document.getElementById("zoomCtl").style.display = sheetMode?"flex":"none";
+})();
+
+// 配置図の表の表示倍率：保存があれば復元
+(function initZoom(){
+  const z=loadData(STORE_KEY.zoom);
+  if(z) sheetZoom=z;
+  document.querySelectorAll(".sizebtn[data-zoom]").forEach(b=>
+    b.classList.toggle("on", b.dataset.zoom===sheetZoom));
+  applySheetZoom();
+})();
+
+// 端数表記：保存があれば復元
+(function initFrac(){
+  const f=loadData(STORE_KEY.frac);
+  if(f){ fracMode=true; document.getElementById("fracChk").checked=true; recalcAllRows(); }
+})();
+
+showMapState();
+
+/* ---------- PWA ---------- */
+let waitingSW=null;
+function applyUpdate(){ if(waitingSW){ waitingSW.postMessage("SKIP_WAITING"); } else { location.reload(); } }
+if("serviceWorker" in navigator && location.protocol.startsWith("http")){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("./sw.js").then(reg=>{
+      function check(){
+        if(reg.waiting){ waitingSW=reg.waiting; document.getElementById("updateBar").style.display="flex"; }
+      }
+      check();
+      reg.addEventListener("updatefound",()=>{
+        const nw=reg.installing;
+        if(nw) nw.addEventListener("statechange",()=>{ if(nw.state==="installed") check(); });
+      });
+    }).catch(()=>{});
+    let reloaded=false;
+    navigator.serviceWorker.addEventListener("controllerchange",()=>{
+      if(!reloaded){ reloaded=true; location.reload(); }
+    });
+  });
+}
+</script>
+</body>
+</html>
