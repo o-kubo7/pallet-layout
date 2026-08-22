@@ -410,15 +410,18 @@
 <script>
 /* ===== スペース定義（配列の順＝収納庫に近い順）===== */
 const DEFAULT_SPACES = [
-  // 倉庫内（収納庫に近い順）。EV横は超過時の受け皿なので最後
+  // 配列の順＝自動配置でエリアを試す順（メイン ＞ 軒下 ＞ PC横・EV横）。
+  // zone はブロック図の倉庫内／外の並べ分けにだけ使う。
   {name:"メイン", zone:"near", orient:"v", block:3, align:"top", cols:[
      {h:6,aisle:true},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:5,aisle:true}]},
+  {name:"軒下①", zone:"far", orient:"h", block:99, cols:[{h:11},{h:11},{h:8}]},
+  {name:"軒下②", zone:"far", orient:"v", block:99, cols:[{h:4},{h:4}]},
   {name:"PC横", zone:"near", orient:"h", block:99, cols:[{h:8},{h:4}]},
   {name:"EV横", zone:"near", orient:"h", block:99, cols:[{h:6},{h:4}]},
-  // 倉庫外
-  {name:"軒下②", zone:"far", orient:"v", block:99, cols:[{h:4},{h:4}]},
-  {name:"軒下①", zone:"far", orient:"h", block:99, cols:[{h:11},{h:11},{h:8}]},
 ];
+// 運用上ひとつづきに使うエリア。①が埋まったら②へ、と列を連結して連続窓を探す。
+// 設定でスペース名を変えるとこの連結は外れ、別エリア扱いになる。
+const AREA_GROUPS = [["軒下①","軒下②"]];
 // 実際の倉庫の位置関係（ブロック図の並び）。列・行はフロア図のマス目
 //   倉庫外: 軒下②＝左 ／ 軒下①＝右
 //   倉庫内: メイン＝右上 ／ PC横＝左下 ／ EV横＝右下
