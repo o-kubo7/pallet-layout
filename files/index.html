@@ -211,6 +211,9 @@
   .sheet td.g.bl{border-left:3px solid #000}
   .sheet td.g.br{border-right:3px solid #000}
   .sheet td.lab{border:0;font-size:11px;color:#333}
+  /* 同じロットが段番号列を跨ぐとき、ここにも太枠の上下線を引いて範囲をつなげる */
+  .sheet td.lab.bt{border-top:3px solid #000}
+  .sheet td.lab.bb{border-bottom:3px solid #000}
   .sheet td.colno{border:0;font-size:11px;height:20px}
 
   @media print{
@@ -1348,7 +1351,8 @@ function gridRows(numOf){
 
   const at=(ci,ri)=>(colCells[ci]&&colCells[ci][ri])?colCells[ci][ri].id:null;
   // 14列の並び：通路 | 1-3 | 段番号 | 4-6 | 段番号 | 7-9 | 通路 | 段番号
-  const order=[{c:0,aisle:true},{c:1},{c:2},{c:3},{lab:true},{c:4},{c:5},{c:6},{lab:true},
+  // 段番号の l/r は左右に隣り合うレーン。最後の段番号は右隣がないので跨がない
+  const order=[{c:0,aisle:true},{c:1},{c:2},{c:3},{lab:true,l:3,r:4},{c:4},{c:5},{c:6},{lab:true,l:6,r:7},
                {c:7},{c:8},{c:9},{c:10,aisle:true},{lab:true}];
   const circled=["①","②","③","④","⑤","⑥","⑦"];
 
@@ -1356,7 +1360,16 @@ function gridRows(numOf){
   for(let ri=0;ri<7;ri++){
     let tds="";
     order.forEach(o=>{
-      if(o.lab){ tds+=`<td class="lab">${circled[ri]||""}</td>`; return; }
+      if(o.lab){
+        // 左右のレーンが同じロットなら、段番号のマスも枠の内側。上下の端だけ太線を引いてつなぐ
+        const span=r=>{ const v=(o.l!=null)?at(o.l,r):null; return (v!=null && v===at(o.r,r))?v:null; };
+        const cls=["lab"], cur=span(ri);
+        if(cur!=null){
+          if(span(ri-1)!==cur) cls.push("bt");
+          if(span(ri+1)!==cur) cls.push("bb");
+        }
+        tds+=`<td class="${cls.join(" ")}">${circled[ri]||""}</td>`; return;
+      }
       const col=sp.cols[o.c];
       if(ri>=col.h){ tds+=`<td class="none"></td>`; return; }
       const id=at(o.c,ri);
