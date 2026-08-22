@@ -853,10 +853,10 @@ function areaCandidates(sp){
   const byName={}; sp.forEach(s=>byName[s.name]=s);
   const done=new Set(), out=[], withAisle=[];
   const push=members=>{
-    const cols=[], map=[];              // map[i] = 連結後のindex → 元のスペースと列番号
-    members.forEach(s=>s.cols.forEach((c,ci)=>{ cols.push(c); map.push({sp:s, ci}); }));
-    out.push({cols, map, useAisle:false});
-    if(cols.some(c=>c.aisle)) withAisle.push({cols, map, useAisle:true});
+    const cols=[];
+    members.forEach(s=>s.cols.forEach(c=>cols.push(c)));
+    out.push({cols, useAisle:false});
+    if(cols.some(c=>c.aisle)) withAisle.push({cols, useAisle:true});
   };
   sp.forEach(s=>{
     if(done.has(s.name)) return;
@@ -948,7 +948,7 @@ function run(goMap){
       typeMix.join(" / ")}。先に入力した行の種別でまとめています。</div>`;
   }
   if(unknown.length){
-    warnHtml=`<div class="msg warn">⚠ SNPが未入力のため計算できない荷物があります：${
+    warnHtml+=`<div class="msg warn">⚠ SNPが未入力のため計算できない荷物があります：${
       unknown.map(u=>`${u.name||"(品名なし)"}${u.lot?"／"+u.lot:""}（個数${u.qty}）`).join(" / ")
     }</div>`;
   }
