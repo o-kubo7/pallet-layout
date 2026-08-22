@@ -461,15 +461,14 @@ const SAMPLES = {
     {type:"商品",  name:"製品Z",lot:"P-203",snp:10,qty:110},
     {type:"商品",  name:"製品W",lot:"P-204",snp:10,qty:80},
   ],
-  mix:(function(){const a=[];let n=1;
-    for(let i=0;i<9;i++)a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),snp:10,qty:60});
-    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),snp:10,qty:60});
-    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),snp:10,qty:50});
-    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),snp:10,qty:80});
-    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),snp:10,qty:40});
-    a.push({type:"仕掛品",name:"部品"+n,lot:"M-"+(100+n++),snp:10,qty:70});
-    a.push({type:"商品",name:"製品X",lot:"P-201",snp:10,qty:100});
-    return a;})(),
+  // 大口4件が各エリアの列を使い切り、最後の小口が空き列を見つけられず混載になる構成。
+  mix:[
+    {type:"仕掛品",name:"部品1",lot:"M-101",snp:10,qty:700},
+    {type:"仕掛品",name:"部品2",lot:"M-102",snp:10,qty:350},
+    {type:"仕掛品",name:"部品3",lot:"M-103",snp:10,qty:110},
+    {type:"仕掛品",name:"部品4",lot:"M-104",snp:10,qty:90},
+    {type:"仕掛品",name:"部品5",lot:"M-105",snp:10,qty:50},
+  ],
 };
 
 const PALETTE=["#93c5fd","#fca5a5","#86efac","#fcd34d","#c4b5fd","#f9a8d4","#7dd3fc","#fdba74",
