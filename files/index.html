@@ -844,26 +844,62 @@ function buildWork(){
     cols:s.cols.map(c=>({h:c.h, aisle:!!c.aisle, fills:[]}))
   }));
 }
-function fillNormalAisle(lot,sp,rem){
-  let colsUsed=0;
-  for(const c of sp.cols){
-    if(rem<=0)break;
-    if(c.aisle||c.fills.length>0)continue;
-    if(colsUsed>=sp.block)break;
-    const put=Math.min(rem,c.h); c.fills.push({id:lot.id,count:put}); rem-=put; colsUsed++;
+/* 優先順に「どの列を対象に、通路を使うか」の候補を並べる。
+   通路をふさぐのは最終手段なので、通路を使う段は全エリアを試したあとに回す。
+   AREA_GROUPS のエリアは列を連結して1つの候補にする（軒下①が埋まったら②へ）。 */
+function areaCandidates(sp){
+  const byName={}; sp.forEach(s=>byName[s.name]=s);
+  const done=new Set(), out=[], withAisle=[];
+  const push=members=>{
+    const cols=[], map=[];              // map[i] = 連結後のindex → 元のスペースと列番号
+    members.forEach(s=>s.cols.forEach((c,ci)=>{ cols.push(c); map.push({sp:s, ci}); }));
+    out.push({cols, map, useAisle:false});
+    if(cols.some(c=>c.aisle)) withAisle.push({cols, map, useAisle:true});
+  };
+  sp.forEach(s=>{
+    if(done.has(s.name)) return;
+    const g=AREA_GROUPS.find(g=>g.includes(s.name));
+    const members = g ? g.map(n=>byName[n]).filter(Boolean) : [s];
+    members.forEach(m=>done.add(m.name));
+    push(members);
+  });
+  return out.concat(withAisle);
+}
+
+/* 1ロットを候補の優先順に割り当てる。
+   まず「連続した空き列に丸ごと入る」場所を探し、
+   どこにも無ければ候補を頭からたどり直して空き列に詰める（分割）。
+   戻り値は置ききれなかったパレット数。 */
+function placeLot(lot, cands){
+  let rem=lot.pallets;
+  for(const c of cands){
+    const run=findRun(c.cols, rem, c.useAisle);
+    if(!run) continue;
+    for(let i=run[0]; i<=run[1] && rem>0; i++){
+      const col=c.cols[i];
+      const put=Math.min(rem, col.h);
+      col.fills.push({id:lot.id, count:put, ov:col.aisle});
+      rem-=put;
+    }
+    return 0;
   }
-  if(rem<=0)return rem;
-  // 通路(灰)は「1ブロックを埋め切った大口の余り」だけに使う。
-  if(colsUsed<sp.block) return rem;
-  for(const c of sp.cols){
-    if(rem<=0)break;
-    if(!c.aisle||c.fills.length>0)continue;
-    const put=Math.min(rem,c.h); c.fills.push({id:lot.id,count:put,ov:true}); rem-=put;
+  for(const c of cands){
+    if(rem<=0) break;
+    for(const col of c.cols){
+      if(rem<=0) break;
+      if(col.fills.length>0) continue;
+      if(col.aisle && !c.useAisle) continue;
+      const put=Math.min(rem, col.h);
+      col.fills.push({id:lot.id, count:put, ov:col.aisle});
+      rem-=put;
+    }
   }
   return rem;
 }
-function fillMix(lot,sp,rem){
-  for(const c of sp.cols){
+
+/* 満杯のときだけ使う最終手段。空きのある列に品目を混ぜて押し込む。 */
+function fillMix(lot, cols, rem){
+  for(const c of cols){
     if(rem<=0)break;
     if(c.aisle)continue;
     const free=c.h-used(c); if(free<=0)continue;
@@ -871,14 +907,30 @@ function fillMix(lot,sp,rem){
   }
   return rem;
 }
+
 function place(lots,allowMix){
   const sp=buildWork();
-  const near=sp.filter(s=>s.zone==="near"), far=sp.filter(s=>s.zone==="far");
-  const tgt=l=>l.type==="仕掛品"?near:far;
-  for(const lot of lots){ let rem=lot.pallets;
-    for(const s of tgt(lot)){ rem=fillNormalAisle(lot,s,rem); if(rem<=0)break; } lot.rem=rem; }
-  if(allowMix){ for(const lot of lots){ if(lot.rem<=0)continue; let rem=lot.rem;
-    for(const s of tgt(lot)){ rem=fillMix(lot,s,rem); if(rem<=0)break; } lot.rem=rem; } }
+  const cands=areaCandidates(sp);
+  // 仕掛品を先に処理してメインを確保させる。各グループ内は大口順。
+  // 大口から置くほど連続した列を取りやすい。
+  const order=[...lots].sort((a,b)=>{
+    const ta=(a.type==="仕掛品")?0:1, tb=(b.type==="仕掛品")?0:1;
+    if(ta!==tb) return ta-tb;
+    return b.pallets-a.pallets;
+  });
+  for(const lot of order){ lot.rem=placeLot(lot, cands); }
+  if(allowMix){
+    for(const lot of order){
+      if(lot.rem<=0) continue;
+      let rem=lot.rem;
+      for(const c of cands){
+        if(rem<=0) break;
+        if(c.useAisle) continue;        // 同じ列を二度見ないよう通路なしの段だけ回す
+        rem=fillMix(lot, c.cols, rem);
+      }
+      lot.rem=rem;
+    }
+  }
   return sp;
 }
 
