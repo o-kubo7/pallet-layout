@@ -435,6 +435,7 @@ const FLOOR_POS = {
 // 「配置図の表」での欄の割り当て
 const SHEET_TOP = ["軒下①","軒下②"];        // 上段4区画
 const SHEET_BOTTOM = ["メイン","PC横","EV横"]; // 下段7区画（メイン以外は注記を付ける）
+const SHEET_TOP_SLOTS = 4, SHEET_BOTTOM_SLOTS = 7; // 上の区画数と一致させる。renderSheet と欄数超過の警告で共有
 
 /* ===== 品目マスタ（品名 → SNP。同じ品名で複数SNP可）===== */
 const DEFAULT_MASTER = (function(){
@@ -976,13 +977,18 @@ function run(goMap){
   const over=lots.filter(l=>l.rem>0);
   const usedAisle=sp.some(s=>s.cols.some(c=>c.aisle&&c.fills.length));
   const usedMix=sp.some(s=>s.cols.some(c=>c.fills.length>1));
-  // 配置図の表は上段4欄・下段7欄しかない。載りきらないロットは黙って消えるので知らせる。
-  const overTop=sheetEntries(SHEET_TOP,null).length-4;
-  const overBottom=sheetEntries(SHEET_BOTTOM,"メイン").length-7;
-  if(overTop>0 || overBottom>0){
+  // 配置図の表は上段SHEET_TOP_SLOTS欄・下段SHEET_BOTTOM_SLOTS欄しかない。載りきらないロットは黙って消えるので知らせる。
+  const overTop=sheetEntries(SHEET_TOP,null).length-SHEET_TOP_SLOTS;
+  const overBottom=sheetEntries(SHEET_BOTTOM,"メイン").length-SHEET_BOTTOM_SLOTS;
+  // 設定でスペース名を変えると SHEET_TOP/SHEET_BOTTOM のどちらにも属さないエリアができる。
+  // そこに置かれたロットは欄自体が無く、上のカウントにも表れずに表から消える。
+  const sheetNames=new Set([...SHEET_TOP, ...SHEET_BOTTOM]);
+  const noSlotAreas=sp.filter(s=>!sheetNames.has(s.name) && s.cols.some(c=>c.fills.length)).map(s=>s.name);
+  if(overTop>0 || overBottom>0 || noSlotAreas.length){
     const parts=[];
     if(overTop>0) parts.push(`軒下 ${overTop}件`);
     if(overBottom>0) parts.push(`倉庫内 ${overBottom}件`);
+    if(noSlotAreas.length) parts.push(`表に欄のないエリア: ${noSlotAreas.join("・")}`);
     warnHtml+=`<div class="msg warn">⚠ 配置図の表に載りきらないロットがあります：${parts.join(" / ")}。ブロック図で確認してください。</div>`;
   }
 
@@ -1259,7 +1265,7 @@ function renderSheet(){
 
   // 行2：曜日 ＋ 上段の品名（品名欄は太枠で囲う）
   rows+=`<tr class="r1">${["月","火","水","木","金"].map(x=>`<td class="dow">${ring(x,x===dw)}</td>`).join("")}`
-      + `${E}${slotCells(top,4,"name","bb2")}</tr>`;
+      + `${E}${slotCells(top,SHEET_TOP_SLOTS,"name","bb2")}</tr>`;
 
   // 行3：総パレット数・あさ／ひる ＋ 上段のロット
   //      左ブロックは用紙どおり行4まで（2行ぶん）ぶち抜き
@@ -1267,19 +1273,19 @@ function renderSheet(){
       + `<span>${totalP}</span><span>P</span></div></td>`
       + `<td class="dow" rowspan="2">${ring("あさ",headTiming==="あさ")}</td>`
       + `<td class="dow" rowspan="2">${ring("ひる",headTiming==="ひる")}</td>${E}`
-      + `${slotCells(top,4,"lot")}</tr>`;
+      + `${slotCells(top,SHEET_TOP_SLOTS,"lot")}</tr>`;
 
   // 行4：上段のパレット数（左5列は上の行の rowspan で埋まっている）
-  rows+=`<tr class="r3">${E}${slotCells(top,4,"pallet")}</tr>`;
+  rows+=`<tr class="r3">${E}${slotCells(top,SHEET_TOP_SLOTS,"pallet")}</tr>`;
 
   // 上下段の区切り（用紙では太罫1本）
   rows+=`<tr class="gap"><td class="none sep" colspan="14"></td></tr>`;
 
   // 下段（7区画）：品名／ロット／パレット数／注記
-  rows+=`<tr>${slotCells(bottom,7,"name","bb2")}</tr>`;
-  rows+=`<tr>${slotCells(bottom,7,"lot")}</tr>`;
-  rows+=`<tr>${slotCells(bottom,7,"pallet")}</tr>`;
-  rows+=`<tr class="note-row">${slotCells(bottom,7,"note")}</tr>`;
+  rows+=`<tr>${slotCells(bottom,SHEET_BOTTOM_SLOTS,"name","bb2")}</tr>`;
+  rows+=`<tr>${slotCells(bottom,SHEET_BOTTOM_SLOTS,"lot")}</tr>`;
+  rows+=`<tr>${slotCells(bottom,SHEET_BOTTOM_SLOTS,"pallet")}</tr>`;
+  rows+=`<tr class="note-row">${slotCells(bottom,SHEET_BOTTOM_SLOTS,"note")}</tr>`;
   rows+=`<tr class="gap"><td class="none" colspan="14"></td></tr>`;
 
   // グリッド（メイン）
