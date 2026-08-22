@@ -847,16 +847,17 @@ function buildWork(){
   }));
 }
 /* 優先順に「どの列を対象に、通路を使うか」の候補を並べる。
-   通路をふさぐのは最終手段なので、通路を使う段は全エリアを試したあとに回す。
+   各エリアを (通路なし)→(通路あり) の順で並べることで、
+   「メインを使い切ったら軒下より先にメインの通路を使う」が成立する。
    AREA_GROUPS のエリアは列を連結して1つの候補にする（軒下①が埋まったら②へ）。 */
 function areaCandidates(sp){
   const byName={}; sp.forEach(s=>byName[s.name]=s);
-  const done=new Set(), out=[], withAisle=[];
+  const done=new Set(), out=[];
   const push=members=>{
     const cols=[];
     members.forEach(s=>s.cols.forEach(c=>cols.push(c)));
     out.push({cols, useAisle:false});
-    if(cols.some(c=>c.aisle)) withAisle.push({cols, useAisle:true});
+    if(cols.some(c=>c.aisle)) out.push({cols, useAisle:true});
   };
   sp.forEach(s=>{
     if(done.has(s.name)) return;
@@ -865,7 +866,7 @@ function areaCandidates(sp){
     members.forEach(m=>done.add(m.name));
     push(members);
   });
-  return out.concat(withAisle);
+  return out;
 }
 
 /* 1ロットを候補の優先順に割り当てる。
