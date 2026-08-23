@@ -99,7 +99,10 @@ lastSp = [
 2. **`touch-action` は Baseline「広く利用可能」** — 2019年9月から
    （https://developer.mozilla.org/en-US/docs/Web/CSS/touch-action ）。
    ただし `touch-action:none` を指定した要素上ではピンチズームが効かなくなる（MDN のアクセシビリティ注記）。
-   選択済みのマスに、ドラッグ中だけ付与して影響を限定する。
+   **付与はドラッグ開始時ではなく選択時に行う。** タッチでは 8px 動いた時点で既にブラウザが
+   パンを開始しており、そこから `touch-action` を変えても間に合わず `pointercancel` で中断する。
+   `.cell.sel` に CSS で静的に持たせ、選択を解除したときに自動で外れる形にする。
+   影響を受けるのは選択中の数マス（30px 角）だけに限定される。
 
 3. **`setPointerCapture()` 中は `event.target` がキャプチャ元に固定される** — MDN が明記している。
    ドロップ先の判定に `event.target` は使えないため、`document.elementFromPoint()` で座標から引く。
@@ -202,8 +205,8 @@ pointerdown（選択済みマスの上）
 pointermove
   → 8px 以上動いたらドラッグ開始
      ・setPointerCapture()
-     ・選択済みマスに touch-action:none を付与
      ・ゴースト（半透明の四角＋「部品A 3P」）を body に追加し、指へ追従
+     （touch-action:none は選択時に `.cell.sel` として既に付いている）
   → ドラッグ中は毎回 elementFromPoint() で .colwrap を引き、
      移動可なら緑、容量不足なら赤でハイライト
   → ポインタが .scroller の左右 40px に入ったら横スクロール、
@@ -336,8 +339,10 @@ SNP 未入力や種別の食い違いの警告は `readLots()` の戻り値（`u
 .colwrap.drop-ok  ドラッグ中の移動可の列（緑の outline）
 .colwrap.drop-ng  ドラッグ中の容量不足の列（赤の outline）
 .dragghost       指に追従する半透明の表示。position:fixed, pointer-events:none
-.cell.sel        ドラッグ中のみ touch-action:none（JS で付け外し）
 ```
+
+`.cell.sel` には `touch-action:none` を含める。JS での付け外しはしない。
+選択された時点で付き、解除された時点で外れる。
 
 `user-select:none` と `-webkit-touch-callout:none` を `.cell` に付け、
 長押し時の選択ハンドルやコールアウトが出ないようにする。
