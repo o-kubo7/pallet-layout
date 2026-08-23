@@ -1093,8 +1093,11 @@ function switchTab(name){
   });
   document.getElementById("actionBar").style.display = (name==="input")?"":"none";
   window.scrollTo(0,0);
-  // 表は表示されて初めて幅が測れるので、タブに来たタイミングで倍率を決める
-  if(name==="map") applySheetZoom();
+  // 表は表示されて初めて幅が測れるので、タブに来たタイミングで再描画・倍率決定する
+  // （表モードで結果があるときは renderSheet() が末尾で applySheetZoom() も呼ぶ）
+  if(name==="map"){
+    if(sheetMode && hasResult) renderSheet(); else applySheetZoom();
+  }
 }
 function showMapState(){
   document.getElementById("mapEmpty").style.display = hasResult?"none":"block";
