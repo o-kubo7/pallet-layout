@@ -210,7 +210,9 @@
   .sheet td.snote{display:table-cell;text-align:left;font-size:10px;color:#333;height:24px;
                   border:0;background:transparent}
   .sheet td.g{height:30px;position:relative;padding:0}
-  .sheet td.g.aisle{background:#d9d9d9}
+  /* 通路列の灰色。ブラウザは既定で背景色を印刷しないので、このセルだけは
+     印刷ダイアログの「背景のグラフィック」を待たずに出すよう指示する */
+  .sheet td.g.aisle{background:#d9d9d9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   /* ○は引き出し線より奥に見えるよう灰色にする */
   .sheet td.g .mk{display:inline-flex;align-items:center;justify-content:center;
                   width:22px;height:22px;border:2px solid #999;border-radius:50%;
