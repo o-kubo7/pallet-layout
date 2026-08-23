@@ -329,7 +329,7 @@
         <button class="btn btn-ghost" onclick="clearLots()">入力をクリア</button>
         <label class="chk"><input type="checkbox" id="mixChk" checked> 満杯時に混載を許可</label>
         <label class="chk"><input type="checkbox" id="fracChk" onchange="toggleFrac()"> 端数を「半」で表示</label>
-        <button class="btn btn-primary" id="runBtnInline" onclick="run(true)">▶ 自動配置を作成</button>
+        <button class="btn btn-primary" id="runBtnInline" onclick="runFromButton()">▶ 自動配置を作成</button>
       </div>
       <div class="row-actions">
         <button class="btn btn-ghost" onclick="loadSample('basic')">基本サンプル</button>
@@ -448,7 +448,7 @@
 </div>
 
 <div class="actionbar" id="actionBar">
-  <button class="btn btn-primary" onclick="run(true)">▶ 自動配置を作成</button>
+  <button class="btn btn-primary" onclick="runFromButton()">▶ 自動配置を作成</button>
 </div>
 
 <div id="updateBar">
@@ -530,7 +530,7 @@ let fracMode=false;   // true なら「満載数P 半」表記
 let sheetMode=true;  // 配置図タブの表示（true=配置図の表 / false=ブロック図）
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", view:"palletApp.view", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", view:"palletApp.view", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual"};
 let storageOK=true;
 const memStore={};
 (function(){
@@ -1091,6 +1091,8 @@ function run(goMap){
 
   const allowMix=document.getElementById("mixChk").checked;
   lastSp=place(lots,allowMix); lastLots=lots; hasResult=true;
+  lastFp=inputFingerprint();   // この配置を作った時点の入力と列構成
+  clearManual();               // 配置し直したので手動調整は捨てる
 
   renderResult(lots, unknown, typeMix);
   if(goMap) switchTab('map');
@@ -1329,6 +1331,9 @@ function setMoveMode(on){
 }
 // 2つのモードは排他。通路編集は前提そのものを変えるので、従来どおり配置し直す。
 function toggleEdit(){
+  // 入るだけで配置し直すので、手動調整があるなら先に確認する
+  if(!editMode && hasManual() &&
+     !confirm("通路の編集に入ると自動配置し直すため、手動調整は破棄されます。よろしいですか？")) return;
   setEditMode(!editMode);
   if(editMode) setMoveMode(false);
   if(lastLots) run(false);
@@ -1382,8 +1387,40 @@ let drag=null;                       // {id, x0, y0, started, ghost, target}
 let lastDropKey=null;                // 直前に判定した列。同じ列に留まる間は判定を繰り返さない
 let edge={x:0, y:0, raf:0};          // 端の自動スクロール
 
-// Task 6 で中身を入れる。ここでは何もしない。
-function saveManual(){}
+/* 手動調整の保存。
+   指紋は「荷物の入力」と「列構成」を連結したもの。
+
+   指紋は保存した瞬間ではなく run() を実行した時点のものを使う（lastFp）。
+   荷物の入力欄を編集しても run() は呼ばれないため、
+   「自動配置 → 入力を書き換える → 配置図に戻って手動移動」という順序が成立してしまう。
+   保存時の入力を指紋にすると {編集後の指紋, 編集前の配置} という食い違った組が残り、
+   リロード時に一致してしまって古い配置が復元される。
+
+   列構成を含めるのは、SPACES が localStorage に保存されておらず
+   リロードで DEFAULT_SPACES に戻るため。設定を変えてから調整すると
+   復元した配置と SPACES のジオメトリが食い違う。 */
+let lastFp=null;
+function inputFingerprint(){ return JSON.stringify(readRowData())+"|#|"+spacesToText(); }
+function saveManual(){
+  if(lastFp==null) return;
+  saveData(STORE_KEY.manual, {fp:lastFp, sp:lastSp, lots:lastLots});
+}
+function clearManual(){ saveData(STORE_KEY.manual, null); }
+function hasManual(){ return !!loadData(STORE_KEY.manual); }
+// 保存済みの手動調整を復元する。復元したら true。place() は呼ばない。
+function restoreManual(){
+  const d=loadData(STORE_KEY.manual);
+  if(!d || !d.sp || !d.lots) return false;
+  if(d.fp!==inputFingerprint()){ clearManual(); return false; }
+  lastSp=d.sp; lastLots=d.lots; hasResult=true; lastFp=d.fp;
+  redraw();
+  return true;
+}
+// 「▶ 自動配置を作成」の入口。手動調整があるときだけ確認する。
+function runFromButton(){
+  if(hasManual() && !confirm("手動調整を破棄して自動配置し直します。よろしいですか？")) return;
+  run(true);
+}
 
 function wrapAt(x,y){
   const el=document.elementFromPoint(x,y);
@@ -1954,7 +1991,9 @@ updateSaveStatus();
       if(snp==null || snp===""){ const l=snpsOf(r.name); snp = l.length?l[0]:""; }
       addRow({type:r.type, name:r.name, lot:r.lot, snp:snp, qty:r.qty});
     });
-    syncCards(); saveLots(); run(false);
+    syncCards(); saveLots();
+    // 入力と列構成が保存時と同じなら、手動調整した配置をそのまま出す
+    if(!restoreManual()) run(false);
   }else{
     SAMPLES.basic.forEach(addRow);
     syncCards(); saveLots(); run(false);
