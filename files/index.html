@@ -1082,11 +1082,12 @@ function run(goMap){
 }
 
 /* ---------- 描画 ---------- */
+// row は列内の行番号（0始まり）。選択とドラッグでマスを特定するために持たせる。
 function cellsOf(col){
-  const arr=Array.from({length:col.h},()=>({id:null,seg:false,label:""}));
+  const arr=Array.from({length:col.h},(_,i)=>({id:null,seg:false,label:"",row:i}));
   let r=0;
   col.fills.forEach((f,fi)=>{
-    for(let k=0;k<f.count;k++){ if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),label:""}; r++; } }
+    for(let k=0;k<f.count;k++){ if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),label:"",row:r}; r++; } }
     if(r-1>=0) arr[r-1].label = f.id;
   });
   return arr;
@@ -1118,7 +1119,8 @@ function drawZone(elId, spaces, colorOf){
         if(!filled&&col.aisle)cls.push("aisle-empty");
         if(a.seg)cls.push(horizontal?"segline-h":"segline");
         const label=filled?(codeShort(a.label)):"";
-        cells+=`<div class="${cls.join(' ')}" style="${bg?'background:'+bg:''}">${label}</div>`;
+        cells+=`<div class="${cls.join(' ')}" data-row="${a.row}"${filled?` data-lot="${a.id}"`:""}`
+              +` style="${bg?'background:'+bg:''}">${label}</div>`;
       });
       const inner = horizontal ? `<div class="hrow">${cells}</div>` : `<div class="col${topAlign?' top':''}">${cells}</div>`;
       const cap = `<div class="colcap">${used(col)}/${col.h}${col.aisle?' 通':''}</div>`;
