@@ -57,22 +57,39 @@ tds += `<td class="${cls.join(" ")}">`
    `.sheet` は `zoom:var(--sheet-zoom)` で拡大される。
    SVG を `.sheet` の内側に置けば矢印も一緒に拡大されるため、
    倍率変更時に座標を再計算する必要はない。
+   また `renderSheet()` が `.sheet` ごと作り直すため、描画時点では常に倍率1になる。
+
+5. **`offsetLeft` は使えない** — 実測の結果、起点と終点で `offsetParent` が異なる。
+
+   | 要素 | position | offsetParent |
+   |---|---|---|
+   | `td.slot`（起点） | static | `TABLE` |
+   | `td.g`（終点） | relative（`files/index.html:203`） | `BODY` |
+
+   `td.g` だけが `position:relative` を持つため、`offsetParent` を決めるときの
+   「最も近い table 祖先」ルールから外れ、非 static の祖先（無いので body）まで遡る。
+   両者を混ぜると座標が10px以上ずれる。`getBoundingClientRect()` で基準を統一する。
 
 ## 設計
 
-### 1. 混載を上詰めにする
+### 1. 混載の向きを判定する
 
-`fillMix()` が押し込むパレットを、列の下ではなく上に置く。
+`fillMix()` が押し込むパレットを、原則として列の上に置く。
+ただし既にその列を使っているロットが**他の列を持たない**場合は下に足す。
 
 ```js
-// 変更前
-c.fills.push({id:lot.id, count:put, mix:true});
-// 変更後
-c.fills.unshift({id:lot.id, count:put, mix:true});
+const holder = c.fills.length ? c.fills[0].id : null;
+const alone  = holder!=null && !cols.some(o=>o!==c && o.fills.some(f=>f.id===holder));
+if(alone) c.fills.push({id:lot.id, count:put, mix:true});
+else      c.fills.unshift({id:lot.id, count:put, mix:true});
 ```
 
-混載列で下に回るロットは、先行する列に上端から入っている大口である。
+混載列で下に回るロットは、通常は先行する列に上端から入っている大口である。
 そのロットの矢印の終点は先行列の上端になるため、下に回っても干渉しない。
+
+一方、既存ロットがその列にしか置かれていない場合に下へ回すと、
+そのロットの矢印が途中開始になってしまう。この場合だけ従来どおり下に足し、
+既存ロットを上端に残す。
 
 全エリア満杯（134P投入）の実データで検証した結果は次のとおり。
 
@@ -86,7 +103,7 @@ c.fills.unshift({id:lot.id, count:put, mix:true});
 
 #### 残る例外
 
-そのロットがその列にしか置かれていない場合、下に回されると途中開始になる。
+同じ列に2ロット以上が混載された場合は、どちら向きに置いても途中開始が残る。
 発生頻度は低いが起こりうるため、矢印側で貫通のフォールバックを用意する（後述）。
 
 #### 副作用として確認が必要な点
@@ -100,15 +117,37 @@ c.fills.unshift({id:lot.id, count:put, mix:true});
 
 #### 配置
 
-`.sheet` を `position:relative` にし、その内側に SVG を絶対配置で重ねる。
+`<table>` を `position:relative` のラッパで包み、その中に SVG を絶対配置で重ねる。
+`.sheet` 自身ではなくラッパを使うのは、`.sheet` の `padding:10px` が
+印刷時に `0` になる（`@media print` の `.sheet{padding:0}`）ためで、
+`.sheet` を基準にすると画面と印刷で座標が10pxずれる。
+
+```html
+<div class="sheet"><div class="sheetbox"><table>…</table></div></div>
+```
 
 ```css
-.sheet{position:relative}
+.sheet .sheetbox{position:relative;width:max-content}
 .sheet .leaders{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
 ```
 
-座標は各 `td` の `offsetLeft` / `offsetTop` / `offsetWidth` から求める。
+座標は `getBoundingClientRect()` を使い、`<table>` の矩形からの相対で求める。
+`offsetLeft` は使わない（「技術的な前提」5 のとおり基準が要素ごとに違う）。
+倍率が掛かった状態で測る事故を防ぐため、`.sheet` の実効 `zoom` で割って正規化する。
+
+```js
+const z = parseFloat(getComputedStyle(sheet).zoom) || 1;
+const base = table.getBoundingClientRect();
+const at = el => {
+  const r = el.getBoundingClientRect();
+  return {x:(r.left-base.left)/z, y:(r.top-base.top)/z, w:r.width/z, h:r.height/z};
+};
+```
+
 `renderSheet()` が DOM を差し込んだ直後に測定して描画する。
+配置図タブが非表示のときは全ての矩形が 0 になるため、描画せずに戻る
+（既存の `autoSheetZoom()` と同じ扱い）。`renderSheet()` は
+`onHeadChange()` や `setTiming()` から `sheetMode` を見ずに呼ばれることがある。
 
 #### 起点
 
@@ -174,15 +213,32 @@ ang = -Math.atan2(x1-x0, y1-y0) * 180 / Math.PI    // 真下が0度
 
 ## 既知の割り切り
 
-注記のあるロットがメインにも配置されている場合、注記テキストと矢印が同じ 35px の帯を通る。
-実測したケースでは発生しなかった（注記が付くのはメイン外のロットであり、
-それらには矢印を引かないため）。重なりが生じた場合は許容する。
+### 注記と矢印の重なり
+
+注記は `e.areas.filter(n=>n!=="メイン")` で作られるため、
+**メインに入りきらず PC横へ溢れたロットは、矢印と注記の両方を持つ**。
+両者は同じ 35px の帯を通る。
+
+完全に避けるのは難しいため、注記行のテキストを中央揃えから左寄せに変え、
+矢印が通る欄の中心とぶつかりにくくする。それでも注記が長い場合は重なるが、許容する。
+
+### ロットが少ない日の浅い線
+
+下段の欄は左から詰めて置かれるのに対し、終点はメイン配置図の実際の位置になる。
+ロットが少ないと1ロットあたりの占有列が増え、終点が右へ広がるため、線が水平に近づく。
+
+実測（部品A 40P・部品B 25P の2ロットのみ）では、部品B の矢印が横に 360px 動き、
+35px の帯では角度84度になった。
+
+対策として「浅い線だけかぎ線にする」「下段の欄を終点の真上に配置する」を検討したが、
+前者は矢印の形状が2種類混在し、後者は表のレイアウトが手書き用紙から離れるため、
+どちらも採らない。読み取れる範囲であるため直線のまま許容する。
 
 ## 影響範囲
 
 | ファイル | 変更内容 |
 |---|---|
-| `files/index.html` | `fillMix` の上詰め化、`gridRows` の戻り値変更、矢印描画関数の追加、番号の削除、CSS、矢頭トグルUI、`STORE_KEY.arrow` |
+| `files/index.html` | `fillMix` の向き判定、`gridRows` の戻り値変更、矢印描画関数の追加、番号の削除、`.sheetbox` ラッパ、注記の左寄せ、○の灰色化、矢頭トグルUI、`STORE_KEY.arrow` |
 | `files/sw.js` | `CACHE_VERSION` を v11 → v12 |
 
 表の高さは変わらないため、印刷の `zoom:1.5` と `SHEET_H` は据え置く。
@@ -197,5 +253,10 @@ ang = -Math.atan2(x1-x0, y1-y0) * 180 / Math.PI    // 真下が0度
 4. メイン外のロット（PC横・EV横のみ）に矢印が引かれていない
 5. 矢頭 off で実線のみになり、再読み込み後も設定が保持される
 6. 表示倍率 100% / 150% / 200% / 自動 のいずれでも矢印が表に追随する
-7. 印刷プレビューで1ページに収まり、矢印が出力される
+7. 印刷プレビューで1ページに収まり、**矢印が画面と同じ位置に**出力される
 8. ロットが1つもない状態、およびメインが空の状態でエラーが出ない
+9. 設定でエリア名を変更し「メイン」という名前のエリアが存在しない状態でエラーが出ない
+10. 下段が7欄を超える（あふれ警告が出る）状態で、8件目以降に矢印が出ず既存の警告と矛盾しない
+11. `fillMix` の向き判定が、既存ロットの列数に応じて上下を切り替えている
+12. ロットが少ない日（2ロット程度）でも矢印が読み取れる
+13. 入力タブを開いたまま搬入日や あさ/ひる を変えてもエラーが出ず、表を開くと矢印が正しく出る
