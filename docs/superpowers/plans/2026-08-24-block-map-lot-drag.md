@@ -652,7 +652,7 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
   return JSON.stringify({
     full: brief(validateMove(sp,5,{"X|0":3},"X",1)),   // 列1の空きは1マス → 拒否
     same: brief(validateMove(sp,5,{"X|0":3},"X",0)),   // 選択がすべて落とし先 → 動かない
-    near: brief(validateMove(sp,5,{"X|0":3},"X",2)),   // 隣の列 → 確認不要
+    near: brief(validateMove(sp,5,{"X|0":3},"X",2)),   // 間に別ロットの列1が挟まる → 飛び地なので確認
     far:  brief(validateMove(sp,5,{"X|0":3},"X",3)),   // 離れた列 → 飛び地なので確認
     gather: brief(g),
     gatherCols: g.next[0].cols.map(c=>c.fills.map(f=>f.id+":"+f.count)),
@@ -664,7 +664,7 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
 期待される出力:
 
 ```
-{"full":{"ok":false,"reason":"移動先の空きが足りません"},"same":{"ok":false,"same":true,"reason":"動くマスがありません"},"near":{"ok":true,"needConfirm":false,"before":1,"after":1},"far":{"ok":true,"needConfirm":true,"before":1,"after":2},"gather":{"ok":true,"needConfirm":false,"before":2,"after":1},"gatherCols":[[],[],["5:3"]],"intact":"[{\"id\":5,\"count\":7}]"}
+{"full":{"ok":false,"reason":"移動先の空きが足りません"},"same":{"ok":false,"same":true,"reason":"動くマスがありません"},"near":{"ok":true,"needConfirm":true,"before":1,"after":2},"far":{"ok":true,"needConfirm":true,"before":1,"after":2},"gather":{"ok":true,"needConfirm":false,"before":2,"after":1},"gatherCols":[[],[],["5:3"]],"intact":"[{\"id\":5,\"count\":7}]"}
 ```
 
 `gather` が「2か所 → 1か所」になり、確認なしで列2にまとまることを確認する。
