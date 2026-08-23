@@ -198,14 +198,15 @@
   .sheet tr.gap td{height:11px;border:0;background:transparent}
   .sheet tr.gap td.sep{border-bottom:2px solid #000}
   /* 注記行（グローバルの .note と衝突させないため別名） */
-  .sheet td.snote{display:table-cell;font-size:10px;color:#333;height:24px;
+  /* 注記行は引き出し線と同じ帯を通るので、線が通る欄の中心を避けて左に寄せる */
+  .sheet td.snote{display:table-cell;text-align:left;font-size:10px;color:#333;height:24px;
                   border:0;background:transparent}
   .sheet td.g{height:30px;position:relative;padding:0}
   .sheet td.g.aisle{background:#d9d9d9}
+  /* ○は引き出し線より奥に見えるよう灰色にする */
   .sheet td.g .mk{display:inline-flex;align-items:center;justify-content:center;
-                  width:22px;height:22px;border:2px solid #000;border-radius:50%;
+                  width:22px;height:22px;border:2px solid #999;border-radius:50%;
                   font-size:11px;font-weight:700}
-  .sheet td.g .num{position:absolute;top:0;left:2px;font-size:9px;font-weight:700}
   .sheet td.g.bt{border-top:3px solid #000}
   .sheet td.g.bb{border-bottom:3px solid #000}
   .sheet td.g.bl{border-left:3px solid #000}
@@ -1262,8 +1263,6 @@ function renderSheet(){
   // 上段：軒下（①→②の順・注釈なし） / 下段：メイン→PC横→EV横（メイン以外を注釈に）
   const top=sheetEntries(SHEET_TOP, null);
   const bottom=sheetEntries(SHEET_BOTTOM, "メイン");
-  const numOf={}; bottom.forEach((e,i)=>{ numOf[e.lot.id]=i+1; });
-
   const d=headDate?new Date(headDate+"T00:00:00"):null;
   const mm=d?d.getMonth()+1:"", dd=d?d.getDate():"", dw=d?DOW[d.getDay()]:"";
   const totalP=lastLots.reduce((a,l)=>a+l.pallets,0);
@@ -1304,7 +1303,7 @@ function renderSheet(){
   rows+=`<tr class="gap"><td class="none" colspan="14"></td></tr>`;
 
   // グリッド（メイン）
-  rows+=gridRows(numOf);
+  rows+=gridRows();
 
   host.innerHTML=`<div class="sheet"><table>
     <colgroup>${Array(14).fill('<col style="width:48px">').join("")}</colgroup>
@@ -1334,8 +1333,8 @@ function slotCells(entries,count,kind,extra){
   return out;
 }
 
-// メインのグリッド行（○／半／太枠／番号）
-function gridRows(numOf){
+// メインのグリッド行（○／半／太枠）
+function gridRows(){
   const sp=lastSp.find(s=>s.name==="メイン");
   if(!sp) return "";
   // 各列の中身（上詰め）
@@ -1393,9 +1392,7 @@ function gridRows(numOf){
         if(at(o.c+1,ri)!==id) cls.push("br");
       }
       const half=isHalf[o.c+"_"+ri];
-      const showNum = id!=null && at(o.c,ri-1)!==id && numOf[id];
       tds+=`<td class="${cls.join(" ")}">`
-         + (showNum?`<span class="num">${numOf[id]}</span>`:"")
          + (id!=null?`<span class="mk">${half?"半":""}</span>`:"")
          + `</td>`;
     });
