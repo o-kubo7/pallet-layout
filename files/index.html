@@ -903,13 +903,22 @@ function placeLot(lot, cands){
   return rem;
 }
 
-/* 満杯のときだけ使う最終手段。空きのある列に品目を混ぜて押し込む。 */
+/* 満杯のときだけ使う最終手段。空きのある列に品目を混ぜて押し込む。
+   押し込む分は原則として列の上側に置く。下に回るロットは、たいてい先行する列に
+   上端から入っている大口なので、引き出し線の終点はそちらの上端になり干渉しない。
+   ただし今その列を使っているロットが他の列を持たない場合だけは、
+   そのロットを上端に残すために下へ足す。 */
 function fillMix(lot, cols, rem){
   for(const c of cols){
     if(rem<=0)break;
     if(c.aisle)continue;
     const free=c.h-used(c); if(free<=0)continue;
-    const put=Math.min(rem,free); c.fills.push({id:lot.id,count:put,mix:true}); rem-=put;
+    const put=Math.min(rem,free);
+    const holder=c.fills.length?c.fills[0].id:null;
+    const alone = holder!=null && !cols.some(o=>o!==c && o.fills.some(f=>f.id===holder));
+    if(alone) c.fills.push({id:lot.id,count:put,mix:true});
+    else      c.fills.unshift({id:lot.id,count:put,mix:true});
+    rem-=put;
   }
   return rem;
 }
