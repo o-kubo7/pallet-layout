@@ -982,41 +982,33 @@ function place(lots,allowMix){
 }
 
 /* ---------- 実行 ---------- */
-function run(goMap){
-  const {lots, unknown, typeMix}=readLots();
-  if(lots.length===0 && unknown.length===0){ alert("荷物を1件以上入力してください。"); return; }
-
-  const m=document.getElementById("messages");
-  let warnHtml="";
+// 入力そのものへの警告（SNP未入力・種別の食い違い）。
+// 自動配置の直後と、保存した手動調整の復元の両方から使う。
+function inputWarnHtml(unknown, typeMix){
+  let h="";
   if(typeMix && typeMix.length){
-    warnHtml+=`<div class="msg warn">⚠ 同じ品名・ロットで種別（仕掛品／商品）が違う行があります：${
+    h+=`<div class="msg warn">⚠ 同じ品名・ロットで種別（仕掛品／商品）が違う行があります：${
       typeMix.join(" / ")}。先に入力した行の種別でまとめています。</div>`;
   }
-  if(unknown.length){
-    warnHtml+=`<div class="msg warn">⚠ SNPが未入力のため計算できない荷物があります：${
+  if(unknown && unknown.length){
+    h+=`<div class="msg warn">⚠ SNPが未入力のため計算できない荷物があります：${
       unknown.map(u=>`${u.name||"(品名なし)"}${u.lot?"／"+u.lot:""}（個数${u.qty}）`).join(" / ")
     }</div>`;
   }
+  return h;
+}
 
-  if(lots.length===0){
-    hasResult=false; lastLots=null;
-    m.innerHTML=warnHtml; showMapState();
-    document.getElementById("mapEmpty").style.display="none";
-    document.getElementById("mapBody").style.display="block";
-    document.getElementById("legend").innerHTML="";
-    document.getElementById("zone-far").innerHTML="";
-    document.getElementById("zone-near").innerHTML="";
-    document.getElementById("summary").textContent="";
-    if(goMap) switchTab('map');
-    return;
-  }
-
-  const allowMix=document.getElementById("mixChk").checked;
-  const sp=place(lots,allowMix);
-  lastSp=sp;
+/* 配置結果を画面に出す。place() は呼ばない。
+   配置は引数で受け取らずグローバルの lastSp を読む。
+   ここから呼ぶ sheetEntries() と tailAreaOf() が lastSp / lastLots を直接見るため、
+   引数で別の配置を渡しても実際には反映されない。渡せるように見せるほうが危険なので持たせない。 */
+function renderResult(lots, unknown, typeMix){
+  const sp=lastSp;
+  const m=document.getElementById("messages");
+  let warnHtml=inputWarnHtml(unknown, typeMix);
 
   const colorOf={}; lots.forEach((l,i)=>colorOf[l.id]=PALETTE[i%PALETTE.length]);
-  lastLots=lots; lastColor=colorOf; hasResult=true;
+  lastColor=colorOf;
 
   const over=lots.filter(l=>l.rem>0);
   const usedAisle=sp.some(s=>s.cols.some(c=>c.aisle&&c.fills.length));
@@ -1055,6 +1047,37 @@ function run(goMap){
   document.getElementById("summary").textContent=`合計 ${totalQty}個 → ${total}P ／ 配置済 ${total-rem}P ／ あふれ ${rem}P`;
 
   showMapState();
+}
+
+// 今ある結果でそのまま描き直す。手動移動の後やモード切替から呼ぶ。
+function redraw(){
+  if(!hasResult || !lastLots) return;
+  const {unknown, typeMix}=readLots();
+  renderResult(lastLots, unknown, typeMix);
+}
+
+function run(goMap){
+  const {lots, unknown, typeMix}=readLots();
+  if(lots.length===0 && unknown.length===0){ alert("荷物を1件以上入力してください。"); return; }
+
+  if(lots.length===0){
+    hasResult=false; lastLots=null;
+    document.getElementById("messages").innerHTML=inputWarnHtml(unknown, typeMix);
+    showMapState();
+    document.getElementById("mapEmpty").style.display="none";
+    document.getElementById("mapBody").style.display="block";
+    document.getElementById("legend").innerHTML="";
+    document.getElementById("zone-far").innerHTML="";
+    document.getElementById("zone-near").innerHTML="";
+    document.getElementById("summary").textContent="";
+    if(goMap) switchTab('map');
+    return;
+  }
+
+  const allowMix=document.getElementById("mixChk").checked;
+  lastSp=place(lots,allowMix); lastLots=lots; hasResult=true;
+
+  renderResult(lots, unknown, typeMix);
   if(goMap) switchTab('map');
 }
 
