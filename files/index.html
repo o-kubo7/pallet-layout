@@ -102,6 +102,8 @@
   .colcap{font-size:10px;color:#9ca3af;text-align:center;margin-top:2px}
   .sizectl{display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
   .sizectl .lbl{font-size:12px;color:var(--muted)}
+  /* ラベルとボタンの組。行が折り返しても組の途中で切れないようにする */
+  .sizectl .grp{display:inline-flex;gap:6px;align-items:center;margin-left:12px}
   .sizebtn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 14px;font-size:13px;
            cursor:pointer;min-height:40px;color:#374151}
   .sizebtn.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
@@ -161,6 +163,8 @@
 
   /* ---- 配置図の表（手書き用紙と同じレイアウト） ---- */
   /* 倍率は CSS 変数で当てる。印刷用の zoom を上書きしないよう style 属性には書かない */
+  /* ロットの太枠の角の丸み。0 にすると角のままになる */
+  :root{--lot-corner:15px}
   .sheet{background:#fff;color:#000;padding:10px;overflow-x:auto;width:max-content;max-width:100%;
          zoom:var(--sheet-zoom,1)}
   /* 引き出し線の基準。.sheet の padding は印刷時に 0 になるので、
@@ -211,14 +215,26 @@
   .sheet td.g .mk{display:inline-flex;align-items:center;justify-content:center;
                   width:22px;height:22px;border:2px solid #999;border-radius:50%;
                   font-size:11px;font-weight:700}
-  .sheet td.g.bt{border-top:3px solid #000}
-  .sheet td.g.bb{border-bottom:3px solid #000}
-  .sheet td.g.bl{border-left:3px solid #000}
-  .sheet td.g.br{border-right:3px solid #000}
-  .sheet td.lab{border:0;font-size:11px;color:#333}
-  /* 同じロットが段番号列を跨ぐとき、ここにも太枠の上下線を引いて範囲をつなげる */
-  .sheet td.lab.bt{border-top:3px solid #000}
-  .sheet td.lab.bb{border-bottom:3px solid #000}
+  .sheet td.lab{border:0;font-size:11px;color:#333;position:relative}
+  /* ロットの太枠。td の border は 1px の格子のまま残し、3px の枠は ::after に描く。
+     border-collapse:collapse の表では border-radius が効かないため、
+     角を丸めるには枠をセルの border から疑似要素に移す必要がある。
+     inset:-1px は 1px の格子の線をちょうど覆う位置。
+     lab（段番号列）にも上下線を引き、同じロットが列を跨ぐとき範囲をつなげる */
+  .sheet td.g.bt::after,.sheet td.g.bb::after,.sheet td.g.bl::after,.sheet td.g.br::after,
+  .sheet td.lab.bt::after,.sheet td.lab.bb::after{
+    content:"";position:absolute;inset:-1px;pointer-events:none;
+    border:0 solid #000;box-sizing:border-box}
+  .sheet td.g.bt::after,.sheet td.lab.bt::after{border-top-width:3px}
+  .sheet td.g.bb::after,.sheet td.lab.bb::after{border-bottom-width:3px}
+  .sheet td.g.bl::after{border-left-width:3px}
+  .sheet td.g.br::after{border-right-width:3px}
+  /* 外向きの角だけ丸める。へこんだ内角は別々のセルの辺なので角のまま残る。
+     --lot-corner が既定値で、「角の丸み：なし」のときだけ JS が 0 で上書きする */
+  .sheet td.g.bt.bl::after{border-top-left-radius:var(--lot-corner)}
+  .sheet td.g.bt.br::after{border-top-right-radius:var(--lot-corner)}
+  .sheet td.g.bb.bl::after{border-bottom-left-radius:var(--lot-corner)}
+  .sheet td.g.bb.br::after{border-bottom-right-radius:var(--lot-corner)}
   .sheet td.colno{border:0;font-size:11px;height:20px}
 
   @media print{
@@ -339,9 +355,12 @@
         <button class="sizebtn" data-zoom="1" onclick="setSheetZoom('1')">100%</button>
         <button class="sizebtn" data-zoom="1.5" onclick="setSheetZoom('1.5')">150%</button>
         <button class="sizebtn" data-zoom="2" onclick="setSheetZoom('2')">200%</button>
-        <span class="lbl" style="margin-left:12px">矢印の先</span>
-        <button class="sizebtn on" data-arrow="1" onclick="setArrowHead(true)">あり</button>
-        <button class="sizebtn" data-arrow="0" onclick="setArrowHead(false)">なし</button>
+        <span class="grp"><span class="lbl">矢印の先</span>
+          <button class="sizebtn on" data-arrow="1" onclick="setArrowHead(true)">あり</button>
+          <button class="sizebtn" data-arrow="0" onclick="setArrowHead(false)">なし</button></span>
+        <span class="grp"><span class="lbl">角の丸み</span>
+          <button class="sizebtn on" data-corner="1" onclick="setLotCorner(true)">あり</button>
+          <button class="sizebtn" data-corner="0" onclick="setLotCorner(false)">なし</button></span>
         <span class="lbl" id="zoomNow"></span>
       </div>
 
@@ -494,7 +513,7 @@ let fracMode=false;   // true なら「満載数P 半」表記
 let sheetMode=true;  // 配置図タブの表示（true=配置図の表 / false=ブロック図）
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", view:"palletApp.view", zoom:"palletApp.zoom", arrow:"palletApp.arrow"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", view:"palletApp.view", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner"};
 let storageOK=true;
 const memStore={};
 (function(){
@@ -1217,6 +1236,23 @@ function setArrowHead(on){
   if(sheetMode && hasResult) renderSheet();
 }
 
+/* ---------- ロットの太枠の角丸 ---------- */
+let lotCorner=true;   // false なら角のままにする
+
+function setLotCorner(on){
+  lotCorner=!!on;
+  document.querySelectorAll(".sizebtn[data-corner]").forEach(b=>
+    b.classList.toggle("on", (b.dataset.corner==="1")===lotCorner));
+  saveData(STORE_KEY.corner, lotCorner);
+  applyLotCorner();
+}
+// CSS の :root{--lot-corner} が既定値。なしのときだけ 0 で上書きする。
+// 純粋な CSS なので表を描き直す必要はない。
+function applyLotCorner(){
+  if(lotCorner) document.documentElement.style.removeProperty("--lot-corner");
+  else          document.documentElement.style.setProperty("--lot-corner","0");
+}
+
 /* ---------- 配置図の表の表示倍率 ---------- */
 // 表の実寸（.sheet の padding 10px×2 を含む）
 const SHEET_W=675+20, SHEET_H=469+20;
@@ -1630,6 +1666,15 @@ updateSaveStatus();
   if(a===false) arrowHead=false;
   document.querySelectorAll(".sizebtn[data-arrow]").forEach(b=>
     b.classList.toggle("on", (b.dataset.arrow==="1")===arrowHead));
+})();
+
+// 太枠の角丸：保存があれば復元
+(function initLotCorner(){
+  const c=loadData(STORE_KEY.corner);
+  if(c===false) lotCorner=false;
+  document.querySelectorAll(".sizebtn[data-corner]").forEach(b=>
+    b.classList.toggle("on", (b.dataset.corner==="1")===lotCorner));
+  applyLotCorner();
 })();
 
 // 端数表記：保存があれば復元
