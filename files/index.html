@@ -95,8 +95,20 @@
   .colwrap.editable:hover .col,.colwrap.editable:hover .hrow{outline:2px solid var(--accent)}
   .cell{width:var(--cell);height:var(--cell);border:1px solid #cbd5e1;border-radius:2px;background:#fff;overflow:hidden;
         display:flex;align-items:center;justify-content:center;font-weight:600;color:#1f2937;
-        font-size:calc(var(--cell) * .3);line-height:1}
+        font-size:calc(var(--cell) * .3);line-height:1;
+        user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
   .cell.aisle-empty{background:#e5e7eb}
+  /* ---- ロットの手動移動 ---- */
+  /* 選択中のマス。マスの背景はロットの色なので、色ではなく枠で示す。
+     touch-action:none は「選択された時点」で必要。ドラッグ開始まで待つと
+     ブラウザが先にパンを始めてしまい pointercancel で中断する。 */
+  .cell.sel{box-shadow:inset 0 0 0 2px #fff, 0 0 0 2px #111827;border-color:#111827;
+            touch-action:none}
+  .colwrap.drop-ok .col,.colwrap.drop-ok .hrow{outline:3px solid #16a34a}
+  .colwrap.drop-ng .col,.colwrap.drop-ng .hrow{outline:3px solid #dc2626}
+  .dragghost{position:fixed;z-index:70;pointer-events:none;background:rgba(17,24,39,.9);color:#fff;
+             border-radius:6px;padding:4px 8px;font-size:12px;font-weight:700;
+             transform:translate(-50%,-160%);white-space:nowrap}
   .cell.segline{border-top:2px dashed #374151}
   .cell.segline-h{border-left:2px dashed #374151}
   .colcap{font-size:10px;color:#9ca3af;text-align:center;margin-top:2px}
@@ -241,7 +253,7 @@
 
   @media print{
     @page{size:A4 landscape;margin:8mm}
-    header,.tabs,.actionbar,#updateBar,.sizectl,#mapBody,#messages,#regInfo,#saveStatus,.note{display:none !important}
+    header,.tabs,.actionbar,#updateBar,.sizectl,#mapBody,#messages,#regInfo,#saveStatus,.note,.hint{display:none !important}
     .wrap{padding:0;max-width:none}
     .card{border:0;padding:0;margin:0}
     .card h2{display:none}
@@ -340,9 +352,12 @@
   <div id="tab-map" class="tabpanel" style="display:none">
     <div class="card" id="resultCard">
       <h2>配置図
-        <button id="editBtn" class="btn btn-ghost" style="margin-left:auto" onclick="toggleEdit()">通路を編集</button>
+        <button id="moveBtn" class="btn btn-ghost" style="margin-left:auto" onclick="toggleMove()">ロットを移動</button>
+        <button id="editBtn" class="btn btn-ghost" style="margin-left:8px" onclick="toggleEdit()">通路を編集</button>
       </h2>
       <div id="editHint" class="hint" style="display:none;margin-bottom:8px">✏ 編集モード：マスをタップするとその列が「通路（灰・破線）」⇔「通常」に切り替わります。</div>
+      <div id="moveHint" class="hint" style="display:none;margin-bottom:8px">✋ 移動モード：同じロットのマスをタップして選び、選んだマスをドラッグして別の列へ運びます。
+        <button class="btn-mini" onclick="clearSel()">選択解除</button></div>
 
       <div class="sizectl">
         <span class="lbl">表示</span>
@@ -1093,6 +1108,8 @@ function cellsOf(col){
   return arr;
 }
 function drawZone(elId, spaces, colorOf){
+  // 作り直すと .sel クラスは消えるので、選択の状態も一緒に捨てる
+  if(typeof clearSel==="function") clearSel();
   const el=document.getElementById(elId); el.innerHTML="";
   spaces.forEach(sp=>{
     const horizontal = sp.orient==="h";
@@ -1289,22 +1306,75 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
   return {ok:true, needConfirm: after>before, before, after, next};
 }
 
-/* ---------- 通路編集 ---------- */
-function toggleEdit(){
-  editMode=!editMode;
+/* ---------- 通路編集 / ロット移動（モードと選択） ---------- */
+let moveMode=false;
+let sel={lotId:null, cells:new Set()};
+// ドラッグの直後に飛んでくる click を無視するための印。Task 5 で立てる。
+let dragMoved=false;
+
+function setEditMode(on){
+  editMode=on;
   const b=document.getElementById("editBtn");
-  b.className = "btn "+(editMode?"btn-on":"btn-ghost");
-  b.textContent = editMode?"編集を終了":"通路を編集";
-  document.getElementById("editHint").style.display = editMode?"block":"none";
+  b.className = "btn "+(on?"btn-on":"btn-ghost");
+  b.textContent = on?"編集を終了":"通路を編集";
+  document.getElementById("editHint").style.display = on?"block":"none";
+}
+function setMoveMode(on){
+  moveMode=on;
+  const b=document.getElementById("moveBtn");
+  b.className = "btn "+(on?"btn-on":"btn-ghost");
+  b.textContent = on?"移動を終了":"ロットを移動";
+  document.getElementById("moveHint").style.display = on?"block":"none";
+  if(!on) clearSel();
+}
+// 2つのモードは排他。通路編集は前提そのものを変えるので、従来どおり配置し直す。
+function toggleEdit(){
+  setEditMode(!editMode);
+  if(editMode) setMoveMode(false);
   if(lastLots) run(false);
 }
+// 移動モードの出入りでは配置し直さない。ただし editable クラスが DOM に焼き込まれているので
+// 描き直して落とす。
+function toggleMove(){
+  setMoveMode(!moveMode);
+  if(moveMode) setEditMode(false);
+  redraw();
+}
+function clearSel(){
+  sel.lotId=null; sel.cells.clear();
+  document.querySelectorAll(".cell.sel").forEach(c=>c.classList.remove("sel"));
+}
+function cellKey(cellEl){
+  const w=cellEl.closest(".colwrap");
+  return w.dataset.space+"|"+w.dataset.col+"|"+cellEl.dataset.row;
+}
+// 1マス目でロットが決まり、以降は同じロットのマスしか選べない。
+function toggleCell(cellEl){
+  if(cellEl.dataset.lot==null) return;          // 空マスは選べない
+  const id=parseInt(cellEl.dataset.lot);
+  if(sel.lotId==null) sel.lotId=id;
+  else if(sel.lotId!==id) return;               // 別ロットのマスは無視する
+  const k=cellKey(cellEl);
+  if(sel.cells.has(k)){ sel.cells.delete(k); cellEl.classList.remove("sel"); }
+  else { sel.cells.add(k); cellEl.classList.add("sel"); }
+  if(sel.cells.size===0) sel.lotId=null;
+}
+
 document.addEventListener("click",e=>{
+  if(moveMode) return;
   if(!editMode)return;
   const w=e.target.closest(".colwrap"); if(!w)return;
   const sp=SPACES.find(s=>s.name===w.dataset.space); if(!sp)return;
   sp.cols[parseInt(w.dataset.col)].aisle=!sp.cols[parseInt(w.dataset.col)].aisle;
   document.getElementById("cfgText").value=spacesToText();
   showCapacity(); run(false);
+});
+document.addEventListener("click",e=>{
+  if(!moveMode) return;
+  if(dragMoved){ dragMoved=false; return; }     // ドラッグ直後の click は選択を動かさない
+  const c=e.target.closest(".cell"); if(!c) return;
+  if(!c.closest("#mapBody")) return;
+  toggleCell(c);
 });
 
 /* ---------- スペース設定 ---------- */
