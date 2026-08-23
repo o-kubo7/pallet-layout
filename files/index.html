@@ -1249,6 +1249,13 @@ function applySheetZoom(){
 }
 window.addEventListener("resize", ()=>{ if(sheetMode && sheetZoom==="auto") applySheetZoom(); });
 
+// ロットの最後のマスがあるエリア名。分割配置は lastSp の並び順（メイン→軒下→PC横→EV横）に
+// 詰めていくので、そのロットのマスを持つ最後のスペースが末尾になる。
+function tailAreaOf(id){
+  let last=null;
+  lastSp.forEach(s=>{ if(s.cols.some(c=>c.fills.some(f=>f.id===id))) last=s.name; });
+  return last;
+}
 /* 配置図の表の欄をロット単位で作る。
    同じロットが同じ段の複数エリアにまたがっても1欄にまとめ、
    パレット数はその段での合計にする。
@@ -1274,7 +1281,10 @@ function sheetEntries(names, baseArea){
   });
   return order.map(e=>{
     const extra = baseArea ? e.areas.filter(n=>n!==baseArea) : [];
-    return {lot:e.lot, pallets:e.pallets, note: extra.length ? ("※"+extra.join("・")) : ""};
+    // 「半」はロットの末尾のマスに付くので、その欄にだけ持たせる（上下段で二重に出さない）
+    const tail = tailAreaOf(e.lot.id);
+    const half = e.areas.includes(tail) ? Math.min(e.lot.half||0, e.pallets) : 0;
+    return {lot:e.lot, pallets:e.pallets, half, note: extra.length ? ("※"+extra.join("・")) : ""};
   });
 }
 function renderSheet(){
@@ -1335,6 +1345,13 @@ function renderSheet(){
   applySheetZoom();
 }
 
+// 区画のパレット数の表示。入力タブの「端数を「半」で表示」に追従する。
+// 端数の伝票が2件以上あるロットはグリッドにも半マークが2つ付くので「18P 半2」と個数を添える。
+function palletSlotText(e){
+  const n=fracMode?(e.half||0):0;
+  if(n<=0) return e.pallets+"P";
+  return (e.pallets-n)+"P 半"+(n>1?n:"");
+}
 // 区画セル（2列ぶんの幅）。kind: name / lot / pallet / pallet2 / note
 // extra: 全セルに足すクラス（品名行の太罫など）。品名行は左右の端も太罫にする
 function slotCells(entries,count,kind,extra){
@@ -1344,7 +1361,7 @@ function slotCells(entries,count,kind,extra){
     let v="", cls="slot";
     if(kind==="name")        v=l?l.name:"";
     else if(kind==="lot")    v=l?l.lot:"";
-    else if(kind==="pallet") v=e?(e.pallets+"P"):"";
+    else if(kind==="pallet") v=e?palletSlotText(e):"";
     else if(kind==="note"){  v=e&&e.note?e.note:""; cls="none snote"; }
     if(extra && kind!=="note"){
       cls+=" "+extra;
@@ -1375,12 +1392,15 @@ function gridRows(){
     const key=ci+"_"+ri;
     (sp.cols[ci].aisle ? (aisle[c.id]=aisle[c.id]||[]) : (norm[c.id]=norm[c.id]||[])).push(key);
   }));
-  // 「半」の位置：通路にはみ出しているならその通路のマス、なければ通常列の最後
+  // 「半」の位置：通路にはみ出しているならその通路のマス、なければ通常列の最後。
+  // 末尾のマスが他のエリアにあるロットは、半パレットもそちらに置かれているので付けない
+  // （下段・上段のパレット数の「半」表記と場所を一致させる）。
   const isHalf={};
   const ids=new Set([...Object.keys(norm),...Object.keys(aisle)]);
   ids.forEach(id=>{
     const lot=lastLots.find(l=>l.id==id); const n=lot?(lot.half||0):0;
     if(n<=0) return;
+    if(tailAreaOf(Number(id))!==sp.name) return;
     const list = (aisle[id]&&aisle[id].length) ? aisle[id] : (norm[id]||[]);
     list.slice(-n).forEach(k=>{ isHalf[k]=true; });
   });
