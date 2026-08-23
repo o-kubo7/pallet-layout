@@ -521,6 +521,11 @@ function movingCount(counts, destSpaceName, destColIndex){
 // 見た目でどちら側になるかはエリアによって違う
 // （メインは上端、軒下②は下端、横向きのエリアは左端）。
 function moveCells(next, lotId, counts, destSpaceName, destColIndex){
+  const ds=next.find(x=>x.name===destSpaceName);
+  const dc=ds?ds.cols[destColIndex]:null;
+  // 移動先が無ければ何も動かさない。減算より先に返さないと、
+  // 移動元から引いたぶんがどこにも足されずマスが消える。
+  if(!dc) return 0;
   const skip=destSpaceName+"|"+destColIndex;
   let total=0;
   Object.keys(counts).forEach(key=>{
@@ -535,9 +540,6 @@ function moveCells(next, lotId, counts, destSpaceName, destColIndex){
       f.count-=take; need-=take; total+=take;
     });
   });
-  const ds=next.find(x=>x.name===destSpaceName);
-  const dc=ds?ds.cols[destColIndex]:null;
-  if(!dc) return 0;                              // 移動先が無ければ何もしない（移動元側の防御と揃える）
   const entry={id:lotId, count:total};
   if(dc.aisle) entry.ov=true;
   if(dc.fills.length) entry.mix=true;
