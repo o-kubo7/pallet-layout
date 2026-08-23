@@ -914,7 +914,10 @@ function fillMix(lot, cols, rem){
     if(c.aisle)continue;
     const free=c.h-used(c); if(free<=0)continue;
     const put=Math.min(rem,free);
-    const holder=c.fills.length?c.fills[0].id:null;
+    // c.fills[0] は前回の呼び出しで unshift された混載ロットの場合があるため、
+    // mix でない最初の要素（placeLot が入れた本来の占有ロット）を holder とする。
+    const owner=c.fills.find(f=>!f.mix);
+    const holder=owner?owner.id:null;
     const alone = holder!=null && !cols.some(o=>o!==c && o.fills.some(f=>f.id===holder));
     if(alone) c.fills.push({id:lot.id,count:put,mix:true});
     else      c.fills.unshift({id:lot.id,count:put,mix:true});
