@@ -163,6 +163,10 @@
   /* 倍率は CSS 変数で当てる。印刷用の zoom を上書きしないよう style 属性には書かない */
   .sheet{background:#fff;color:#000;padding:10px;overflow-x:auto;width:max-content;max-width:100%;
          zoom:var(--sheet-zoom,1)}
+  /* 引き出し線の基準。.sheet の padding は印刷時に 0 になるので、
+     表にぴったり重なるこのラッパを座標の原点にする */
+  .sheet .sheetbox{position:relative;width:max-content}
+  .sheet .leaders{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
   /* 1列 48px×14＝672px。ロット（最大9文字）が区画セル（2列＝96px）に収まる幅 */
   .sheet table{border-collapse:collapse;table-layout:fixed;
                width:672px;min-width:672px;max-width:672px;margin:0}
@@ -1298,16 +1302,19 @@ function renderSheet(){
   // 下段（7区画）：品名／ロット／パレット数／注記
   rows+=`<tr>${slotCells(bottom,SHEET_BOTTOM_SLOTS,"name","bb2")}</tr>`;
   rows+=`<tr>${slotCells(bottom,SHEET_BOTTOM_SLOTS,"lot")}</tr>`;
-  rows+=`<tr>${slotCells(bottom,SHEET_BOTTOM_SLOTS,"pallet")}</tr>`;
+  // この行の各セルの下辺が引き出し線の起点になる
+  rows+=`<tr class="btmp">${slotCells(bottom,SHEET_BOTTOM_SLOTS,"pallet")}</tr>`;
   rows+=`<tr class="note-row">${slotCells(bottom,SHEET_BOTTOM_SLOTS,"note")}</tr>`;
   rows+=`<tr class="gap"><td class="none" colspan="14"></td></tr>`;
 
   // グリッド（メイン）
-  rows+=gridRows();
+  const grid=gridRows();
+  rows+=grid.html;
 
-  host.innerHTML=`<div class="sheet"><table>
+  host.innerHTML=`<div class="sheet"><div class="sheetbox"><table>
     <colgroup>${Array(14).fill('<col style="width:48px">').join("")}</colgroup>
-    ${rows}</table></div>`;
+    ${rows}</table></div></div>`;
+  drawLeaders(grid.anchors, bottom.map(e=>e.lot.id));
   applySheetZoom();
 }
 
@@ -1336,7 +1343,8 @@ function slotCells(entries,count,kind,extra){
 // メインのグリッド行（○／半／太枠）
 function gridRows(){
   const sp=lastSp.find(s=>s.name==="メイン");
-  if(!sp) return "";
+  // 設定でエリア名を変えると「メイン」が無くなることがある
+  if(!sp) return {html:"", anchors:[]};
   // 各列の中身（上詰め）
   const colCells=sp.cols.map(col=>{
     const arr=Array(col.h).fill(null); let r=0;
@@ -1361,6 +1369,32 @@ function gridRows(){
   });
 
   const at=(ci,ri)=>(colCells[ci]&&colCells[ci][ri])?colCells[ci][ri].id:null;
+  // 引き出し線の終点。そのロットが始まる最初の連続ブロックの中央列を選ぶ。
+  // 段番号列は左右のレーンが同じロットなら連続とみなすが、終点の候補にはしない。
+  // 飛び地は最初のブロックだけを見る。全体の中心を取ると表を横断する斜線になるうえ、
+  // 下段の欄順（左の列から順）と終点の左右順が食い違って矢印が交差する。
+  // row は通常 0 になるが、同じ列に2ロット以上が混載された場合は 0 より大きくなり、
+  // そのときは開始マスの上辺が終点になって線が上のロットを斜めに横切る。
+  const anchorOf=(id, order)=>{
+    const list=[]; let row=0;
+    for(let k=0;k<order.length;k++){
+      const o=order[k];
+      if(o.lab){
+        if(!list.length) continue;
+        const bridged = o.l!=null && at(o.l,row)===id && at(o.r,row)===id;
+        if(!bridged) break;
+        continue;
+      }
+      let r0=null;
+      for(let r=0;r<sp.cols[o.c].h;r++) if(at(o.c,r)===id){ r0=r; break; }
+      if(r0==null){ if(list.length) break; continue; }
+      if(!list.length){ row=r0; list.push(k); }
+      else if(r0===row) list.push(k);
+      else break;
+    }
+    if(!list.length) return null;
+    return {id, k:list[Math.floor((list.length-1)/2)], row};
+  };
   // 14列の並び：通路 | 1-3 | 段番号 | 4-6 | 段番号 | 7-9 | 通路 | 段番号
   // 段番号の l/r は左右に隣り合うレーン。最後の段番号は右隣がないので跨がない
   const order=[{c:0,aisle:true},{c:1},{c:2},{c:3},{lab:true,l:3,r:4},{c:4},{c:5},{c:6},{lab:true,l:6,r:7},
@@ -1396,12 +1430,83 @@ function gridRows(){
          + (id!=null?`<span class="mk">${half?"半":""}</span>`:"")
          + `</td>`;
     });
-    rows+=`<tr>${tds}</tr>`;
+    rows+=`<tr class="grow">${tds}</tr>`;
   }
   // 列番号
   let nums="";
   order.forEach(o=>{ nums+=`<td class="colno">${(o.lab||o.aisle)?"":o.c}</td>`; });
-  return rows+`<tr>${nums}</tr>`;
+
+  // メインに置かれている全ロットの終点を集める
+  const anchors=[];
+  new Set(Object.keys(norm).concat(Object.keys(aisle))).forEach(key=>{
+    const a=anchorOf(Number(key), order);
+    if(a) anchors.push(a);
+  });
+
+  return {html: rows+`<tr>${nums}</tr>`, anchors};
+}
+
+/* 下段の欄からメインのスペースへ引き出し線を引く。
+   表を差し込んだ直後に呼ぶ（セルの位置を実測するため）。
+   座標は必ず getBoundingClientRect() で table 基準にそろえる。
+   offsetLeft は td.g だけ position:relative のせいで基準が違うので使わない。
+   anchors : gridRows() が返す [{id, k, row}]
+   slotIds : 下段の欄順に並んだロット id */
+function drawLeaders(anchors, slotIds){
+  const sheet=document.querySelector("#sheetView .sheet");
+  const box=sheet && sheet.querySelector(".sheetbox");
+  const table=box && box.querySelector("table");
+  if(!table) return;
+  const from=box.querySelectorAll("tr.btmp td");
+  const grid=box.querySelectorAll("tr.grow");
+  if(!from.length || !grid.length) return;
+
+  const base=table.getBoundingClientRect();
+  if(!base.width) return;              // タブ非表示中は測れないので描かない
+  const z=parseFloat(getComputedStyle(sheet).zoom)||1;
+  const rectOf=el=>{
+    const r=el.getBoundingClientRect();
+    return {x:(r.left-base.left)/z, y:(r.top-base.top)/z, w:r.width/z, h:r.height/z};
+  };
+
+  const NS="http://www.w3.org/2000/svg";
+  const svg=document.createElementNS(NS,"svg");
+  svg.setAttribute("class","leaders");
+  svg.setAttribute("width", base.width/z);
+  svg.setAttribute("height", base.height/z);
+
+  const byId={}; anchors.forEach(a=>{ byId[a.id]=a; });
+  slotIds.forEach((id,i)=>{
+    const a=byId[id], src=from[i];
+    if(!a || !src) return;                      // メイン外のロットには線を引かない
+    const row=grid[a.row]; if(!row) return;
+    const dst=row.children[a.k]; if(!dst) return;
+
+    const s=rectOf(src), d=rectOf(dst);
+    const x0=s.x+s.w/2, y0=s.y+s.h;
+    const x1=d.x+d.w/2, y1=d.y-2;
+    if(y1<=y0) return;
+
+    const p=document.createElementNS(NS,"path");
+    p.setAttribute("d",`M${x0} ${y0}L${x1} ${y1}`);
+    p.setAttribute("stroke","#000");
+    p.setAttribute("stroke-width","1.6");
+    p.setAttribute("fill","none");
+    svg.appendChild(p);
+
+    const ang=-Math.atan2(x1-x0, y1-y0)*180/Math.PI;   // 真下が0度
+    const h=document.createElementNS(NS,"path");
+    h.setAttribute("d","M-4.5 -8L0 0L4.5 -8");
+    h.setAttribute("stroke","#000");
+    h.setAttribute("stroke-width","1.6");
+    h.setAttribute("fill","none");
+    h.setAttribute("stroke-linecap","round");
+    h.setAttribute("stroke-linejoin","round");
+    h.setAttribute("transform",`translate(${x1},${y1}) rotate(${ang})`);
+    svg.appendChild(h);
+  });
+
+  box.appendChild(svg);
 }
 
 /* ---------- utils ---------- */
