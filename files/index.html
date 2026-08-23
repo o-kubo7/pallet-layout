@@ -1162,6 +1162,130 @@ function setCellSize(px){
   saveData(STORE_KEY.cell, px);
 }
 
+/* ---------- ロットの手動移動（データ操作） ----------
+   ここの関数は DOM に触らない。コンソールから直接呼んで検証できる。 */
+
+// 選択（"スペース名|列番号|行番号" の集合）を「スペース名|列番号 → マス数」に集計する
+function selCounts(cells){
+  const n={};
+  cells.forEach(k=>{
+    const p=k.split("|");
+    const key=p[0]+"|"+p[1];
+    n[key]=(n[key]||0)+1;
+  });
+  return n;
+}
+
+// 運用上ひとつづきに使うエリア（AREA_GROUPS）は、分割の判定でも1つの束として扱う。
+// 束にしないと 軒下①から軒下② への移動が毎回「2か所に分かれます」になる。
+function areaKeyOf(name){
+  const g=AREA_GROUPS.find(g=>g.includes(name));
+  return g?g.join("+"):name;
+}
+
+// あるロットが何ブロックに分かれているかを数える。
+// 束ごとに列を連結し、列番号が隣り合っていれば1ブロック。
+// 間に挟まる列がすべて「空の通路列」の場合も1ブロックとみなす。
+// 別の束にあれば必ず別ブロック。
+function blockCountOf(sp, lotId){
+  const groups={};
+  sp.forEach(s=>{
+    const k=areaKeyOf(s.name);
+    (groups[k]=groups[k]||[]).push(...s.cols);
+  });
+  let total=0;
+  Object.keys(groups).forEach(k=>{
+    const cols=groups[k];
+    const idx=[];
+    cols.forEach((c,i)=>{ if(c.fills.some(f=>f.id===lotId)) idx.push(i); });
+    if(!idx.length) return;
+    let blocks=1;
+    for(let j=1;j<idx.length;j++){
+      let bridged=true;
+      for(let i=idx[j-1]+1;i<idx[j];i++){
+        const c=cols[i];
+        if(!(c.aisle && c.fills.length===0)){ bridged=false; break; }
+      }
+      if(!bridged) blocks++;
+    }
+    total+=blocks;
+  });
+  return total;
+}
+
+// count が 0 以下の要素を捨て、同じ列で隣り合う同一ロットの要素を統合する。
+// 隣り合っていない同一ロット（間に別ロットが挟まる形）は畳まない。
+// 畳むと間のロットの位置が動いてしまうため。
+function normalizeFills(sp){
+  sp.forEach(s=>s.cols.forEach(col=>{
+    const out=[];
+    col.fills.forEach(f=>{
+      if(f.count<=0) return;
+      const last=out[out.length-1];
+      if(last && last.id===f.id){ last.count+=f.count; return; }
+      out.push(f);
+    });
+    col.fills=out;
+  }));
+}
+
+// 実際に動くマス数。落とし先の列に既にあるマスは動かないので除く。
+// これにより「2列に分かれたロットを全部選び、片方の列に落としてまとめる」が成立する。
+function movingCount(counts, destSpaceName, destColIndex){
+  const skip=destSpaceName+"|"+destColIndex;
+  let n=0;
+  Object.keys(counts).forEach(k=>{ if(k!==skip) n+=counts[k]; });
+  return n;
+}
+
+// 移動を適用する。next は lastSp のコピーを渡すこと（破壊的に書き換える）。
+// 移動先には自動配置の fillMix と同じく fills の先頭へ差し込む。
+// 見た目でどちら側になるかはエリアによって違う
+// （メインは上端、軒下②は下端、横向きのエリアは左端）。
+function moveCells(next, lotId, counts, destSpaceName, destColIndex){
+  const skip=destSpaceName+"|"+destColIndex;
+  let total=0;
+  Object.keys(counts).forEach(key=>{
+    if(key===skip) return;                       // 落とし先に既にある分は動かさない
+    const p=key.split("|");
+    const s=next.find(x=>x.name===p[0]); if(!s) return;
+    const col=s.cols[parseInt(p[1])]; if(!col) return;
+    let need=counts[key];
+    col.fills.forEach(f=>{
+      if(need<=0 || f.id!==lotId) return;
+      const take=Math.min(need, f.count);
+      f.count-=take; need-=take; total+=take;
+    });
+  });
+  const ds=next.find(x=>x.name===destSpaceName);
+  const dc=ds.cols[destColIndex];
+  const entry={id:lotId, count:total};
+  if(dc.aisle) entry.ov=true;
+  if(dc.fills.length) entry.mix=true;
+  dc.fills.unshift(entry);
+  normalizeFills(next);
+  return total;
+}
+
+// 移動の可否を判定する。sp は書き換えない。
+// ok:true のとき next に移動適用済みのコピーが入るので、呼び出し側はそれを lastSp に入れる。
+function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
+  const ds=sp.find(x=>x.name===destSpaceName);
+  if(!ds) return {ok:false, reason:"エリアが見つかりません"};
+  const dc=ds.cols[destColIndex];
+  if(!dc) return {ok:false, reason:"列が見つかりません"};
+  const n=movingCount(counts, destSpaceName, destColIndex);
+  if(n<=0) return {ok:false, same:true, reason:"動くマスがありません"};
+  // used(dc) には落とし先に既にあるそのロットの分が含まれ、n からはその分が除かれているので
+  // 二重に数えることはない。
+  if(used(dc)+n > dc.h) return {ok:false, reason:"移動先の空きが足りません"};
+  const before=blockCountOf(sp, lotId);
+  const next=clone(sp);
+  moveCells(next, lotId, counts, destSpaceName, destColIndex);
+  const after=blockCountOf(next, lotId);
+  return {ok:true, needConfirm: after>before, before, after, next};
+}
+
 /* ---------- 通路編集 ---------- */
 function toggleEdit(){
   editMode=!editMode;
