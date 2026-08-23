@@ -20,9 +20,13 @@
 - **ドロップ先の判定に `event.target` を使わない。** `setPointerCapture()` 中はキャプチャ元に固定される。
   必ず `document.elementFromPoint()` で座標から引く
 - **HTML5 Drag & Drop API を使わない。** iOS Safari で動作しない
-- `lastSp` を書き換えたら必ず `renderResult()` を通す。`drawZone()` を直接呼ばない
-- 印刷用 CSS には手を入れない。`@media print` が `#mapBody` を隠しているためブロック図は紙に出ない
-- 最後に `files/sw.js` の `CACHE_VERSION` を `v15` → `v16` にする（Task 7）
+- **`renderResult()` に配置を引数で渡さない。** 内部で呼ぶ `sheetEntries()` / `tailAreaOf()` が
+  グローバルの `lastSp` / `lastLots` を直接読むため、引数を持たせると嘘になる
+- **手動調整の指紋は `run()` を実行した時点のものを使う。** 保存した瞬間の入力ではない
+- **端の自動スクロールは `requestAnimationFrame` のループで回す。** `pointermove` の中では、
+  指を端で止めた瞬間にスクロールが止まる
+- 印刷の非表示リストに `.hint` を追加する。追加しないと移動モードのヒント文が紙に出る
+- 最後に `files/sw.js` の `CACHE_VERSION` を `v15` から `v16` にする（Task 7）
 - 設計書は `docs/superpowers/specs/2026-08-24-block-map-lot-drag-design.md`
 
 ---
@@ -35,7 +39,7 @@
 | `files/sw.js` | Service Worker（キャッシュ） | `CACHE_VERSION` の更新のみ |
 
 既存の構造に合わせ、JS は既存のセクションコメントの区分に従って追記する。
-移動関連の関数は「通路編集」セクションの直前に `/* ---------- ロットの手動移動 ---------- */` として置く。
+移動関連の関数は「通路編集」セクションに寄せる。
 
 ---
 
@@ -67,8 +71,8 @@ DevTools のコンソールに貼り付けて実行する。以降のタスク�
 [[],["0:7"],["0:7"],["0:7"],["0:7"],["3:7"],["3:7"],["3:6"],["2:3"],["1:2"],[]]
 ```
 
-ロットidの対応は `部品A=0` / `部品C=1` / `部品B=2` / `製品X=3` / `製品W=4`。
-メインの列番号 0 と 10 は通路。列 8 が `部品B(3P)`、列 9 が `部品C(2P)`。
+ロットidの対応は `部品A=0`（28P）/ `部品C=1`（2P）/ `部品B=2`（3P）/ `製品X=3`（20P）/ `製品W=4`（30P）。
+合計 83P。メインの列番号 0 と 10 は通路。列 8 が `部品B`、列 9 が `部品C`。
 
 **データ B（初期化）** — 保存を消して読み込み直す。
 
@@ -83,10 +87,10 @@ location.reload();
 
 ---
 
-### Task 1: run() を分割して renderResult() を切り出す
+### Task 1: run() を分割して renderResult() と redraw() を切り出す
 
-保存した手動調整を復元するとき、`place()` を呼ばずに画面を組み立てる必要がある。
-`run()` の後半を `renderResult()` として切り出し、両方から呼べるようにする。
+保存した手動調整を復元するときや、モードを切り替えたときに、`place()` を呼ばずに
+画面を組み立て直す必要がある。`run()` の後半を切り出して共用する。
 このタスクでは挙動を変えない。
 
 **Files:**
@@ -96,7 +100,8 @@ location.reload();
 - Consumes: なし
 - Produces:
   - `inputWarnHtml(unknown, typeMix) -> string` — 入力そのものへの警告HTML
-  - `renderResult(lots, sp, unknown, typeMix) -> void` — 配置結果を画面に出す。`lastColor` を更新する
+  - `renderResult(lots, unknown, typeMix) -> void` — グローバルの `lastSp` を読んで画面を組み立てる。`lastColor` を更新する
+  - `redraw() -> void` — 現在の `lastLots` / `lastSp` で描き直す。結果が無ければ何もしない
   - `run(goMap)` のシグネチャと挙動は変わらない
 
 - [ ] **Step 1: 変更前の描画結果を記録する**
@@ -122,7 +127,7 @@ python3 -m http.server 50999
 })()
 ```
 
-期待される出力（例。数値は環境で変わらないが、控えた値と後で一致すればよい）:
+期待される出力（数値は控えるだけでよい。`sum` は次のとおり）:
 
 ```
 {"msg":...,"legend":...,"near":...,"far":...,"sum":"合計 810個 → 83P ／ 配置済 83P ／ あふれ 0P"}
@@ -130,9 +135,10 @@ python3 -m http.server 50999
 
 - [ ] **Step 2: run() を置き換える**
 
-`/* ---------- 実行 ---------- */` から `function run(goMap){` 全体（`if(goMap) switchTab('map');` と閉じ括弧まで）を探し、次で置き換える。
+`/* ---------- 実行 ---------- */` から `function run(goMap){` の閉じ括弧までを探し、
+次の4つの関数で置き換える。
 
-変更前（先頭と末尾で位置を特定する）:
+変更前（先頭で位置を特定する。末尾は `if(goMap) switchTab('map');` と `}`）:
 
 ```js
 /* ---------- 実行 ---------- */
@@ -140,9 +146,7 @@ function run(goMap){
   const {lots, unknown, typeMix}=readLots();
 ```
 
-…（中略。`showMapState();` と `if(goMap) switchTab('map');` と `}` で終わる）
-
-変更後（関数まるごと3つ）:
+変更後:
 
 ```js
 /* ---------- 実行 ---------- */
@@ -162,9 +166,12 @@ function inputWarnHtml(unknown, typeMix){
   return h;
 }
 
-/* 配置結果（lots と sp）を画面に出す。place() は呼ばない。
-   自動配置の直後と、保存した手動調整を復元したときの両方から呼ぶ。 */
-function renderResult(lots, sp, unknown, typeMix){
+/* 配置結果を画面に出す。place() は呼ばない。
+   配置は引数で受け取らずグローバルの lastSp を読む。
+   ここから呼ぶ sheetEntries() と tailAreaOf() が lastSp / lastLots を直接見るため、
+   引数で別の配置を渡しても実際には反映されない。渡せるように見せるほうが危険なので持たせない。 */
+function renderResult(lots, unknown, typeMix){
+  const sp=lastSp;
   const m=document.getElementById("messages");
   let warnHtml=inputWarnHtml(unknown, typeMix);
 
@@ -210,6 +217,13 @@ function renderResult(lots, sp, unknown, typeMix){
   showMapState();
 }
 
+// 今ある結果でそのまま描き直す。手動移動の後やモード切替から呼ぶ。
+function redraw(){
+  if(!hasResult || !lastLots) return;
+  const {unknown, typeMix}=readLots();
+  renderResult(lastLots, unknown, typeMix);
+}
+
 function run(goMap){
   const {lots, unknown, typeMix}=readLots();
   if(lots.length===0 && unknown.length===0){ alert("荷物を1件以上入力してください。"); return; }
@@ -229,10 +243,9 @@ function run(goMap){
   }
 
   const allowMix=document.getElementById("mixChk").checked;
-  const sp=place(lots,allowMix);
-  lastSp=sp; lastLots=lots; hasResult=true;
+  lastSp=place(lots,allowMix); lastLots=lots; hasResult=true;
 
-  renderResult(lots, sp, unknown, typeMix);
+  renderResult(lots, unknown, typeMix);
   if(goMap) switchTab('map');
 }
 ```
@@ -255,7 +268,25 @@ function run(goMap){
 
 期待される結果: Step 1 で控えた値と**完全に一致**する。
 
-- [ ] **Step 4: 空入力の分岐を確かめる**
+- [ ] **Step 4: redraw() が同じ結果を出すことを確かめる**
+
+続けてコンソールで実行する。
+
+```js
+(function(){
+  const before=document.getElementById("zone-near").innerHTML;
+  redraw();
+  return document.getElementById("zone-near").innerHTML===before;
+})()
+```
+
+期待される出力:
+
+```
+true
+```
+
+- [ ] **Step 5: 空入力の分岐を確かめる**
 
 コンソールで実行する。
 
@@ -276,11 +307,11 @@ true
 
 確認したらページを再読み込みして入力を元に戻す。
 
-- [ ] **Step 5: コミット**
+- [ ] **Step 6: コミット**
 
 ```bash
 git add files/index.html
-git commit -m "refactor: run() から renderResult() と inputWarnHtml() を切り出す"
+git commit -m "refactor: run() から renderResult() / redraw() / inputWarnHtml() を切り出す"
 ```
 
 ---
@@ -393,11 +424,13 @@ DOM に触らない関数として、選択の集計・ブロック数の計算�
 - Modify: `files/index.html`（`/* ---------- 通路編集 ---------- */` の直前に追加）
 
 **Interfaces:**
-- Consumes: 既存の `used(col)`、`clone(o)`
+- Consumes: 既存の `used(col)`、`clone(o)`、`AREA_GROUPS`
 - Produces:
   - `selCounts(cells: Set<string>) -> {"スペース名|列番号": マス数}`
+  - `areaKeyOf(name) -> string`
   - `blockCountOf(sp, lotId) -> number`
   - `normalizeFills(sp) -> void`（破壊的）
+  - `movingCount(counts, destSpaceName, destColIndex) -> number`
   - `moveCells(next, lotId, counts, destSpaceName, destColIndex) -> number`（移動したマス数。破壊的）
   - `validateMove(sp, lotId, counts, destSpaceName, destColIndex) -> {ok, same?, reason?, needConfirm?, before?, after?, next?}`
     `ok:true` のとき `next` に移動適用済みのコピーが入る
@@ -421,21 +454,34 @@ function selCounts(cells){
   return n;
 }
 
+// 運用上ひとつづきに使うエリア（AREA_GROUPS）は、分割の判定でも1つの束として扱う。
+// 束にしないと 軒下①から軒下② への移動が毎回「2か所に分かれます」になる。
+function areaKeyOf(name){
+  const g=AREA_GROUPS.find(g=>g.includes(name));
+  return g?g.join("+"):name;
+}
+
 // あるロットが何ブロックに分かれているかを数える。
-// 同じエリアで列番号が隣り合っていれば1ブロック。
+// 束ごとに列を連結し、列番号が隣り合っていれば1ブロック。
 // 間に挟まる列がすべて「空の通路列」の場合も1ブロックとみなす。
-// エリアが違えば必ず別ブロック。
+// 別の束にあれば必ず別ブロック。
 function blockCountOf(sp, lotId){
-  let total=0;
+  const groups={};
   sp.forEach(s=>{
+    const k=areaKeyOf(s.name);
+    (groups[k]=groups[k]||[]).push(...s.cols);
+  });
+  let total=0;
+  Object.keys(groups).forEach(k=>{
+    const cols=groups[k];
     const idx=[];
-    s.cols.forEach((c,i)=>{ if(c.fills.some(f=>f.id===lotId)) idx.push(i); });
+    cols.forEach((c,i)=>{ if(c.fills.some(f=>f.id===lotId)) idx.push(i); });
     if(!idx.length) return;
     let blocks=1;
-    for(let k=1;k<idx.length;k++){
+    for(let j=1;j<idx.length;j++){
       let bridged=true;
-      for(let i=idx[k-1]+1;i<idx[k];i++){
-        const c=s.cols[i];
+      for(let i=idx[j-1]+1;i<idx[j];i++){
+        const c=cols[i];
         if(!(c.aisle && c.fills.length===0)){ bridged=false; break; }
       }
       if(!bridged) blocks++;
@@ -445,7 +491,9 @@ function blockCountOf(sp, lotId){
   return total;
 }
 
-// count が 0 以下の要素を捨て、同じ列で隣り合う同一ロットの要素を統合する
+// count が 0 以下の要素を捨て、同じ列で隣り合う同一ロットの要素を統合する。
+// 隣り合っていない同一ロット（間に別ロットが挟まる形）は畳まない。
+// 畳むと間のロットの位置が動いてしまうため。
 function normalizeFills(sp){
   sp.forEach(s=>s.cols.forEach(col=>{
     const out=[];
@@ -459,11 +507,24 @@ function normalizeFills(sp){
   }));
 }
 
+// 実際に動くマス数。落とし先の列に既にあるマスは動かないので除く。
+// これにより「2列に分かれたロットを全部選び、片方の列に落としてまとめる」が成立する。
+function movingCount(counts, destSpaceName, destColIndex){
+  const skip=destSpaceName+"|"+destColIndex;
+  let n=0;
+  Object.keys(counts).forEach(k=>{ if(k!==skip) n+=counts[k]; });
+  return n;
+}
+
 // 移動を適用する。next は lastSp のコピーを渡すこと（破壊的に書き換える）。
-// 移動先には自動配置の混載と同じく上側（fills の先頭）へ差し込む。
+// 移動先には自動配置の fillMix と同じく fills の先頭へ差し込む。
+// 見た目でどちら側になるかはエリアによって違う
+// （メインは上端、軒下②は下端、横向きのエリアは左端）。
 function moveCells(next, lotId, counts, destSpaceName, destColIndex){
+  const skip=destSpaceName+"|"+destColIndex;
   let total=0;
   Object.keys(counts).forEach(key=>{
+    if(key===skip) return;                       // 落とし先に既にある分は動かさない
     const p=key.split("|");
     const s=next.find(x=>x.name===p[0]); if(!s) return;
     const col=s.cols[parseInt(p[1])]; if(!col) return;
@@ -491,9 +552,10 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
   if(!ds) return {ok:false, reason:"エリアが見つかりません"};
   const dc=ds.cols[destColIndex];
   if(!dc) return {ok:false, reason:"列が見つかりません"};
-  if(counts[destSpaceName+"|"+destColIndex]) return {ok:false, same:true, reason:"移動元と同じ列です"};
-  const n=Object.keys(counts).reduce((a,k)=>a+counts[k],0);
-  if(n<=0) return {ok:false, reason:"選択がありません"};
+  const n=movingCount(counts, destSpaceName, destColIndex);
+  if(n<=0) return {ok:false, same:true, reason:"動くマスがありません"};
+  // used(dc) には落とし先に既にあるそのロットの分が含まれ、n からはその分が除かれているので
+  // 二重に数えることはない。
   if(used(dc)+n > dc.h) return {ok:false, reason:"移動先の空きが足りません"};
   const before=blockCountOf(sp, lotId);
   const next=clone(sp);
@@ -511,7 +573,7 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
 ```js
 (function(){
   const cnt=selCounts(new Set(["メイン|1|0","メイン|1|1","メイン|2|0"]));
-  // 列0=通路(空) / 列1,2=id5 / 列3=空 / 列4=id5  → 1〜2 は連続、4 は飛び地で 2ブロック
+  // 列0=通路(空) / 列1,2=id5 / 列3=空 / 列4=id5 → 1〜2 は連続、4 は飛び地で 2ブロック
   const sp1=[{name:"X",cols:[
     {h:6,aisle:true,fills:[]},
     {h:7,aisle:false,fills:[{id:5,count:7}]},
@@ -523,17 +585,21 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
     {h:7,aisle:false,fills:[{id:5,count:7}]},
     {h:6,aisle:true, fills:[]},
     {h:7,aisle:false,fills:[{id:5,count:3}]}]}];
-  // 2エリアに分かれていれば 2ブロック
+  // 束でないエリアに分かれていれば 2ブロック
   const sp3=[{name:"X",cols:[{h:7,aisle:false,fills:[{id:5,count:7}]}]},
              {name:"Y",cols:[{h:7,aisle:false,fills:[{id:5,count:2}]}]}];
-  return JSON.stringify({cnt, b1:blockCountOf(sp1,5), b2:blockCountOf(sp2,5), b3:blockCountOf(sp3,5)});
+  // 軒下①と軒下②は AREA_GROUPS の束なので、またいでも 1ブロック
+  const sp4=[{name:"軒下①",cols:[{h:11,aisle:false,fills:[{id:5,count:11}]}]},
+             {name:"軒下②",cols:[{h:4, aisle:false,fills:[{id:5,count:2}]}]}];
+  return JSON.stringify({cnt, b1:blockCountOf(sp1,5), b2:blockCountOf(sp2,5),
+    b3:blockCountOf(sp3,5), b4:blockCountOf(sp4,5)});
 })()
 ```
 
 期待される出力:
 
 ```
-{"cnt":{"メイン|1":2,"メイン|2":1},"b1":2,"b2":1,"b3":2}
+{"cnt":{"メイン|1":2,"メイン|2":1},"b1":2,"b2":1,"b3":2,"b4":1}
 ```
 
 - [ ] **Step 3: moveCells と normalizeFills を検証する**
@@ -576,19 +642,21 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
     {h:7,aisle:false,fills:[{id:9,count:6}]},
     {h:7,aisle:false,fills:[]},
     {h:7,aisle:false,fills:[]}]}];
+  const brief=v=>({ok:v.ok,same:v.same,needConfirm:v.needConfirm,before:v.before,after:v.after,reason:v.reason});
+  // 寄せて詰める：列0と列2から選んで列2に落とす → 列0の分だけが動く
+  const sp2=[{name:"X",cols:[
+    {h:7,aisle:false,fills:[{id:5,count:2}]},
+    {h:7,aisle:false,fills:[]},
+    {h:7,aisle:false,fills:[{id:5,count:1}]}]}];
+  const g=validateMove(sp2,5,{"X|0":2,"X|2":1},"X",2);
   return JSON.stringify({
-    // 列1の空きは1マスしかない → 拒否
-    full: validateMove(sp,5,{"X|0":3},"X",1),
-    // 移動元と同じ列 → same
-    same: validateMove(sp,5,{"X|0":3},"X",0),
-    // 隣の列2へ3マス → 連続なので確認不要
-    near: (function(){const v=validateMove(sp,5,{"X|0":3},"X",2);
-           return {ok:v.ok,needConfirm:v.needConfirm,before:v.before,after:v.after};})(),
-    // 離れた列3へ3マス → 列2が空の通常列なので飛び地。確認が要る
-    far:  (function(){const v=validateMove(sp,5,{"X|0":3},"X",3);
-           return {ok:v.ok,needConfirm:v.needConfirm,before:v.before,after:v.after};})(),
-    // 元の sp は書き換わっていない
-    intact: JSON.stringify(sp[0].cols[0].fills)
+    full: brief(validateMove(sp,5,{"X|0":3},"X",1)),   // 列1の空きは1マス → 拒否
+    same: brief(validateMove(sp,5,{"X|0":3},"X",0)),   // 選択がすべて落とし先 → 動かない
+    near: brief(validateMove(sp,5,{"X|0":3},"X",2)),   // 隣の列 → 確認不要
+    far:  brief(validateMove(sp,5,{"X|0":3},"X",3)),   // 離れた列 → 飛び地なので確認
+    gather: brief(g),
+    gatherCols: g.next[0].cols.map(c=>c.fills.map(f=>f.id+":"+f.count)),
+    intact: JSON.stringify(sp[0].cols[0].fills)        // 元は書き換わっていない
   });
 })()
 ```
@@ -596,8 +664,10 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
 期待される出力:
 
 ```
-{"full":{"ok":false,"reason":"移動先の空きが足りません"},"same":{"ok":false,"same":true,"reason":"移動元と同じ列です"},"near":{"ok":true,"needConfirm":false,"before":1,"after":1},"far":{"ok":true,"needConfirm":true,"before":1,"after":2},"intact":"[{\"id\":5,\"count\":7}]"}
+{"full":{"ok":false,"reason":"移動先の空きが足りません"},"same":{"ok":false,"same":true,"reason":"動くマスがありません"},"near":{"ok":true,"needConfirm":false,"before":1,"after":1},"far":{"ok":true,"needConfirm":true,"before":1,"after":2},"gather":{"ok":true,"needConfirm":false,"before":2,"after":1},"gatherCols":[[],[],["5:3"]],"intact":"[{\"id\":5,\"count\":7}]"}
 ```
+
+`gather` が「2か所 → 1か所」になり、確認なしで列2にまとまることを確認する。
 
 - [ ] **Step 5: 実データで往復させる**
 
@@ -637,12 +707,12 @@ git commit -m "feat: ロット移動のデータ操作（selCounts/blockCountOf/
 ボタンでモードに入り、マスのタップで選択できるようにする。まだ移動はしない。
 
 **Files:**
-- Modify: `files/index.html`（CSS、配置図タブのヘッダHTML、通路編集セクション）
+- Modify: `files/index.html`（CSS、印刷CSS、配置図タブのヘッダHTML、`drawZone`、通路編集セクション）
 
 **Interfaces:**
-- Consumes: なし
+- Consumes: Task 1 の `redraw()`
 - Produces:
-  - `moveMode: boolean`、`sel: {lotId:number|null, cells:Set<string>}`
+  - `moveMode: boolean`、`sel: {lotId:number|null, cells:Set<string>}`、`dragMoved: boolean`
   - `setEditMode(on)` / `setMoveMode(on)` / `toggleEdit()` / `toggleMove()` / `clearSel()`
   - `cellKey(cellEl) -> "スペース名|列番号|行番号"`、`toggleCell(cellEl)`
   - CSS クラス `.cell.sel` / `.colwrap.drop-ok` / `.colwrap.drop-ng` / `.dragghost`
@@ -693,7 +763,24 @@ git commit -m "feat: ロット移動のデータ操作（selCounts/blockCountOf/
         user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 ```
 
-- [ ] **Step 2: ボタンとヒントを足す**
+- [ ] **Step 2: 印刷でヒント文が出ないようにする**
+
+`.hint` は現在の非表示リストに入っていない。このままだと移動モードのまま印刷したときに
+「移動モード：…」の行と「選択解除」ボタンが紙に出る。
+
+変更前:
+
+```css
+    header,.tabs,.actionbar,#updateBar,.sizectl,#mapBody,#messages,#regInfo,#saveStatus,.note{display:none !important}
+```
+
+変更後:
+
+```css
+    header,.tabs,.actionbar,#updateBar,.sizectl,#mapBody,#messages,#regInfo,#saveStatus,.note,.hint{display:none !important}
+```
+
+- [ ] **Step 3: ボタンとヒントを足す**
 
 次を探す。
 
@@ -718,7 +805,29 @@ git commit -m "feat: ロット移動のデータ操作（selCounts/blockCountOf/
         <button class="btn-mini" onclick="clearSel()">選択解除</button></div>
 ```
 
-- [ ] **Step 3: モードと選択のロジックを入れる**
+- [ ] **Step 4: 再描画したら選択を捨てる**
+
+`drawZone()` が走ると DOM ごと作り直されるため、`.sel` クラスは消えるが
+`sel.cells` の中身だけが残ってしまう。設定タブの変更など、移動モードのまま
+再描画される経路があるので、`drawZone()` の先頭で選択を捨てる。
+
+変更前:
+
+```js
+function drawZone(elId, spaces, colorOf){
+  const el=document.getElementById(elId); el.innerHTML="";
+```
+
+変更後:
+
+```js
+function drawZone(elId, spaces, colorOf){
+  // 作り直すと .sel クラスは消えるので、選択の状態も一緒に捨てる
+  if(typeof clearSel==="function") clearSel();
+  const el=document.getElementById(elId); el.innerHTML="";
+```
+
+- [ ] **Step 5: モードと選択のロジックを入れる**
 
 次の関数とリスナ全体を探して置き換える。
 
@@ -774,9 +883,12 @@ function toggleEdit(){
   if(editMode) setMoveMode(false);
   if(lastLots) run(false);
 }
+// 移動モードの出入りでは配置し直さない。ただし editable クラスが DOM に焼き込まれているので
+// 描き直して落とす。
 function toggleMove(){
   setMoveMode(!moveMode);
   if(moveMode) setEditMode(false);
+  redraw();
 }
 function clearSel(){
   sel.lotId=null; sel.cells.clear();
@@ -809,36 +921,14 @@ document.addEventListener("click",e=>{
 });
 document.addEventListener("click",e=>{
   if(!moveMode) return;
-  if(dragMoved){ dragMoved=false; return; }   // ドラッグ直後の click は選択を動かさない
+  if(dragMoved){ dragMoved=false; return; }     // ドラッグ直後の click は選択を動かさない
   const c=e.target.closest(".cell"); if(!c) return;
   if(!c.closest("#mapBody")) return;
   toggleCell(c);
 });
 ```
 
-- [ ] **Step 4: 再描画したら選択を捨てる**
-
-`drawZone()` が走ると DOM ごと作り直されるため、`.sel` クラスは消えるが
-`sel.cells` の中身だけが残ってしまう。設定タブの変更など移動モードのまま
-再描画される経路があるので、`drawZone()` の先頭で選択を捨てる。
-
-変更前:
-
-```js
-function drawZone(elId, spaces, colorOf){
-  const el=document.getElementById(elId); el.innerHTML="";
-```
-
-変更後:
-
-```js
-function drawZone(elId, spaces, colorOf){
-  // 作り直すと .sel クラスは消えるので、選択の状態も一緒に捨てる
-  if(typeof clearSel==="function") clearSel();
-  const el=document.getElementById(elId); el.innerHTML="";
-```
-
-- [ ] **Step 5: 選択の挙動を確かめる**
+- [ ] **Step 6: 選択の挙動を確かめる**
 
 ブラウザを再読み込みし、コンソールで「データ A」を実行する。
 画面上部の「配置図」タブ →「ブロック図」→「ロットを移動」を押す。
@@ -860,13 +950,19 @@ JSON.stringify({lotId:sel.lotId, cells:[...sel.cells], dom:document.querySelecto
 {"lotId":2,"cells":["メイン|8|0","メイン|8|1"],"dom":2}
 ```
 
-- [ ] **Step 6: モードの排他を確かめる**
+- [ ] **Step 7: モードの排他を確かめる**
 
 「通路を編集」を押す →「ロットを移動」のボタンが灰色（オフ）に戻り、選択が消えること。
-もう一度「ロットを移動」を押す →「通路を編集」がオフに戻ること。
+もう一度「ロットを移動」を押す →「通路を編集」がオフに戻り、
+列に hover してもオレンジの枠が出ないこと（`editable` が落ちている）。
 移動モード中に列をタップしても通路が切り替わらないこと。
 
-- [ ] **Step 7: コミット**
+- [ ] **Step 8: 印刷でヒントが出ないことを確かめる**
+
+移動モードのまま「配置図の表」に切り替え、印刷プレビューを開く。
+「移動モード：…」の行が紙に出ないこと。確認したらプレビューを閉じる。
+
+- [ ] **Step 9: コミット**
 
 ```bash
 git add files/index.html
@@ -883,7 +979,7 @@ git commit -m "feat: ロット移動モードとマスの選択"
 - Modify: `files/index.html`（ロット移動セクションの末尾に追加）
 
 **Interfaces:**
-- Consumes: Task 3 の `selCounts` / `validateMove`、Task 4 の `sel` / `moveMode` / `clearSel`、Task 1 の `renderResult`
+- Consumes: Task 3 の `selCounts` / `validateMove`、Task 4 の `sel` / `moveMode` / `clearSel` / `dragMoved`、Task 1 の `redraw`
 - Produces:
   - `applyMove(spaceName, colIndex) -> void` — 検証して `lastSp` を更新し再描画する
   - `saveManual()` を呼ぶ（Task 6 で実装。**このタスクでは空の関数を先に置く**）
@@ -894,7 +990,9 @@ Task 4 で書き換えた2つ目の `document.addEventListener("click", …)`（
 
 ```js
 /* ---------- ロット移動（ドラッグ） ---------- */
-let drag=null;   // {id, x0, y0, started, ghost, target}
+let drag=null;                       // {id, x0, y0, started, ghost, target}
+let lastDropKey=null;                // 直前に判定した列。同じ列に留まる間は判定を繰り返さない
+let edge={x:0, y:0, raf:0};          // 端の自動スクロール
 
 // Task 6 で中身を入れる。ここでは何もしない。
 function saveManual(){}
@@ -908,15 +1006,24 @@ function clearDropMark(){
   document.querySelectorAll(".colwrap.drop-ok,.colwrap.drop-ng")
     .forEach(w=>w.classList.remove("drop-ok","drop-ng"));
 }
+// 判定は内部で配置全体を clone するので、同じ列にいる間は結果を使い回す。
+// pointermove ごとに回すとスマホで毎秒60〜120回の複製になる。
 function highlightDrop(x,y){
+  const w=wrapAt(x,y);
+  const key=w?(w.dataset.space+"|"+w.dataset.col):"";
+  if(key===lastDropKey) return;
+  lastDropKey=key;
   clearDropMark();
-  const w=wrapAt(x,y); if(!w) return;
+  if(!w) return;
   const v=validateMove(lastSp, sel.lotId, selCounts(sel.cells), w.dataset.space, parseInt(w.dataset.col));
-  if(v.same) return;                       // 移動元の列には何も出さない
+  if(v.same) return;                 // 動くマスが無い列には何も出さない
   w.classList.add(v.ok?"drop-ok":"drop-ng");
 }
-// 画面端に来たら送る。ブロック図は横に長く、スマホでは全体が画面に収まらない。
-function edgeScroll(x,y){
+// 端の自動スクロールは rAF で回す。pointermove の中で送ると、
+// 指を端で止めた瞬間にイベントが来なくなってスクロールも止まる。
+function edgeTick(){
+  if(!drag || !drag.started){ edge.raf=0; return; }
+  const x=edge.x, y=edge.y;
   document.querySelectorAll("#mapBody .scroller").forEach(sc=>{
     const r=sc.getBoundingClientRect();
     if(y<r.top || y>r.bottom) return;
@@ -925,16 +1032,22 @@ function edgeScroll(x,y){
   });
   if(y<60) window.scrollBy(0,-8);
   else if(y>window.innerHeight-60) window.scrollBy(0,8);
+  edge.raf=requestAnimationFrame(edgeTick);
+}
+function edgeScroll(x,y){
+  edge.x=x; edge.y=y;
+  if(!edge.raf) edge.raf=requestAnimationFrame(edgeTick);
 }
 function endDrag(){
   if(drag){
     if(drag.ghost) drag.ghost.remove();
     try{ drag.target.releasePointerCapture(drag.id); }catch(err){}
   }
-  drag=null;
+  drag=null; lastDropKey=null;
+  if(edge.raf){ cancelAnimationFrame(edge.raf); edge.raf=0; }
   clearDropMark();
 }
-// 検証して lastSp を更新する。同じ列・容量不足は黙って中止する。
+// 検証して lastSp を更新する。動くマスが無い場合と容量不足は黙って中止する。
 function applyMove(spaceName, colIndex){
   const counts=selCounts(sel.cells);
   const v=validateMove(lastSp, sel.lotId, counts, spaceName, colIndex);
@@ -947,13 +1060,13 @@ function applyMove(spaceName, colIndex){
   lastSp=v.next;
   saveManual();
   clearSel();
-  const {unknown, typeMix}=readLots();
-  renderResult(lastLots, lastSp, unknown, typeMix);
+  redraw();
 }
 
 document.addEventListener("pointerdown",e=>{
   dragMoved=false;
   if(!moveMode || !sel.cells.size) return;
+  if(e.button!=null && e.button!==0) return;    // 右クリック・中クリックでは始めない
   const c=e.target.closest(".cell"); if(!c) return;
   if(!c.classList.contains("sel")) return;      // 選択済みのマスからだけ掴める
   drag={id:e.pointerId, x0:e.clientX, y0:e.clientY, started:false, ghost:null, target:c};
@@ -984,6 +1097,7 @@ document.addEventListener("pointerup",e=>{
   applyMove(w.dataset.space, parseInt(w.dataset.col));
 });
 document.addEventListener("pointercancel",endDrag);
+document.addEventListener("lostpointercapture",endDrag);
 ```
 
 - [ ] **Step 2: applyMove を単体で確かめる**
@@ -1049,8 +1163,38 @@ UI を使わず、選択状態を作って `applyMove` を直接呼ぶ。
 6. 選択したマスをドラッグして離れた列へ運ぶ → 分割の確認ダイアログが出る。
    キャンセルで何も起きず、OK で移動する
 7. 選択していないマスからドラッグ → 従来どおり横スクロールする
+8. マスを右クリックしたままドラッグ → 移動は始まらない
+9. 選択したマスをドラッグしたまま画面の右端で**止める** → 止めている間もスクロールが続く
 
-- [ ] **Step 5: コミット**
+- [ ] **Step 5: 寄せて詰める操作を確かめる**
+
+ブラウザを再読み込みし、コンソールで「データ A」を実行する。
+まず `部品B`（3P・メイン列8）を2列に分ける。
+
+```js
+(function(){
+  moveMode=true;
+  sel.lotId=2; sel.cells=new Set(["メイン|8|0"]);
+  applyMove("メイン", 9);                          // 1マスだけ列9（部品C の列）へ混載して分割する
+  return JSON.stringify({col8:lastSp.find(s=>s.name==="メイン").cols[8].fills,
+                         col9:lastSp.find(s=>s.name==="メイン").cols[9].fills});
+})()
+```
+
+期待される出力（`部品B(id:2)` が列8に2マス、列9に1マス）:
+
+```
+{"col8":[{"id":2,"count":2}],"col9":[{"id":2,"count":1,"mix":true},{"id":1,"count":2}]}
+```
+
+画面で「ロットを移動」に入り、`部品B` のマスを**全部**（列8の2マスと列9の1マス）選び、
+**列8**へドロップする。
+
+期待される結果: 列9の1マスだけが列8へ移り、`部品B` が列8に3マスでまとまる。
+列8と列9は隣り合っているので分割数は1のままであり、確認ダイアログは出ない。
+（2か所から1か所へまとまる場合の確認なしは Task 3 Step 4 の `gather` で検証済み。）
+
+- [ ] **Step 6: コミット**
 
 ```bash
 git add files/index.html
@@ -1061,15 +1205,15 @@ git commit -m "feat: 選択したマスをドラッグ＆ドロップで移動�
 
 ### Task 6: 手動調整の保存と復元
 
-入力が同じ間は、手動調整した配置を再読み込み後も保つ。
+入力と列構成が同じ間は、手動調整した配置を再読み込み後も保つ。
 
 **Files:**
-- Modify: `files/index.html`（`STORE_KEY`、ロット移動セクション、`run`、配置ボタンのHTML、`initLots`）
+- Modify: `files/index.html`（`STORE_KEY`、ロット移動セクション、`toggleEdit`、`run`、配置ボタンのHTML、`initLots`）
 
 **Interfaces:**
-- Consumes: Task 1 の `renderResult`、Task 5 の `saveManual` の呼び出し箇所
+- Consumes: Task 1 の `redraw`、Task 5 の `saveManual` の呼び出し箇所
 - Produces:
-  - `STORE_KEY.manual = "palletApp.manual"`
+  - `STORE_KEY.manual = "palletApp.manual"`、`lastFp: string|null`
   - `inputFingerprint() -> string`、`saveManual()`、`clearManual()`、`hasManual() -> boolean`
   - `restoreManual() -> boolean`（復元したら true）
   - `runFromButton()` — 「▶ 自動配置を作成」から呼ぶ入口
@@ -1102,12 +1246,23 @@ function saveManual(){}
 変更後:
 
 ```js
-/* 手動調整の保存。入力内容そのものを指紋にして、
-   入力が1文字でも変わったら保存を捨てる。ロットidは行順の連番なので、
-   入力が完全一致すればidも再現される。 */
-function inputFingerprint(){ return JSON.stringify(readRowData()); }
+/* 手動調整の保存。
+   指紋は「荷物の入力」と「列構成」を連結したもの。
+
+   指紋は保存した瞬間ではなく run() を実行した時点のものを使う（lastFp）。
+   荷物の入力欄を編集しても run() は呼ばれないため、
+   「自動配置 → 入力を書き換える → 配置図に戻って手動移動」という順序が成立してしまう。
+   保存時の入力を指紋にすると {編集後の指紋, 編集前の配置} という食い違った組が残り、
+   リロード時に一致してしまって古い配置が復元される。
+
+   列構成を含めるのは、SPACES が localStorage に保存されておらず
+   リロードで DEFAULT_SPACES に戻るため。設定を変えてから調整すると
+   復元した配置と SPACES のジオメトリが食い違う。 */
+let lastFp=null;
+function inputFingerprint(){ return JSON.stringify(readRowData())+"|#|"+spacesToText(); }
 function saveManual(){
-  saveData(STORE_KEY.manual, {fp:inputFingerprint(), sp:lastSp, lots:lastLots});
+  if(lastFp==null) return;
+  saveData(STORE_KEY.manual, {fp:lastFp, sp:lastSp, lots:lastLots});
 }
 function clearManual(){ saveData(STORE_KEY.manual, null); }
 function hasManual(){ return !!loadData(STORE_KEY.manual); }
@@ -1116,9 +1271,8 @@ function restoreManual(){
   const d=loadData(STORE_KEY.manual);
   if(!d || !d.sp || !d.lots) return false;
   if(d.fp!==inputFingerprint()){ clearManual(); return false; }
-  const {unknown, typeMix}=readLots();
-  lastSp=d.sp; lastLots=d.lots; hasResult=true;
-  renderResult(lastLots, lastSp, unknown, typeMix);
+  lastSp=d.sp; lastLots=d.lots; hasResult=true; lastFp=d.fp;
+  redraw();
   return true;
 }
 // 「▶ 自動配置を作成」の入口。手動調整があるときだけ確認する。
@@ -1128,28 +1282,56 @@ function runFromButton(){
 }
 ```
 
-- [ ] **Step 3: run() で手動調整を破棄する**
+- [ ] **Step 3: run() で指紋を記録し、手動調整を破棄する**
 
-`run()` の中の次の3行を探して置き換える。
+`run()` の中の次の行を探して置き換える。
 
 変更前:
 
 ```js
   const allowMix=document.getElementById("mixChk").checked;
-  const sp=place(lots,allowMix);
-  lastSp=sp; lastLots=lots; hasResult=true;
+  lastSp=place(lots,allowMix); lastLots=lots; hasResult=true;
 ```
 
 変更後:
 
 ```js
   const allowMix=document.getElementById("mixChk").checked;
-  const sp=place(lots,allowMix);
-  lastSp=sp; lastLots=lots; hasResult=true;
-  clearManual();   // 自動配置し直したので手動調整は捨てる（通路編集・設定変更・サンプル読込も同じ）
+  lastSp=place(lots,allowMix); lastLots=lots; hasResult=true;
+  lastFp=inputFingerprint();   // この配置を作った時点の入力と列構成
+  clearManual();               // 配置し直したので手動調整は捨てる
 ```
 
-- [ ] **Step 4: 配置ボタンの入口を差し替える**
+- [ ] **Step 4: 通路編集の開始時に確認を出す**
+
+「通路を編集」はモードに入った時点で `run(false)` が走るため、
+列を1つも変えなくても手動調整が全部消える。ボタンが「ロットを移動」のすぐ隣にあるので、
+押し間違いを拾えるように確認を出す。
+
+変更前:
+
+```js
+function toggleEdit(){
+  setEditMode(!editMode);
+  if(editMode) setMoveMode(false);
+  if(lastLots) run(false);
+}
+```
+
+変更後:
+
+```js
+function toggleEdit(){
+  // 入るだけで配置し直すので、手動調整があるなら先に確認する
+  if(!editMode && hasManual() &&
+     !confirm("通路の編集に入ると自動配置し直すため、手動調整は破棄されます。よろしいですか？")) return;
+  setEditMode(!editMode);
+  if(editMode) setMoveMode(false);
+  if(lastLots) run(false);
+}
+```
+
+- [ ] **Step 5: 配置ボタンの入口を差し替える**
 
 2か所ある。どちらも `run(true)` を `runFromButton()` に変える。
 
@@ -1177,7 +1359,7 @@ function runFromButton(){
   <button class="btn btn-primary" onclick="runFromButton()">▶ 自動配置を作成</button>
 ```
 
-- [ ] **Step 5: 起動時に復元する**
+- [ ] **Step 6: 起動時に復元する**
 
 変更前:
 
@@ -1193,7 +1375,7 @@ function runFromButton(){
 
 ```js
     syncCards(); saveLots();
-    // 入力が保存時と同じなら手動調整した配置をそのまま出す
+    // 入力と列構成が保存時と同じなら、手動調整した配置をそのまま出す
     if(!restoreManual()) run(false);
   }else{
     SAMPLES.basic.forEach(addRow);
@@ -1201,7 +1383,7 @@ function runFromButton(){
   }
 ```
 
-- [ ] **Step 6: 保存と復元を確かめる**
+- [ ] **Step 7: 保存と復元を確かめる**
 
 ブラウザを再読み込みし、コンソールで「データ A」を実行する。
 「配置図」タブ →「ブロック図」→「ロットを移動」。
@@ -1217,7 +1399,7 @@ function runFromButton(){
 })()
 ```
 
-期待される出力の形（`部品C(id:1)` が PC横 のどこかの列に 2P）:
+期待される出力（`部品C(id:1)` が PC横 の 8マスの行に 2P）:
 
 ```
 {"saved":true,"fpMatch":true,"pc":[["1:2"],[]]}
@@ -1231,7 +1413,7 @@ JSON.stringify(lastSp.find(s=>s.name==="PC横").cols.map(c=>c.fills.map(f=>f.id+
 
 期待される出力: 再読み込み前と同じ（`部品C` が PC横 にいる）。
 
-- [ ] **Step 7: 入力を変えたら自動配置に戻ることを確かめる**
+- [ ] **Step 8: 入力を変えたら自動配置に戻ることを確かめる**
 
 「入力」タブで、どれか1行の個数を 1 だけ変える。ページを再読み込みする。
 「配置図」タブ →「ブロック図」を開く。
@@ -1247,7 +1429,29 @@ JSON.stringify({pc:lastSp.find(s=>s.name==="PC横").cols.map(c=>c.fills.length),
 {"pc":[0,0],"manual":null}
 ```
 
-- [ ] **Step 8: 破棄の確認ダイアログを確かめる**
+- [ ] **Step 9: 「配置を作った時点の指紋」が効いていることを確かめる**
+
+これが `lastFp` を入れた理由の確認。**この検証を飛ばさないこと。**
+
+コンソールで「データ A」を実行する。次に「入力」タブで `部品C` の個数を 12 から 50 に変える
+（この時点では `run()` は走らないので配置図は古いまま）。
+「配置図」タブ →「ブロック図」→「ロットを移動」で、どれか1マスを別の列へ移す。
+ページを再読み込みする。
+
+```js
+JSON.stringify({manual:loadData(STORE_KEY.manual),
+                lotC:lastLots.find(l=>l.name==="部品C").pallets})
+```
+
+期待される出力（保存は破棄され、新しい入力で自動配置し直されている。50個 → 5P）:
+
+```
+{"manual":null,"lotC":5}
+```
+
+保存した瞬間の入力を指紋にしていると、ここで古い 2P の配置が復元されてしまう。
+
+- [ ] **Step 10: 破棄の確認ダイアログを確かめる**
 
 再度「データ A」を実行し、ブロック図で1回移動する。
 「入力」タブへ戻り「▶ 自動配置を作成」を押す。
@@ -1258,13 +1462,30 @@ JSON.stringify({pc:lastSp.find(s=>s.name==="PC横").cols.map(c=>c.fills.length),
 
 続けて、調整していない状態で「▶ 自動配置を作成」を押す → **確認は出ない**こと。
 
-さらに、調整した状態で「通路を編集」を押す → 確認なしで自動配置に戻ること。
+さらに、調整した状態で「通路を編集」を押す
+→「通路の編集に入ると自動配置し直すため、手動調整は破棄されます」の確認が出ること。
+キャンセルすると編集モードに入らず、調整も残ること。
 
-- [ ] **Step 9: コミット**
+- [ ] **Step 11: 列構成を変えたら復元しないことを確かめる**
+
+「データ A」を実行 → ブロック図で1回移動 →「設定」タブでスペース定義の
+どれか1行の列の高さを 1 変えて反映 → 再読み込み。
+
+```js
+JSON.stringify(loadData(STORE_KEY.manual))
+```
+
+期待される出力:
+
+```
+null
+```
+
+- [ ] **Step 12: コミット**
 
 ```bash
 git add files/index.html
-git commit -m "feat: 手動調整した配置を保存し、入力が同じ間は復元する"
+git commit -m "feat: 手動調整した配置を保存し、入力と列構成が同じ間は復元する"
 ```
 
 ---
@@ -1301,9 +1522,8 @@ Object.keys(localStorage).filter(k=>k.startsWith("palletApp.")).forEach(k=>local
 location.reload();
 ```
 
-「入力」タブでコンソールから「データ A」を流し込むのではなく、
-画面の入力欄に手で6行を入れ、「▶ 自動配置を作成」を押して配置図を開く。
-そのうえで下の表のシナリオを上から順に実行する。
+コンソールから流し込むのではなく、画面の入力欄に「データ A」の6行を手で入れ、
+「▶ 自動配置を作成」を押して配置図を開く。そのうえで下の表を上から順に実行する。
 
 | # | 操作 | 期待結果 |
 |---|---|---|
@@ -1312,16 +1532,17 @@ location.reload();
 | 3 | 2マスを選び、空きのある列へドロップ | 列の上側に入り破線の区切りが出る。「混載あり」が出る |
 | 4 | 5マス選び、空きが1マスの列へドラッグ | 赤い枠。離しても何も起きない。選択は残る |
 | 5 | 選択を離れた列へドロップ | 分割の確認ダイアログ。キャンセルで無変化、OK で移動 |
-| 6 | 既に2か所に分かれたロットを、分割数を変えずに移す | 確認ダイアログが出ない |
-| 7 | 別ロットのマスをタップ | 何も起きない |
-| 8 | 「選択解除」を押す | 選択がすべて外れる |
-| 9 | ページを再読み込み | 調整後の配置が復元される |
-| 10 | 入力を1文字変えて再読み込み | 自動配置に戻る |
-| 11 | 調整後に「▶ 自動配置を作成」 | 確認ダイアログが出る。OK で自動配置 |
-| 12 | 調整後に「通路を編集」で列を切替 | 確認なしで自動配置に戻る |
-| 13 | 「配置図の表」に切り替える | 品名・ロット・パレット数・注記・半マーク・引き出し線が調整後の内容 |
-| 14 | 印刷プレビューを開く | 表のみ。選択の枠やゴーストは出ない |
-| 15 | 「マスの大きさ」を 小/中/大 に変える | マスの大きさが変わる。`setCellSize` は CSS 変数を変えるだけで再描画しないため、**選択は保持される** |
+| 6 | 2列に分かれたロットを全マス選び、マスが多いほうの列へドロップ | 1列にまとまる。確認ダイアログは出ない |
+| 7 | 既に2か所に分かれたロットを、分割数を変えずに移す | 確認ダイアログが出ない |
+| 8 | 別ロットのマスをタップ | 何も起きない |
+| 9 | 「選択解除」を押す | 選択がすべて外れる |
+| 10 | ページを再読み込み | 調整後の配置が復元される |
+| 11 | 入力を1文字変えて再読み込み | 自動配置に戻る |
+| 12 | 調整後に「▶ 自動配置を作成」 | 確認ダイアログが出る。OK で自動配置 |
+| 13 | 調整後に「通路を編集」を押す | 確認ダイアログが出る。キャンセルで編集モードに入らず調整も残る |
+| 14 | 「配置図の表」に切り替える | 品名・ロット・パレット数・注記・半マーク・引き出し線が調整後の内容 |
+| 15 | 移動モードのまま印刷プレビューを開く | 表のみ。ヒント文・選択の枠・ゴーストは出ない |
+| 16 | 「マスの大きさ」を 小/中/大 に変える | マスの大きさが変わる。`setCellSize` は CSS 変数を変えるだけで再描画しないため、選択は保持される |
 
 - [ ] **Step 3: 実機で確認する**
 
@@ -1333,8 +1554,9 @@ location.reload();
 - 選択していないマスから指を滑らせる → ブロック図が横スクロールする
 - 選択したマスから指を滑らせる → **ページがスクロールせず**ゴーストが付いてくる
 - マスを長押ししても選択ハンドルやコールアウトが出ない
-- 画面の右端まで運ぶと自動で横スクロールし、PC横 まで運べる
+- 画面の右端に指を置いて**止めた**まま待つ → スクロールが続き、PC横 まで運べる
 - ドロップして配置が変わる。アプリを一度バックグラウンドに送って戻しても調整が残る
+- 2本目の指を置いてもゴーストが画面に残らない
 
 **Android Chrome** — 同上。
 
@@ -1347,14 +1569,29 @@ git commit -m "chore: ロット移動の追加に合わせて CACHE_VERSION を 
 
 ---
 
+## 既知の制約（実装しないと決めたもの）
+
+- **エリアをまたいで手動分割したロットの「半」マークが実物と違うエリアに出ることがある。**
+  `tailAreaOf()` が「自動配置の詰め順で最後のエリアが末尾」という前提で書かれているため。
+  発生条件は「端数あり」かつ「手動でエリアをまたいで分割」の両方が揃ったときだけ。
+- **混載で押し下げられた既存ロットの引き出し線が斜めになることがある。** 既存の制約。
+- **同じ列に同一ロットが2箇所に分かれる形が残ることがある。** `[{id:9},{id:5}]` の列に
+  id5 を差し込むと `[{id:5},{id:9},{id:5}]` になる。畳むと間のロットが動くため畳まない。
+- **「入りきらない荷物」は手動で置けない。** ブロック図にマスが無く選択できない。
+- **キーボード操作は無い。**
+- **取り消し／履歴は無い。** リセットは「▶ 自動配置を作成」のやり直し。
+  誤操作への備えは「通路を編集」の開始時の確認だけ。
+
+---
+
 ## 完了後
 
-`superpowers:finishing-a-development-branch` に進む前に、次の E2E コマンドを
-ユーザーがターミナルで実行できるよう提示すること。
+`superpowers:finishing-a-development-branch` に進む前に、次の E2E をユーザーに提示すること。
 このプロジェクトにはテストランナーが無いため、E2E は Task 7 Step 2〜3 の手動確認が該当する。
 
 ```bash
 python3 -m http.server 50999
 ```
 
-`http://localhost:50999/files/index.html` を開き、Task 7 Step 2 の15シナリオを実行する。
+`http://localhost:50999/files/index.html` を開き、Task 7 Step 2 の16シナリオと
+Step 3 の実機確認を実行する。
