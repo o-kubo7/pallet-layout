@@ -339,6 +339,9 @@
         <button class="sizebtn" data-zoom="1" onclick="setSheetZoom('1')">100%</button>
         <button class="sizebtn" data-zoom="1.5" onclick="setSheetZoom('1.5')">150%</button>
         <button class="sizebtn" data-zoom="2" onclick="setSheetZoom('2')">200%</button>
+        <span class="lbl" style="margin-left:12px">矢印の先</span>
+        <button class="sizebtn on" data-arrow="1" onclick="setArrowHead(true)">あり</button>
+        <button class="sizebtn" data-arrow="0" onclick="setArrowHead(false)">なし</button>
         <span class="lbl" id="zoomNow"></span>
       </div>
 
@@ -491,7 +494,7 @@ let fracMode=false;   // true なら「満載数P 半」表記
 let sheetMode=true;  // 配置図タブの表示（true=配置図の表 / false=ブロック図）
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", view:"palletApp.view", zoom:"palletApp.zoom"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", view:"palletApp.view", zoom:"palletApp.zoom", arrow:"palletApp.arrow"};
 let storageOK=true;
 const memStore={};
 (function(){
@@ -1203,6 +1206,17 @@ function setView(v){
   if(sheetMode && hasResult) renderSheet();
 }
 
+/* ---------- 引き出し線の矢頭 ---------- */
+let arrowHead=true;   // false なら実線だけにする
+
+function setArrowHead(on){
+  arrowHead=!!on;
+  document.querySelectorAll(".sizebtn[data-arrow]").forEach(b=>
+    b.classList.toggle("on", (b.dataset.arrow==="1")===arrowHead));
+  saveData(STORE_KEY.arrow, arrowHead);
+  if(sheetMode && hasResult) renderSheet();
+}
+
 /* ---------- 配置図の表の表示倍率 ---------- */
 // 表の実寸（.sheet の padding 10px×2 を含む）
 const SHEET_W=675+20, SHEET_H=469+20;
@@ -1497,6 +1511,7 @@ function drawLeaders(anchors, slotIds){
     p.setAttribute("fill","none");
     svg.appendChild(p);
 
+    if(!arrowHead) return;                             // 実線だけにする
     const ang=-Math.atan2(x1-x0, y1-y0)*180/Math.PI;   // 真下が0度
     const h=document.createElementNS(NS,"path");
     h.setAttribute("d","M-4.5 -8L0 0L4.5 -8");
@@ -1587,6 +1602,14 @@ updateSaveStatus();
   document.querySelectorAll(".sizebtn[data-zoom]").forEach(b=>
     b.classList.toggle("on", b.dataset.zoom===sheetZoom));
   applySheetZoom();
+})();
+
+// 引き出し線の矢頭：保存があれば復元
+(function initArrowHead(){
+  const a=loadData(STORE_KEY.arrow);
+  if(a===false) arrowHead=false;
+  document.querySelectorAll(".sizebtn[data-arrow]").forEach(b=>
+    b.classList.toggle("on", (b.dataset.arrow==="1")===arrowHead));
 })();
 
 // 端数表記：保存があれば復元
