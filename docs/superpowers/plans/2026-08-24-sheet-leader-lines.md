@@ -156,7 +156,10 @@ function fillMix(lot, cols, rem){
     if(c.aisle)continue;
     const free=c.h-used(c); if(free<=0)continue;
     const put=Math.min(rem,free);
-    const holder=c.fills.length?c.fills[0].id:null;
+    // c.fills[0] は前回の呼び出しで unshift された混載ロットの場合があるため、
+    // mix でない最初の要素（placeLot が入れた本来の占有ロット）を holder とする。
+    const owner=c.fills.find(f=>!f.mix);
+    const holder=owner?owner.id:null;
     const alone = holder!=null && !cols.some(o=>o!==c && o.fills.some(f=>f.id===holder));
     if(alone) c.fills.push({id:lot.id,count:put,mix:true});
     else      c.fills.unshift({id:lot.id,count:put,mix:true});
@@ -632,6 +635,33 @@ function drawLeaders(anchors, slotIds){
   drawLeaders(grid.anchors, bottom.map(e=>e.lot.id));
   applySheetZoom();
 ```
+
+- [ ] **Step 8b: 配置図タブに来たときに描き直す**
+
+`drawLeaders` はセルの位置を実測するため、配置図タブが非表示のうちは描けない。
+`run(goMap)` は `showMapState()`（この中で `renderSheet()`）を呼んでから `switchTab('map')` を
+呼ぶので、このままでは実行ボタンという主動線で矢印が1本も出ない。
+`onHeadChange` / `setTiming` も入力タブを開いたまま `renderSheet()` を呼ぶため同じ状態になる。
+
+変更前:
+
+```js
+  // 表は表示されて初めて幅が測れるので、タブに来たタイミングで倍率を決める
+  if(name==="map") applySheetZoom();
+```
+
+変更後:
+
+```js
+  // 表は表示されて初めて幅が測れるので、タブに来たタイミングで再描画・倍率決定する
+  // （表モードで結果があるときは renderSheet() が末尾で applySheetZoom() も呼ぶ）
+  if(name==="map"){
+    if(sheetMode && hasResult) renderSheet(); else applySheetZoom();
+  }
+```
+
+ガード条件 `sheetMode && hasResult` は `showMapState()` の `if(hasResult&&sheetMode) renderSheet()` と
+同じで、ブロック図モードと結果なしのときは従来どおり `applySheetZoom()` だけが走る。
 
 - [ ] **Step 9: 標準サンプルで矢印を確認する**
 

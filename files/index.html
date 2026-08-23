@@ -163,6 +163,10 @@
   /* 倍率は CSS 変数で当てる。印刷用の zoom を上書きしないよう style 属性には書かない */
   .sheet{background:#fff;color:#000;padding:10px;overflow-x:auto;width:max-content;max-width:100%;
          zoom:var(--sheet-zoom,1)}
+  /* 引き出し線の基準。.sheet の padding は印刷時に 0 になるので、
+     表にぴったり重なるこのラッパを座標の原点にする */
+  .sheet .sheetbox{position:relative;width:max-content}
+  .sheet .leaders{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
   /* 1列 48px×14＝672px。ロット（最大9文字）が区画セル（2列＝96px）に収まる幅 */
   .sheet table{border-collapse:collapse;table-layout:fixed;
                width:672px;min-width:672px;max-width:672px;margin:0}
@@ -198,14 +202,15 @@
   .sheet tr.gap td{height:11px;border:0;background:transparent}
   .sheet tr.gap td.sep{border-bottom:2px solid #000}
   /* 注記行（グローバルの .note と衝突させないため別名） */
-  .sheet td.snote{display:table-cell;font-size:10px;color:#333;height:24px;
+  /* 注記行は引き出し線と同じ帯を通るので、線が通る欄の中心を避けて左に寄せる */
+  .sheet td.snote{display:table-cell;text-align:left;font-size:10px;color:#333;height:24px;
                   border:0;background:transparent}
   .sheet td.g{height:30px;position:relative;padding:0}
   .sheet td.g.aisle{background:#d9d9d9}
+  /* ○は引き出し線より奥に見えるよう灰色にする */
   .sheet td.g .mk{display:inline-flex;align-items:center;justify-content:center;
-                  width:22px;height:22px;border:2px solid #000;border-radius:50%;
+                  width:22px;height:22px;border:2px solid #999;border-radius:50%;
                   font-size:11px;font-weight:700}
-  .sheet td.g .num{position:absolute;top:0;left:2px;font-size:9px;font-weight:700}
   .sheet td.g.bt{border-top:3px solid #000}
   .sheet td.g.bb{border-bottom:3px solid #000}
   .sheet td.g.bl{border-left:3px solid #000}
@@ -334,6 +339,9 @@
         <button class="sizebtn" data-zoom="1" onclick="setSheetZoom('1')">100%</button>
         <button class="sizebtn" data-zoom="1.5" onclick="setSheetZoom('1.5')">150%</button>
         <button class="sizebtn" data-zoom="2" onclick="setSheetZoom('2')">200%</button>
+        <span class="lbl" style="margin-left:12px">矢印の先</span>
+        <button class="sizebtn on" data-arrow="1" onclick="setArrowHead(true)">あり</button>
+        <button class="sizebtn" data-arrow="0" onclick="setArrowHead(false)">なし</button>
         <span class="lbl" id="zoomNow"></span>
       </div>
 
@@ -486,7 +494,7 @@ let fracMode=false;   // true なら「満載数P 半」表記
 let sheetMode=true;  // 配置図タブの表示（true=配置図の表 / false=ブロック図）
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", view:"palletApp.view", zoom:"palletApp.zoom"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", view:"palletApp.view", zoom:"palletApp.zoom", arrow:"palletApp.arrow"};
 let storageOK=true;
 const memStore={};
 (function(){
@@ -903,13 +911,25 @@ function placeLot(lot, cands){
   return rem;
 }
 
-/* 満杯のときだけ使う最終手段。空きのある列に品目を混ぜて押し込む。 */
+/* 満杯のときだけ使う最終手段。空きのある列に品目を混ぜて押し込む。
+   押し込む分は原則として列の上側に置く。下に回るロットは、たいてい先行する列に
+   上端から入っている大口なので、引き出し線の終点はそちらの上端になり干渉しない。
+   ただし今その列を使っているロットが他の列を持たない場合だけは、
+   そのロットを上端に残すために下へ足す。 */
 function fillMix(lot, cols, rem){
   for(const c of cols){
     if(rem<=0)break;
     if(c.aisle)continue;
     const free=c.h-used(c); if(free<=0)continue;
-    const put=Math.min(rem,free); c.fills.push({id:lot.id,count:put,mix:true}); rem-=put;
+    const put=Math.min(rem,free);
+    // c.fills[0] は前回の呼び出しで unshift された混載ロットの場合があるため、
+    // mix でない最初の要素（placeLot が入れた本来の占有ロット）を holder とする。
+    const owner=c.fills.find(f=>!f.mix);
+    const holder=owner?owner.id:null;
+    const alone = holder!=null && !cols.some(o=>o!==c && o.fills.some(f=>f.id===holder));
+    if(alone) c.fills.push({id:lot.id,count:put,mix:true});
+    else      c.fills.unshift({id:lot.id,count:put,mix:true});
+    rem-=put;
   }
   return rem;
 }
@@ -1076,8 +1096,11 @@ function switchTab(name){
   });
   document.getElementById("actionBar").style.display = (name==="input")?"":"none";
   window.scrollTo(0,0);
-  // 表は表示されて初めて幅が測れるので、タブに来たタイミングで倍率を決める
-  if(name==="map") applySheetZoom();
+  // 表は表示されて初めて幅が測れるので、タブに来たタイミングで再描画・倍率決定する
+  // （表モードで結果があるときは renderSheet() が末尾で applySheetZoom() も呼ぶ）
+  if(name==="map"){
+    if(sheetMode && hasResult) renderSheet(); else applySheetZoom();
+  }
 }
 function showMapState(){
   document.getElementById("mapEmpty").style.display = hasResult?"none":"block";
@@ -1183,6 +1206,17 @@ function setView(v){
   if(sheetMode && hasResult) renderSheet();
 }
 
+/* ---------- 引き出し線の矢頭 ---------- */
+let arrowHead=true;   // false なら実線だけにする
+
+function setArrowHead(on){
+  arrowHead=!!on;
+  document.querySelectorAll(".sizebtn[data-arrow]").forEach(b=>
+    b.classList.toggle("on", (b.dataset.arrow==="1")===arrowHead));
+  saveData(STORE_KEY.arrow, arrowHead);
+  if(sheetMode && hasResult) renderSheet();
+}
+
 /* ---------- 配置図の表の表示倍率 ---------- */
 // 表の実寸（.sheet の padding 10px×2 を含む）
 const SHEET_W=675+20, SHEET_H=469+20;
@@ -1250,8 +1284,6 @@ function renderSheet(){
   // 上段：軒下（①→②の順・注釈なし） / 下段：メイン→PC横→EV横（メイン以外を注釈に）
   const top=sheetEntries(SHEET_TOP, null);
   const bottom=sheetEntries(SHEET_BOTTOM, "メイン");
-  const numOf={}; bottom.forEach((e,i)=>{ numOf[e.lot.id]=i+1; });
-
   const d=headDate?new Date(headDate+"T00:00:00"):null;
   const mm=d?d.getMonth()+1:"", dd=d?d.getDate():"", dw=d?DOW[d.getDay()]:"";
   const totalP=lastLots.reduce((a,l)=>a+l.pallets,0);
@@ -1287,16 +1319,19 @@ function renderSheet(){
   // 下段（7区画）：品名／ロット／パレット数／注記
   rows+=`<tr>${slotCells(bottom,SHEET_BOTTOM_SLOTS,"name","bb2")}</tr>`;
   rows+=`<tr>${slotCells(bottom,SHEET_BOTTOM_SLOTS,"lot")}</tr>`;
-  rows+=`<tr>${slotCells(bottom,SHEET_BOTTOM_SLOTS,"pallet")}</tr>`;
+  // この行の各セルの下辺が引き出し線の起点になる
+  rows+=`<tr class="btmp">${slotCells(bottom,SHEET_BOTTOM_SLOTS,"pallet")}</tr>`;
   rows+=`<tr class="note-row">${slotCells(bottom,SHEET_BOTTOM_SLOTS,"note")}</tr>`;
   rows+=`<tr class="gap"><td class="none" colspan="14"></td></tr>`;
 
   // グリッド（メイン）
-  rows+=gridRows(numOf);
+  const grid=gridRows();
+  rows+=grid.html;
 
-  host.innerHTML=`<div class="sheet"><table>
+  host.innerHTML=`<div class="sheet"><div class="sheetbox"><table>
     <colgroup>${Array(14).fill('<col style="width:48px">').join("")}</colgroup>
-    ${rows}</table></div>`;
+    ${rows}</table></div></div>`;
+  drawLeaders(grid.anchors, bottom.map(e=>e.lot.id));
   applySheetZoom();
 }
 
@@ -1322,10 +1357,11 @@ function slotCells(entries,count,kind,extra){
   return out;
 }
 
-// メインのグリッド行（○／半／太枠／番号）
-function gridRows(numOf){
+// メインのグリッド行（○／半／太枠）
+function gridRows(){
   const sp=lastSp.find(s=>s.name==="メイン");
-  if(!sp) return "";
+  // 設定でエリア名を変えると「メイン」が無くなることがある
+  if(!sp) return {html:"", anchors:[]};
   // 各列の中身（上詰め）
   const colCells=sp.cols.map(col=>{
     const arr=Array(col.h).fill(null); let r=0;
@@ -1350,6 +1386,32 @@ function gridRows(numOf){
   });
 
   const at=(ci,ri)=>(colCells[ci]&&colCells[ci][ri])?colCells[ci][ri].id:null;
+  // 引き出し線の終点。そのロットが始まる最初の連続ブロックの中央列を選ぶ。
+  // 段番号列は左右のレーンが同じロットなら連続とみなすが、終点の候補にはしない。
+  // 飛び地は最初のブロックだけを見る。全体の中心を取ると表を横断する斜線になるうえ、
+  // 下段の欄順（左の列から順）と終点の左右順が食い違って矢印が交差する。
+  // row は通常 0 になるが、同じ列に2ロット以上が混載された場合は 0 より大きくなり、
+  // そのときは開始マスの上辺が終点になって線が上のロットを斜めに横切る。
+  const anchorOf=(id, order)=>{
+    const list=[]; let row=0;
+    for(let k=0;k<order.length;k++){
+      const o=order[k];
+      if(o.lab){
+        if(!list.length) continue;
+        const bridged = o.l!=null && at(o.l,row)===id && at(o.r,row)===id;
+        if(!bridged) break;
+        continue;
+      }
+      let r0=null;
+      for(let r=0;r<sp.cols[o.c].h;r++) if(at(o.c,r)===id){ r0=r; break; }
+      if(r0==null){ if(list.length) break; continue; }
+      if(!list.length){ row=r0; list.push(k); }
+      else if(r0===row) list.push(k);
+      else break;
+    }
+    if(!list.length) return null;
+    return {id, k:list[Math.floor((list.length-1)/2)], row};
+  };
   // 14列の並び：通路 | 1-3 | 段番号 | 4-6 | 段番号 | 7-9 | 通路 | 段番号
   // 段番号の l/r は左右に隣り合うレーン。最後の段番号は右隣がないので跨がない
   const order=[{c:0,aisle:true},{c:1},{c:2},{c:3},{lab:true,l:3,r:4},{c:4},{c:5},{c:6},{lab:true,l:6,r:7},
@@ -1381,18 +1443,88 @@ function gridRows(numOf){
         if(at(o.c+1,ri)!==id) cls.push("br");
       }
       const half=isHalf[o.c+"_"+ri];
-      const showNum = id!=null && at(o.c,ri-1)!==id && numOf[id];
       tds+=`<td class="${cls.join(" ")}">`
-         + (showNum?`<span class="num">${numOf[id]}</span>`:"")
          + (id!=null?`<span class="mk">${half?"半":""}</span>`:"")
          + `</td>`;
     });
-    rows+=`<tr>${tds}</tr>`;
+    rows+=`<tr class="grow">${tds}</tr>`;
   }
   // 列番号
   let nums="";
   order.forEach(o=>{ nums+=`<td class="colno">${(o.lab||o.aisle)?"":o.c}</td>`; });
-  return rows+`<tr>${nums}</tr>`;
+
+  // メインに置かれている全ロットの終点を集める
+  const anchors=[];
+  new Set(Object.keys(norm).concat(Object.keys(aisle))).forEach(key=>{
+    const a=anchorOf(Number(key), order);
+    if(a) anchors.push(a);
+  });
+
+  return {html: rows+`<tr>${nums}</tr>`, anchors};
+}
+
+/* 下段の欄からメインのスペースへ引き出し線を引く。
+   表を差し込んだ直後に呼ぶ（セルの位置を実測するため）。
+   座標は必ず getBoundingClientRect() で table 基準にそろえる。
+   offsetLeft は td.g だけ position:relative のせいで基準が違うので使わない。
+   anchors : gridRows() が返す [{id, k, row}]
+   slotIds : 下段の欄順に並んだロット id */
+function drawLeaders(anchors, slotIds){
+  const sheet=document.querySelector("#sheetView .sheet");
+  const box=sheet && sheet.querySelector(".sheetbox");
+  const table=box && box.querySelector("table");
+  if(!table) return;
+  const from=box.querySelectorAll("tr.btmp td");
+  const grid=box.querySelectorAll("tr.grow");
+  if(!from.length || !grid.length) return;
+
+  const base=table.getBoundingClientRect();
+  if(!base.width) return;              // タブ非表示中は測れないので描かない
+  const z=parseFloat(getComputedStyle(sheet).zoom)||1;
+  const rectOf=el=>{
+    const r=el.getBoundingClientRect();
+    return {x:(r.left-base.left)/z, y:(r.top-base.top)/z, w:r.width/z, h:r.height/z};
+  };
+
+  const NS="http://www.w3.org/2000/svg";
+  const svg=document.createElementNS(NS,"svg");
+  svg.setAttribute("class","leaders");
+  svg.setAttribute("width", base.width/z);
+  svg.setAttribute("height", base.height/z);
+
+  const byId={}; anchors.forEach(a=>{ byId[a.id]=a; });
+  slotIds.forEach((id,i)=>{
+    const a=byId[id], src=from[i];
+    if(!a || !src) return;                      // メイン外のロットには線を引かない
+    const row=grid[a.row]; if(!row) return;
+    const dst=row.children[a.k]; if(!dst) return;
+
+    const s=rectOf(src), d=rectOf(dst);
+    const x0=s.x+s.w/2, y0=s.y+s.h;
+    const x1=d.x+d.w/2, y1=d.y-2;
+    if(y1<=y0) return;
+
+    const p=document.createElementNS(NS,"path");
+    p.setAttribute("d",`M${x0} ${y0}L${x1} ${y1}`);
+    p.setAttribute("stroke","#000");
+    p.setAttribute("stroke-width","1.6");
+    p.setAttribute("fill","none");
+    svg.appendChild(p);
+
+    if(!arrowHead) return;                             // 実線だけにする
+    const ang=-Math.atan2(x1-x0, y1-y0)*180/Math.PI;   // 真下が0度
+    const h=document.createElementNS(NS,"path");
+    h.setAttribute("d","M-4.5 -8L0 0L4.5 -8");
+    h.setAttribute("stroke","#000");
+    h.setAttribute("stroke-width","1.6");
+    h.setAttribute("fill","none");
+    h.setAttribute("stroke-linecap","round");
+    h.setAttribute("stroke-linejoin","round");
+    h.setAttribute("transform",`translate(${x1},${y1}) rotate(${ang})`);
+    svg.appendChild(h);
+  });
+
+  box.appendChild(svg);
 }
 
 /* ---------- utils ---------- */
@@ -1470,6 +1602,14 @@ updateSaveStatus();
   document.querySelectorAll(".sizebtn[data-zoom]").forEach(b=>
     b.classList.toggle("on", b.dataset.zoom===sheetZoom));
   applySheetZoom();
+})();
+
+// 引き出し線の矢頭：保存があれば復元
+(function initArrowHead(){
+  const a=loadData(STORE_KEY.arrow);
+  if(a===false) arrowHead=false;
+  document.querySelectorAll(".sizebtn[data-arrow]").forEach(b=>
+    b.classList.toggle("on", (b.dataset.arrow==="1")===arrowHead));
 })();
 
 // 端数表記：保存があれば復元
