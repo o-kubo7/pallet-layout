@@ -1067,6 +1067,9 @@ function applyMove(spaceName, colIndex){
 }
 
 document.addEventListener("pointerdown",e=>{
+  // ドラッグ中に2本目の指が触れても乗っ取らせない。
+  // 乗っ取ると1本目のゴーストが孤児になって画面に残る。
+  if(drag) return;
   dragMoved=false;
   if(!moveMode || !sel.cells.size) return;
   if(e.button!=null && e.button!==0) return;    // 右クリック・中クリックでは始めない
@@ -1099,8 +1102,10 @@ document.addEventListener("pointerup",e=>{
   const w=wrapAt(x,y); if(!w) return;
   applyMove(w.dataset.space, parseInt(w.dataset.col));
 });
-document.addEventListener("pointercancel",endDrag);
-document.addEventListener("lostpointercapture",endDrag);
+// 片付けは自分のポインタのイベントでだけ行う。
+// pointerId を見ないと、別のポインタのイベントで進行中のドラッグを壊す。
+document.addEventListener("pointercancel",e=>{ if(drag && e.pointerId===drag.id) endDrag(); });
+document.addEventListener("lostpointercapture",e=>{ if(drag && e.pointerId===drag.id) endDrag(); });
 ```
 
 - [ ] **Step 2: applyMove を単体で確かめる**
