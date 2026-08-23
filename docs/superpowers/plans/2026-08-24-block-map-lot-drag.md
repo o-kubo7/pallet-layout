@@ -536,7 +536,8 @@ function moveCells(next, lotId, counts, destSpaceName, destColIndex){
     });
   });
   const ds=next.find(x=>x.name===destSpaceName);
-  const dc=ds.cols[destColIndex];
+  const dc=ds?ds.cols[destColIndex]:null;
+  if(!dc) return 0;                              // 移動先が無ければ何もしない（移動元側の防御と揃える）
   const entry={id:lotId, count:total};
   if(dc.aisle) entry.ov=true;
   if(dc.fills.length) entry.mix=true;
