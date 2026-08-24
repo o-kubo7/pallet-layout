@@ -710,6 +710,9 @@ function clearLots(){
   hasResult=false; lastLots=null; showMapState();
 }
 function loadSample(which){
+  // 入力を全置換するので、置換の前に確認する。
+  // run(true) を runFromButton() に替えるだけでは、断っても入力が戻らない。
+  if(hasManual() && !confirm("手動調整を破棄してサンプルを読み込みます。よろしいですか？")) return;
   document.querySelector("#lotTable tbody").innerHTML="";
   SAMPLES[which].forEach(addRow);
   syncCards(); saveLots(); run(true);
