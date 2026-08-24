@@ -1410,11 +1410,19 @@ function hasManual(){ return !!loadData(STORE_KEY.manual); }
 // 保存済みの手動調整を復元する。復元したら true。place() は呼ばない。
 function restoreManual(){
   const d=loadData(STORE_KEY.manual);
-  if(!d || !d.sp || !d.lots) return false;
+  // 形を見る。壊れた保存を読むと renderResult() で例外が飛び、単一 script なので
+  // そこから下（Service Worker の登録を含む）が丸ごと実行されなくなる。
+  if(!d || !Array.isArray(d.sp) || !Array.isArray(d.lots)) return false;
   if(d.fp!==inputFingerprint()){ clearManual(); return false; }
-  lastSp=d.sp; lastLots=d.lots; hasResult=true; lastFp=d.fp;
-  redraw();
-  return true;
+  try{
+    lastSp=d.sp; lastLots=d.lots; hasResult=true; lastFp=d.fp;
+    redraw();
+    return true;
+  }catch(e){
+    // 復元に失敗したら保存を捨てて自動配置に落ちる
+    clearManual(); lastSp=null; lastLots=null; hasResult=false; lastFp=null;
+    return false;
+  }
 }
 // 「▶ 自動配置を作成」の入口。手動調整があるときだけ確認する。
 function runFromButton(){
