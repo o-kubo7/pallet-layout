@@ -95,8 +95,20 @@
   .colwrap.editable:hover .col,.colwrap.editable:hover .hrow{outline:2px solid var(--accent)}
   .cell{width:var(--cell);height:var(--cell);border:1px solid #cbd5e1;border-radius:2px;background:#fff;overflow:hidden;
         display:flex;align-items:center;justify-content:center;font-weight:600;color:#1f2937;
-        font-size:calc(var(--cell) * .3);line-height:1}
+        font-size:calc(var(--cell) * .3);line-height:1;
+        user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
   .cell.aisle-empty{background:#e5e7eb}
+  /* ---- ロットの手動移動 ---- */
+  /* 選択中のマス。マスの背景はロットの色なので、色ではなく枠で示す。
+     touch-action:none は「選択された時点」で必要。ドラッグ開始まで待つと
+     ブラウザが先にパンを始めてしまい pointercancel で中断する。 */
+  .cell.sel{box-shadow:inset 0 0 0 2px #fff, 0 0 0 2px #111827;border-color:#111827;
+            touch-action:none}
+  .colwrap.drop-ok .col,.colwrap.drop-ok .hrow{outline:3px solid #16a34a}
+  .colwrap.drop-ng .col,.colwrap.drop-ng .hrow{outline:3px solid #dc2626}
+  .dragghost{position:fixed;z-index:70;pointer-events:none;background:rgba(17,24,39,.9);color:#fff;
+             border-radius:6px;padding:4px 8px;font-size:12px;font-weight:700;
+             transform:translate(-50%,-160%);white-space:nowrap}
   .cell.segline{border-top:2px dashed #374151}
   .cell.segline-h{border-left:2px dashed #374151}
   .colcap{font-size:10px;color:#9ca3af;text-align:center;margin-top:2px}
@@ -241,7 +253,7 @@
 
   @media print{
     @page{size:A4 landscape;margin:8mm}
-    header,.tabs,.actionbar,#updateBar,.sizectl,#mapBody,#messages,#regInfo,#saveStatus,.note{display:none !important}
+    header,.tabs,.actionbar,#updateBar,.sizectl,#mapBody,#messages,#regInfo,#saveStatus,.note,.hint{display:none !important}
     .wrap{padding:0;max-width:none}
     .card{border:0;padding:0;margin:0}
     .card h2{display:none}
@@ -317,7 +329,7 @@
         <button class="btn btn-ghost" onclick="clearLots()">入力をクリア</button>
         <label class="chk"><input type="checkbox" id="mixChk" checked> 満杯時に混載を許可</label>
         <label class="chk"><input type="checkbox" id="fracChk" onchange="toggleFrac()"> 端数を「半」で表示</label>
-        <button class="btn btn-primary" id="runBtnInline" onclick="run(true)">▶ 自動配置を作成</button>
+        <button class="btn btn-primary" id="runBtnInline" onclick="runFromButton()">▶ 自動配置を作成</button>
       </div>
       <div class="row-actions">
         <button class="btn btn-ghost" onclick="loadSample('basic')">基本サンプル</button>
@@ -340,9 +352,12 @@
   <div id="tab-map" class="tabpanel" style="display:none">
     <div class="card" id="resultCard">
       <h2>配置図
-        <button id="editBtn" class="btn btn-ghost" style="margin-left:auto" onclick="toggleEdit()">通路を編集</button>
+        <button id="moveBtn" class="btn btn-ghost" style="margin-left:auto" onclick="toggleMove()">ロットを移動</button>
+        <button id="editBtn" class="btn btn-ghost" style="margin-left:8px" onclick="toggleEdit()">通路を編集</button>
       </h2>
       <div id="editHint" class="hint" style="display:none;margin-bottom:8px">✏ 編集モード：マスをタップするとその列が「通路（灰・破線）」⇔「通常」に切り替わります。</div>
+      <div id="moveHint" class="hint" style="display:none;margin-bottom:8px">✋ 移動モード：同じロットのマスをタップして選び、選んだマスをドラッグして別の列へ運びます。
+        <button class="btn-mini" onclick="clearSel()">選択解除</button></div>
 
       <div class="sizectl">
         <span class="lbl">表示</span>
@@ -433,7 +448,7 @@
 </div>
 
 <div class="actionbar" id="actionBar">
-  <button class="btn btn-primary" onclick="run(true)">▶ 自動配置を作成</button>
+  <button class="btn btn-primary" onclick="runFromButton()">▶ 自動配置を作成</button>
 </div>
 
 <div id="updateBar">
@@ -515,7 +530,7 @@ let fracMode=false;   // true なら「満載数P 半」表記
 let sheetMode=true;  // 配置図タブの表示（true=配置図の表 / false=ブロック図）
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", view:"palletApp.view", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", view:"palletApp.view", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual"};
 let storageOK=true;
 const memStore={};
 (function(){
@@ -695,6 +710,9 @@ function clearLots(){
   hasResult=false; lastLots=null; showMapState();
 }
 function loadSample(which){
+  // 入力を全置換するので、置換の前に確認する。
+  // run(true) を runFromButton() に替えるだけでは、断っても入力が戻らない。
+  if(hasManual() && !confirm("手動調整を破棄してサンプルを読み込みます。よろしいですか？")) return;
   document.querySelector("#lotTable tbody").innerHTML="";
   SAMPLES[which].forEach(addRow);
   syncCards(); saveLots(); run(true);
@@ -982,41 +1000,33 @@ function place(lots,allowMix){
 }
 
 /* ---------- 実行 ---------- */
-function run(goMap){
-  const {lots, unknown, typeMix}=readLots();
-  if(lots.length===0 && unknown.length===0){ alert("荷物を1件以上入力してください。"); return; }
-
-  const m=document.getElementById("messages");
-  let warnHtml="";
+// 入力そのものへの警告（SNP未入力・種別の食い違い）。
+// 自動配置の直後と、保存した手動調整の復元の両方から使う。
+function inputWarnHtml(unknown, typeMix){
+  let h="";
   if(typeMix && typeMix.length){
-    warnHtml+=`<div class="msg warn">⚠ 同じ品名・ロットで種別（仕掛品／商品）が違う行があります：${
+    h+=`<div class="msg warn">⚠ 同じ品名・ロットで種別（仕掛品／商品）が違う行があります：${
       typeMix.join(" / ")}。先に入力した行の種別でまとめています。</div>`;
   }
-  if(unknown.length){
-    warnHtml+=`<div class="msg warn">⚠ SNPが未入力のため計算できない荷物があります：${
+  if(unknown && unknown.length){
+    h+=`<div class="msg warn">⚠ SNPが未入力のため計算できない荷物があります：${
       unknown.map(u=>`${u.name||"(品名なし)"}${u.lot?"／"+u.lot:""}（個数${u.qty}）`).join(" / ")
     }</div>`;
   }
+  return h;
+}
 
-  if(lots.length===0){
-    hasResult=false; lastLots=null;
-    m.innerHTML=warnHtml; showMapState();
-    document.getElementById("mapEmpty").style.display="none";
-    document.getElementById("mapBody").style.display="block";
-    document.getElementById("legend").innerHTML="";
-    document.getElementById("zone-far").innerHTML="";
-    document.getElementById("zone-near").innerHTML="";
-    document.getElementById("summary").textContent="";
-    if(goMap) switchTab('map');
-    return;
-  }
-
-  const allowMix=document.getElementById("mixChk").checked;
-  const sp=place(lots,allowMix);
-  lastSp=sp;
+/* 配置結果を画面に出す。place() は呼ばない。
+   配置は引数で受け取らずグローバルの lastSp を読む。
+   ここから呼ぶ sheetEntries() と tailAreaOf() が lastSp / lastLots を直接見るため、
+   引数で別の配置を渡しても実際には反映されない。渡せるように見せるほうが危険なので持たせない。 */
+function renderResult(lots, unknown, typeMix){
+  const sp=lastSp;
+  const m=document.getElementById("messages");
+  let warnHtml=inputWarnHtml(unknown, typeMix);
 
   const colorOf={}; lots.forEach((l,i)=>colorOf[l.id]=PALETTE[i%PALETTE.length]);
-  lastLots=lots; lastColor=colorOf; hasResult=true;
+  lastColor=colorOf;
 
   const over=lots.filter(l=>l.rem>0);
   const usedAisle=sp.some(s=>s.cols.some(c=>c.aisle&&c.fills.length));
@@ -1055,20 +1065,56 @@ function run(goMap){
   document.getElementById("summary").textContent=`合計 ${totalQty}個 → ${total}P ／ 配置済 ${total-rem}P ／ あふれ ${rem}P`;
 
   showMapState();
+}
+
+// 今ある結果でそのまま描き直す。手動移動の後やモード切替から呼ぶ。
+function redraw(){
+  if(!hasResult || !lastLots) return;
+  const {unknown, typeMix}=readLots();
+  renderResult(lastLots, unknown, typeMix);
+}
+
+function run(goMap){
+  const {lots, unknown, typeMix}=readLots();
+  if(lots.length===0 && unknown.length===0){ alert("荷物を1件以上入力してください。"); return; }
+
+  if(lots.length===0){
+    hasResult=false; lastLots=null;
+    document.getElementById("messages").innerHTML=inputWarnHtml(unknown, typeMix);
+    showMapState();
+    document.getElementById("mapEmpty").style.display="none";
+    document.getElementById("mapBody").style.display="block";
+    document.getElementById("legend").innerHTML="";
+    document.getElementById("zone-far").innerHTML="";
+    document.getElementById("zone-near").innerHTML="";
+    document.getElementById("summary").textContent="";
+    if(goMap) switchTab('map');
+    return;
+  }
+
+  const allowMix=document.getElementById("mixChk").checked;
+  lastSp=place(lots,allowMix); lastLots=lots; hasResult=true;
+  lastFp=inputFingerprint();   // この配置を作った時点の入力と列構成
+  clearManual();               // 配置し直したので手動調整は捨てる
+
+  renderResult(lots, unknown, typeMix);
   if(goMap) switchTab('map');
 }
 
 /* ---------- 描画 ---------- */
+// row は列内の行番号（0始まり）。選択とドラッグでマスを特定するために持たせる。
 function cellsOf(col){
-  const arr=Array.from({length:col.h},()=>({id:null,seg:false,label:""}));
+  const arr=Array.from({length:col.h},(_,i)=>({id:null,seg:false,label:"",row:i}));
   let r=0;
   col.fills.forEach((f,fi)=>{
-    for(let k=0;k<f.count;k++){ if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),label:""}; r++; } }
+    for(let k=0;k<f.count;k++){ if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),label:"",row:r}; r++; } }
     if(r-1>=0) arr[r-1].label = f.id;
   });
   return arr;
 }
 function drawZone(elId, spaces, colorOf){
+  // 作り直すと .sel クラスは消えるので、選択の状態も一緒に捨てる
+  if(typeof clearSel==="function") clearSel();
   const el=document.getElementById(elId); el.innerHTML="";
   spaces.forEach(sp=>{
     const horizontal = sp.orient==="h";
@@ -1095,7 +1141,8 @@ function drawZone(elId, spaces, colorOf){
         if(!filled&&col.aisle)cls.push("aisle-empty");
         if(a.seg)cls.push(horizontal?"segline-h":"segline");
         const label=filled?(codeShort(a.label)):"";
-        cells+=`<div class="${cls.join(' ')}" style="${bg?'background:'+bg:''}">${label}</div>`;
+        cells+=`<div class="${cls.join(' ')}" data-row="${a.row}"${filled?` data-lot="${a.id}"`:""}`
+              +` style="${bg?'background:'+bg:''}">${label}</div>`;
       });
       const inner = horizontal ? `<div class="hrow">${cells}</div>` : `<div class="col${topAlign?' top':''}">${cells}</div>`;
       const cap = `<div class="colcap">${used(col)}/${col.h}${col.aisle?' 通':''}</div>`;
@@ -1137,16 +1184,194 @@ function setCellSize(px){
   saveData(STORE_KEY.cell, px);
 }
 
-/* ---------- 通路編集 ---------- */
-function toggleEdit(){
-  editMode=!editMode;
+/* ---------- ロットの手動移動（データ操作） ----------
+   ここの関数は DOM に触らない。コンソールから直接呼んで検証できる。 */
+
+// 選択（"スペース名|列番号|行番号" の集合）を「スペース名|列番号 → マス数」に集計する
+function selCounts(cells){
+  const n={};
+  cells.forEach(k=>{
+    const p=k.split("|");
+    const key=p[0]+"|"+p[1];
+    n[key]=(n[key]||0)+1;
+  });
+  return n;
+}
+
+// 運用上ひとつづきに使うエリア（AREA_GROUPS）は、分割の判定でも1つの束として扱う。
+// 束にしないと 軒下①から軒下② への移動が毎回「2か所に分かれます」になる。
+function areaKeyOf(name){
+  const g=AREA_GROUPS.find(g=>g.includes(name));
+  return g?g.join("+"):name;
+}
+
+// あるロットが何ブロックに分かれているかを数える。
+// 束ごとに列を連結し、列番号が隣り合っていれば1ブロック。
+// 間に挟まる列がすべて「空の通路列」の場合も1ブロックとみなす。
+// 別の束にあれば必ず別ブロック。
+function blockCountOf(sp, lotId){
+  const groups={};
+  sp.forEach(s=>{
+    const k=areaKeyOf(s.name);
+    (groups[k]=groups[k]||[]).push(...s.cols);
+  });
+  let total=0;
+  Object.keys(groups).forEach(k=>{
+    const cols=groups[k];
+    const idx=[];
+    cols.forEach((c,i)=>{ if(c.fills.some(f=>f.id===lotId)) idx.push(i); });
+    if(!idx.length) return;
+    let blocks=1;
+    for(let j=1;j<idx.length;j++){
+      let bridged=true;
+      for(let i=idx[j-1]+1;i<idx[j];i++){
+        const c=cols[i];
+        if(!(c.aisle && c.fills.length===0)){ bridged=false; break; }
+      }
+      if(!bridged) blocks++;
+    }
+    total+=blocks;
+  });
+  return total;
+}
+
+// count が 0 以下の要素を捨て、同じ列で隣り合う同一ロットの要素を統合する。
+// 隣り合っていない同一ロット（間に別ロットが挟まる形）は畳まない。
+// 畳むと間のロットの位置が動いてしまうため。
+function normalizeFills(sp){
+  sp.forEach(s=>s.cols.forEach(col=>{
+    const out=[];
+    col.fills.forEach(f=>{
+      if(f.count<=0) return;
+      const last=out[out.length-1];
+      if(last && last.id===f.id){ last.count+=f.count; return; }
+      out.push(f);
+    });
+    col.fills=out;
+  }));
+}
+
+// 実際に動くマス数。落とし先の列に既にあるマスは動かないので除く。
+// これにより「2列に分かれたロットを全部選び、片方の列に落としてまとめる」が成立する。
+function movingCount(counts, destSpaceName, destColIndex){
+  const skip=destSpaceName+"|"+destColIndex;
+  let n=0;
+  Object.keys(counts).forEach(k=>{ if(k!==skip) n+=counts[k]; });
+  return n;
+}
+
+// 移動を適用する。next は lastSp のコピーを渡すこと（破壊的に書き換える）。
+// 移動先には自動配置の fillMix と同じく fills の先頭へ差し込む。
+// 見た目でどちら側になるかはエリアによって違う
+// （メインは上端、軒下②は下端、横向きのエリアは左端）。
+function moveCells(next, lotId, counts, destSpaceName, destColIndex){
+  const ds=next.find(x=>x.name===destSpaceName);
+  const dc=ds?ds.cols[destColIndex]:null;
+  // 移動先が無ければ何も動かさない。減算より先に返さないと、
+  // 移動元から引いたぶんがどこにも足されずマスが消える。
+  if(!dc) return 0;
+  const skip=destSpaceName+"|"+destColIndex;
+  let total=0;
+  Object.keys(counts).forEach(key=>{
+    if(key===skip) return;                       // 落とし先に既にある分は動かさない
+    const p=key.split("|");
+    const s=next.find(x=>x.name===p[0]); if(!s) return;
+    const col=s.cols[parseInt(p[1])]; if(!col) return;
+    let need=counts[key];
+    col.fills.forEach(f=>{
+      if(need<=0 || f.id!==lotId) return;
+      const take=Math.min(need, f.count);
+      f.count-=take; need-=take; total+=take;
+    });
+  });
+  const entry={id:lotId, count:total};
+  if(dc.aisle) entry.ov=true;
+  if(dc.fills.length) entry.mix=true;
+  dc.fills.unshift(entry);
+  normalizeFills(next);
+  return total;
+}
+
+// 移動の可否を判定する。sp は書き換えない。
+// ok:true のとき next に移動適用済みのコピーが入るので、呼び出し側はそれを lastSp に入れる。
+function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
+  const ds=sp.find(x=>x.name===destSpaceName);
+  if(!ds) return {ok:false, reason:"エリアが見つかりません"};
+  const dc=ds.cols[destColIndex];
+  if(!dc) return {ok:false, reason:"列が見つかりません"};
+  const n=movingCount(counts, destSpaceName, destColIndex);
+  if(n<=0) return {ok:false, same:true, reason:"動くマスがありません"};
+  // used(dc) には落とし先に既にあるそのロットの分が含まれ、n からはその分が除かれているので
+  // 二重に数えることはない。
+  if(used(dc)+n > dc.h) return {ok:false, reason:"移動先の空きが足りません"};
+  const before=blockCountOf(sp, lotId);
+  const next=clone(sp);
+  moveCells(next, lotId, counts, destSpaceName, destColIndex);
+  const after=blockCountOf(next, lotId);
+  return {ok:true, needConfirm: after>before, before, after, next};
+}
+
+/* ---------- 通路編集 / ロット移動（モードと選択） ---------- */
+let moveMode=false;
+let sel={lotId:null, cells:new Set()};
+// ドラッグの直後に飛んでくる click を無視するための印。Task 5 で立てる。
+let dragMoved=false;
+
+function setEditMode(on){
+  editMode=on;
   const b=document.getElementById("editBtn");
-  b.className = "btn "+(editMode?"btn-on":"btn-ghost");
-  b.textContent = editMode?"編集を終了":"通路を編集";
-  document.getElementById("editHint").style.display = editMode?"block":"none";
+  b.className = "btn "+(on?"btn-on":"btn-ghost");
+  b.textContent = on?"編集を終了":"通路を編集";
+  document.getElementById("editHint").style.display = on?"block":"none";
+}
+function setMoveMode(on){
+  moveMode=on;
+  const b=document.getElementById("moveBtn");
+  b.className = "btn "+(on?"btn-on":"btn-ghost");
+  b.textContent = on?"移動を終了":"ロットを移動";
+  document.getElementById("moveHint").style.display = on?"block":"none";
+  if(!on) clearSel();
+}
+// 2つのモードは排他。通路編集は前提そのものを変えるので、従来どおり配置し直す。
+function toggleEdit(){
+  // 入るだけで配置し直すので、手動調整があるなら先に確認する
+  if(!editMode && hasManual() &&
+     !confirm("通路の編集に入ると自動配置し直すため、手動調整は破棄されます。よろしいですか？")) return;
+  setEditMode(!editMode);
+  if(editMode) setMoveMode(false);
   if(lastLots) run(false);
 }
+// 移動モードの出入りでは配置し直さない。ただし editable クラスが DOM に焼き込まれているので
+// 描き直して落とす。
+function toggleMove(){
+  setMoveMode(!moveMode);
+  // 既定は「配置図の表」なので、そのまま移動モードに入ると掴めるマスが1つも無い。
+  // 移動モードに入るときはブロック図へ寄せる。
+  if(moveMode){ setEditMode(false); if(sheetMode) setView('block'); }
+  redraw();
+}
+function clearSel(){
+  sel.lotId=null; sel.cells.clear();
+  document.querySelectorAll(".cell.sel").forEach(c=>c.classList.remove("sel"));
+}
+function cellKey(cellEl){
+  const w=cellEl.closest(".colwrap");
+  return w.dataset.space+"|"+w.dataset.col+"|"+cellEl.dataset.row;
+}
+// 1マス目でロットが決まり、以降は同じロットのマスしか選べない。
+function toggleCell(cellEl){
+  if(cellEl.dataset.lot==null) return;          // 空マスは選べない
+  const id=parseInt(cellEl.dataset.lot);
+  if(sel.lotId==null) sel.lotId=id;
+  else if(sel.lotId!==id) return;               // 別ロットのマスは無視する
+  const k=cellKey(cellEl);
+  if(sel.cells.has(k)){ sel.cells.delete(k); cellEl.classList.remove("sel"); }
+  else { sel.cells.add(k); cellEl.classList.add("sel"); }
+  if(sel.cells.size===0) sel.lotId=null;
+}
+
 document.addEventListener("click",e=>{
+  if(moveMode) return;
   if(!editMode)return;
   const w=e.target.closest(".colwrap"); if(!w)return;
   const sp=SPACES.find(s=>s.name===w.dataset.space); if(!sp)return;
@@ -1154,6 +1379,168 @@ document.addEventListener("click",e=>{
   document.getElementById("cfgText").value=spacesToText();
   showCapacity(); run(false);
 });
+document.addEventListener("click",e=>{
+  if(!moveMode) return;
+  if(dragMoved){ dragMoved=false; return; }     // ドラッグ直後の click は選択を動かさない
+  const c=e.target.closest(".cell"); if(!c) return;
+  if(!c.closest("#mapBody")) return;
+  toggleCell(c);
+});
+
+/* ---------- ロット移動（ドラッグ） ---------- */
+let drag=null;                       // {id, x0, y0, started, ghost, target}
+let lastDropKey=null;                // 直前に判定した列。同じ列に留まる間は判定を繰り返さない
+let edge={x:0, y:0, raf:0};          // 端の自動スクロール
+
+/* 手動調整の保存。
+   指紋は「荷物の入力」と「列構成」を連結したもの。
+
+   指紋は保存した瞬間ではなく run() を実行した時点のものを使う（lastFp）。
+   荷物の入力欄を編集しても run() は呼ばれないため、
+   「自動配置 → 入力を書き換える → 配置図に戻って手動移動」という順序が成立してしまう。
+   保存時の入力を指紋にすると {編集後の指紋, 編集前の配置} という食い違った組が残り、
+   リロード時に一致してしまって古い配置が復元される。
+
+   列構成を含めるのは、SPACES が localStorage に保存されておらず
+   リロードで DEFAULT_SPACES に戻るため。設定を変えてから調整すると
+   復元した配置と SPACES のジオメトリが食い違う。 */
+let lastFp=null;
+function inputFingerprint(){ return JSON.stringify(readRowData())+"|#|"+spacesToText(); }
+function saveManual(){
+  if(lastFp==null) return;
+  saveData(STORE_KEY.manual, {fp:lastFp, sp:lastSp, lots:lastLots});
+}
+function clearManual(){ saveData(STORE_KEY.manual, null); }
+function hasManual(){ return !!loadData(STORE_KEY.manual); }
+// 保存済みの手動調整を復元する。復元したら true。place() は呼ばない。
+function restoreManual(){
+  const d=loadData(STORE_KEY.manual);
+  // 形を見る。壊れた保存を読むと renderResult() で例外が飛び、単一 script なので
+  // そこから下（Service Worker の登録を含む）が丸ごと実行されなくなる。
+  if(!d || !Array.isArray(d.sp) || !Array.isArray(d.lots)) return false;
+  if(d.fp!==inputFingerprint()){ clearManual(); return false; }
+  try{
+    lastSp=d.sp; lastLots=d.lots; hasResult=true; lastFp=d.fp;
+    redraw();
+    return true;
+  }catch(e){
+    // 復元に失敗したら保存を捨てて自動配置に落ちる
+    clearManual(); lastSp=null; lastLots=null; hasResult=false; lastFp=null;
+    return false;
+  }
+}
+// 「▶ 自動配置を作成」の入口。手動調整があるときだけ確認する。
+function runFromButton(){
+  if(hasManual() && !confirm("手動調整を破棄して自動配置し直します。よろしいですか？")) return;
+  run(true);
+}
+
+function wrapAt(x,y){
+  const el=document.elementFromPoint(x,y);
+  const w=el?el.closest(".colwrap"):null;
+  return (w && w.closest("#mapBody")) ? w : null;
+}
+function clearDropMark(){
+  document.querySelectorAll(".colwrap.drop-ok,.colwrap.drop-ng")
+    .forEach(w=>w.classList.remove("drop-ok","drop-ng"));
+}
+// 判定は内部で配置全体を clone するので、同じ列にいる間は結果を使い回す。
+// pointermove ごとに回すとスマホで毎秒60〜120回の複製になる。
+function highlightDrop(x,y){
+  const w=wrapAt(x,y);
+  const key=w?(w.dataset.space+"|"+w.dataset.col):"";
+  if(key===lastDropKey) return;
+  lastDropKey=key;
+  clearDropMark();
+  if(!w) return;
+  const v=validateMove(lastSp, sel.lotId, selCounts(sel.cells), w.dataset.space, parseInt(w.dataset.col));
+  if(v.same) return;                 // 動くマスが無い列には何も出さない
+  w.classList.add(v.ok?"drop-ok":"drop-ng");
+}
+// 端の自動スクロールは rAF で回す。pointermove の中で送ると、
+// 指を端で止めた瞬間にイベントが来なくなってスクロールも止まる。
+function edgeTick(){
+  if(!drag || !drag.started){ edge.raf=0; return; }
+  const x=edge.x, y=edge.y;
+  document.querySelectorAll("#mapBody .scroller").forEach(sc=>{
+    const r=sc.getBoundingClientRect();
+    if(y<r.top || y>r.bottom) return;
+    if(x<r.left+40)       sc.scrollLeft-=8;
+    else if(x>r.right-40) sc.scrollLeft+=8;
+  });
+  if(y<60) window.scrollBy(0,-8);
+  else if(y>window.innerHeight-60) window.scrollBy(0,8);
+  edge.raf=requestAnimationFrame(edgeTick);
+}
+function edgeScroll(x,y){
+  edge.x=x; edge.y=y;
+  if(!edge.raf) edge.raf=requestAnimationFrame(edgeTick);
+}
+function endDrag(){
+  if(drag){
+    if(drag.ghost) drag.ghost.remove();
+    try{ drag.target.releasePointerCapture(drag.id); }catch(err){}
+  }
+  drag=null; lastDropKey=null;
+  if(edge.raf){ cancelAnimationFrame(edge.raf); edge.raf=0; }
+  clearDropMark();
+}
+// 検証して lastSp を更新する。動くマスが無い場合と容量不足は黙って中止する。
+function applyMove(spaceName, colIndex){
+  const counts=selCounts(sel.cells);
+  const v=validateMove(lastSp, sel.lotId, counts, spaceName, colIndex);
+  if(!v.ok) return;
+  if(v.needConfirm){
+    const lot=lastLots.find(l=>l.id===sel.lotId);
+    const name=lot?`${lot.name} / ${lot.lot||"—"}`:"このロット";
+    if(!confirm(`${name} が ${v.before}か所から ${v.after}か所に分かれます。このまま移動しますか？`)) return;
+  }
+  lastSp=v.next;
+  saveManual();
+  clearSel();
+  redraw();
+}
+
+document.addEventListener("pointerdown",e=>{
+  // ドラッグ中に2本目の指が触れても乗っ取らせない。
+  // 乗っ取ると1本目のゴーストが孤児になって画面に残る。
+  if(drag) return;
+  dragMoved=false;
+  if(!moveMode || !sel.cells.size) return;
+  if(e.button!=null && e.button!==0) return;    // 右クリック・中クリックでは始めない
+  const c=e.target.closest(".cell"); if(!c) return;
+  if(!c.classList.contains("sel")) return;      // 選択済みのマスからだけ掴める
+  drag={id:e.pointerId, x0:e.clientX, y0:e.clientY, started:false, ghost:null, target:c};
+});
+document.addEventListener("pointermove",e=>{
+  if(!drag || e.pointerId!==drag.id) return;
+  if(!drag.started){
+    if(Math.abs(e.clientX-drag.x0)<8 && Math.abs(e.clientY-drag.y0)<8) return;
+    drag.started=true; dragMoved=true;
+    try{ drag.target.setPointerCapture(drag.id); }catch(err){}
+    const lot=lastLots?lastLots.find(l=>l.id===sel.lotId):null;
+    drag.ghost=document.createElement("div");
+    drag.ghost.className="dragghost";
+    drag.ghost.textContent=`${lot?lot.name:""} ${sel.cells.size}P`;
+    document.body.appendChild(drag.ghost);
+  }
+  drag.ghost.style.left=e.clientX+"px";
+  drag.ghost.style.top =e.clientY+"px";
+  highlightDrop(e.clientX, e.clientY);
+  edgeScroll(e.clientX, e.clientY);
+});
+document.addEventListener("pointerup",e=>{
+  if(!drag || e.pointerId!==drag.id) return;
+  const started=drag.started, x=e.clientX, y=e.clientY;
+  endDrag();
+  if(!started) return;                          // 動いていなければタップ（click 側で処理）
+  const w=wrapAt(x,y); if(!w) return;
+  applyMove(w.dataset.space, parseInt(w.dataset.col));
+});
+// 片付けは自分のポインタのイベントでだけ行う。
+// pointerId を見ないと、別のポインタのイベントで進行中のドラッグを壊す。
+document.addEventListener("pointercancel",e=>{ if(drag && e.pointerId===drag.id) endDrag(); });
+document.addEventListener("lostpointercapture",e=>{ if(drag && e.pointerId===drag.id) endDrag(); });
 
 /* ---------- スペース設定 ---------- */
 function spacesToText(){
@@ -1617,7 +2004,9 @@ updateSaveStatus();
       if(snp==null || snp===""){ const l=snpsOf(r.name); snp = l.length?l[0]:""; }
       addRow({type:r.type, name:r.name, lot:r.lot, snp:snp, qty:r.qty});
     });
-    syncCards(); saveLots(); run(false);
+    syncCards(); saveLots();
+    // 入力と列構成が保存時と同じなら、手動調整した配置をそのまま出す
+    if(!restoreManual()) run(false);
   }else{
     SAMPLES.basic.forEach(addRow);
     syncCards(); saveLots(); run(false);

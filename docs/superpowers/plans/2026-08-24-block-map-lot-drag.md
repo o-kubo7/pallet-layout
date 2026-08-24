@@ -521,6 +521,11 @@ function movingCount(counts, destSpaceName, destColIndex){
 // 見た目でどちら側になるかはエリアによって違う
 // （メインは上端、軒下②は下端、横向きのエリアは左端）。
 function moveCells(next, lotId, counts, destSpaceName, destColIndex){
+  const ds=next.find(x=>x.name===destSpaceName);
+  const dc=ds?ds.cols[destColIndex]:null;
+  // 移動先が無ければ何も動かさない。減算より先に返さないと、
+  // 移動元から引いたぶんがどこにも足されずマスが消える。
+  if(!dc) return 0;
   const skip=destSpaceName+"|"+destColIndex;
   let total=0;
   Object.keys(counts).forEach(key=>{
@@ -535,8 +540,6 @@ function moveCells(next, lotId, counts, destSpaceName, destColIndex){
       f.count-=take; need-=take; total+=take;
     });
   });
-  const ds=next.find(x=>x.name===destSpaceName);
-  const dc=ds.cols[destColIndex];
   const entry={id:lotId, count:total};
   if(dc.aisle) entry.ov=true;
   if(dc.fills.length) entry.mix=true;
@@ -652,7 +655,7 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
   return JSON.stringify({
     full: brief(validateMove(sp,5,{"X|0":3},"X",1)),   // 列1の空きは1マス → 拒否
     same: brief(validateMove(sp,5,{"X|0":3},"X",0)),   // 選択がすべて落とし先 → 動かない
-    near: brief(validateMove(sp,5,{"X|0":3},"X",2)),   // 隣の列 → 確認不要
+    near: brief(validateMove(sp,5,{"X|0":3},"X",2)),   // 間に別ロットの列1が挟まる → 飛び地なので確認
     far:  brief(validateMove(sp,5,{"X|0":3},"X",3)),   // 離れた列 → 飛び地なので確認
     gather: brief(g),
     gatherCols: g.next[0].cols.map(c=>c.fills.map(f=>f.id+":"+f.count)),
@@ -664,7 +667,7 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
 期待される出力:
 
 ```
-{"full":{"ok":false,"reason":"移動先の空きが足りません"},"same":{"ok":false,"same":true,"reason":"動くマスがありません"},"near":{"ok":true,"needConfirm":false,"before":1,"after":1},"far":{"ok":true,"needConfirm":true,"before":1,"after":2},"gather":{"ok":true,"needConfirm":false,"before":2,"after":1},"gatherCols":[[],[],["5:3"]],"intact":"[{\"id\":5,\"count\":7}]"}
+{"full":{"ok":false,"reason":"移動先の空きが足りません"},"same":{"ok":false,"same":true,"reason":"動くマスがありません"},"near":{"ok":true,"needConfirm":true,"before":1,"after":2},"far":{"ok":true,"needConfirm":true,"before":1,"after":2},"gather":{"ok":true,"needConfirm":false,"before":2,"after":1},"gatherCols":[[],[],["5:3"]],"intact":"[{\"id\":5,\"count\":7}]"}
 ```
 
 `gather` が「2か所 → 1か所」になり、確認なしで列2にまとまることを確認する。
@@ -1064,6 +1067,9 @@ function applyMove(spaceName, colIndex){
 }
 
 document.addEventListener("pointerdown",e=>{
+  // ドラッグ中に2本目の指が触れても乗っ取らせない。
+  // 乗っ取ると1本目のゴーストが孤児になって画面に残る。
+  if(drag) return;
   dragMoved=false;
   if(!moveMode || !sel.cells.size) return;
   if(e.button!=null && e.button!==0) return;    // 右クリック・中クリックでは始めない
@@ -1096,8 +1102,10 @@ document.addEventListener("pointerup",e=>{
   const w=wrapAt(x,y); if(!w) return;
   applyMove(w.dataset.space, parseInt(w.dataset.col));
 });
-document.addEventListener("pointercancel",endDrag);
-document.addEventListener("lostpointercapture",endDrag);
+// 片付けは自分のポインタのイベントでだけ行う。
+// pointerId を見ないと、別のポインタのイベントで進行中のドラッグを壊す。
+document.addEventListener("pointercancel",e=>{ if(drag && e.pointerId===drag.id) endDrag(); });
+document.addEventListener("lostpointercapture",e=>{ if(drag && e.pointerId===drag.id) endDrag(); });
 ```
 
 - [ ] **Step 2: applyMove を単体で確かめる**
@@ -1184,7 +1192,7 @@ UI を使わず、選択状態を作って `applyMove` を直接呼ぶ。
 期待される出力（`部品B(id:2)` が列8に2マス、列9に1マス）:
 
 ```
-{"col8":[{"id":2,"count":2}],"col9":[{"id":2,"count":1,"mix":true},{"id":1,"count":2}]}
+{"col8":[{"id":2,"count":2,"ov":false}],"col9":[{"id":2,"count":1,"mix":true},{"id":1,"count":2,"ov":false}]}
 ```
 
 画面で「ロットを移動」に入り、`部品B` のマスを**全部**（列8の2マスと列9の1マス）選び、
