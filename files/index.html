@@ -1342,7 +1342,9 @@ function toggleEdit(){
 // 描き直して落とす。
 function toggleMove(){
   setMoveMode(!moveMode);
-  if(moveMode) setEditMode(false);
+  // 既定は「配置図の表」なので、そのまま移動モードに入ると掴めるマスが1つも無い。
+  // 移動モードに入るときはブロック図へ寄せる。
+  if(moveMode){ setEditMode(false); if(sheetMode) setView('block'); }
   redraw();
 }
 function clearSel(){
