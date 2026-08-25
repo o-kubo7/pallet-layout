@@ -1050,6 +1050,16 @@ document.addEventListener("pointerdown", ev=>{
   if(ev.target.closest("#acList")) return;
   acClose();
 });
+// Tab でフォーカスが移ったとき。pointerdown が起きないので外側タップの経路では閉じられず、
+// 移動先の欄には acKey が無いので Esc も効かない。候補の持ち主から離れたら閉じる。
+// blur ではなく focusin で見るのは、候補リストをタッチでスクロールしても閉じないようにするため
+// （.ac-item は div でフォーカスを取らないので focusin は発火しない）。
+document.addEventListener("focusin", ev=>{
+  if(!acVisible()) return;
+  if(ev.target===acInput) return;
+  if(ev.target.closest && ev.target.closest("#acList")) return;
+  acClose();
+});
 // 欄が動いたら位置を合わせ直す
 window.addEventListener("scroll", ()=>{ if(acVisible()) acPosition(); }, true);
 window.addEventListener("resize", ()=>{ if(acVisible()) acPosition(); });
@@ -1070,10 +1080,13 @@ function nextField(el){
     const cur=el.closest(".fld");
     const f=cur?cur.dataset.f:null;
     const k=FIELD_ORDER.indexOf(f);
-    // SNP欄(自由入力)は onchange="snpEntered()" を持ち、そこから saveLots()→syncCards() が
-    // #lotCards を丸ごと作り直す。focusField() を先に呼ぶと、その focus で発生する同期的な
-    // blur で change が発火し、掴んだばかりの次欄が syncCards() の作り直しで DOM から
+    // el.blur() はどの欄からの遷移でも無条件に呼んでいる。どの欄の onchange も
+    // #lotCards を丸ごと作り直しうるため。focusField() を先に呼ぶと、その focus で発生する
+    // 同期的な blur で change が発火し、掴んだばかりの次欄が syncCards() の作り直しで DOM から
     // 消えてフォーカスが body に落ちる。先に blur() で change を確定させてから focusField() する。
+    // 今それが実際に起きるのは SNP欄(onchange="snpEntered()")と SNP の select
+    // (onchange="cardSnpSelect()")。name/lot には onchange が無いので今は空振りだが、
+    // 足したときに壊れないようこの順序を保つ。
     if(k>=0 && k<FIELD_ORDER.length-1){ el.blur(); focusField(i, FIELD_ORDER[k+1]); return; }
     addNextRow(i);   // 個数まで来たら次の行へ
     return;
