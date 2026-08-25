@@ -1070,7 +1070,11 @@ function nextField(el){
     const cur=el.closest(".fld");
     const f=cur?cur.dataset.f:null;
     const k=FIELD_ORDER.indexOf(f);
-    if(k>=0 && k<FIELD_ORDER.length-1){ focusField(i, FIELD_ORDER[k+1]); return; }
+    // SNP欄(自由入力)は onchange="snpEntered()" を持ち、そこから saveLots()→syncCards() が
+    // #lotCards を丸ごと作り直す。focusField() を先に呼ぶと、その focus で発生する同期的な
+    // blur で change が発火し、掴んだばかりの次欄が syncCards() の作り直しで DOM から
+    // 消えてフォーカスが body に落ちる。先に blur() で change を確定させてから focusField() する。
+    if(k>=0 && k<FIELD_ORDER.length-1){ el.blur(); focusField(i, FIELD_ORDER[k+1]); return; }
     addNextRow(i);   // 個数まで来たら次の行へ
     return;
   }
