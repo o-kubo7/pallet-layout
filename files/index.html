@@ -66,6 +66,18 @@
   .legend span{display:inline-flex;align-items:center;gap:5px;font-size:12px;background:#f3f4f6;border-radius:6px;padding:4px 8px}
   .swatch{width:13px;height:13px;border-radius:3px;border:1px solid rgba(0,0,0,.2);flex:none}
   .legend b.lno{font-weight:800;font-size:12px;min-width:14px;text-align:center;flex:none}
+
+  /* ---- 品名のオートコンプリート ----
+     datalist は Android の IME がキーボード上の候補ストリップに出してしまい、
+     ドロップダウンにならない。body 直下に1つだけ置いて position:fixed で位置を合わせる。 */
+  .ac-list{position:fixed;z-index:50;background:#fff;border:1px solid var(--line);border-radius:8px;
+           box-shadow:0 8px 24px rgba(0,0,0,.18);overflow-y:auto;-webkit-overflow-scrolling:touch;
+           touch-action:pan-y;padding:4px}
+  .ac-list[hidden]{display:none}
+  .ac-item{padding:10px 12px;border-radius:6px;font-size:14px;cursor:pointer;min-height:44px;
+           display:flex;align-items:center;gap:8px}
+  .ac-item span{margin-left:auto;font-size:11px;color:var(--muted);flex:none}
+  .ac-item.on{background:#eef2ff}
   .zone-title{font-weight:700;margin:6px 0;padding:4px 10px;border-radius:6px;display:inline-block;font-size:13px}
   .zone-near{background:#e8f5e9;color:#1b5e20}
   .zone-far{background:#fff3e0;color:#8a5300}
@@ -330,8 +342,6 @@
           <tbody></tbody>
         </table>
       </div>
-      <datalist id="nameOptions"></datalist>
-
       <div class="row-actions">
         <button class="btn btn-ghost" onclick="addRow();syncCards();saveLots()">＋ 行を追加</button>
         <button class="btn btn-ghost" onclick="clearLots()">入力をクリア</button>
@@ -461,6 +471,9 @@
 <div class="actionbar" id="actionBar">
   <button class="btn btn-primary" onclick="runFromButton()">▶ 自動配置を作成</button>
 </div>
+
+<!-- 品名の候補。開いている入力欄に合わせて位置を決めるので body 直下に1つだけ置く -->
+<div id="acList" class="ac-list" hidden></div>
 
 <div id="updateBar">
   <span>新しいバージョンがあります</span>
@@ -604,10 +617,9 @@ function onMasterChange(){
   updateRegCount();
   saveMaster();
 }
+// マスタが変わったら、開いている候補を描き直す（閉じていれば何もしない）
 function refreshNameOptions(){
-  const names=[]; MASTER.forEach(m=>{ if(!names.includes(m.name)) names.push(m.name); });
-  document.getElementById("nameOptions").innerHTML =
-    names.map(n=>`<option value="${esc(n)}">SNP ${snpsOf(n).join(" / ")}</option>`).join("");
+  if(acVisible()) acRender();
 }
 function loadMaster(){
   document.querySelector("#masterTable tbody").innerHTML="";
@@ -634,7 +646,8 @@ function addRow(d){
       <option ${d.type==="仕掛品"?"selected":""}>仕掛品</option>
       <option ${d.type==="商品"?"selected":""}>商品</option>
     </select></td>
-    <td><input list="nameOptions" value="${esc(d.name)}" placeholder="品名" oninput="nameChanged(this)"></td>
+    <td><input enterkeyhint="next" value="${esc(d.name)}" placeholder="品名"
+               oninput="nameChanged(this);acTyped(this)" onfocus="acOpen(this)" onkeydown="acKey(event,this)"></td>
     <td><input inputmode="tel" value="${esc(d.lot)}" placeholder="ロット" oninput="rowChanged(this)"></td>
     <td><input type="number" inputmode="numeric" min="1" value="${esc(d.snp)}" placeholder="SNP" oninput="rowChanged(this)"></td>
     <td><input type="number" inputmode="numeric" min="1" value="${esc(d.qty)}" placeholder="個数" oninput="rowChanged(this)"
@@ -735,6 +748,10 @@ function loadSample(which){
 
 /* ---------- 入力（スマホカード：テーブルと同期） ---------- */
 function syncCards(){
+  // カードを作り直すと、カード側から開いている候補の参照先が DOM から消える。
+  // テーブル側の欄は作り直されないので、そのままにする
+  // （テーブルの品名入力は rowChanged() 経由でここを毎回通る）
+  if(acInput && acInput.dataset.card!=null) acClose();
   const host=document.getElementById("lotCards");
   const rows=[...document.querySelectorAll("#lotTable tbody tr")];
   host.innerHTML = rows.map((tr,i)=>{
@@ -767,7 +784,9 @@ function syncCards(){
         <button class="btn-mini" onclick="cardDelete(${i})">削除</button>
       </div>
       <div class="fld" data-f="name"><label>品名</label>
-        <input list="nameOptions" value="${esc(v.name)}" placeholder="品名" oninput="cardEdit(${i},1,this.value)"></div>
+        <input enterkeyhint="next" data-card="${i}" value="${esc(v.name)}" placeholder="品名"
+               oninput="cardEdit(${i},1,this.value);acTyped(this)" onfocus="acOpen(this)"
+               onkeydown="acKey(event,this)"></div>
       <div class="fld" data-f="lot"><label>ロット</label>
         <input inputmode="tel" value="${esc(v.lot)}" placeholder="ロット" oninput="cardEdit(${i},2,this.value)">
         <button class="hyph" onclick="addHyphen(${i})" title="ハイフンを入力">−</button></div>
@@ -869,7 +888,8 @@ function updateCardFoot(i){ // 入力中のフォーカスを保つため、必�
   const el=card.querySelector(".foot .val");
   el.textContent = v.snp>0 && v.qty>0 ? Math.ceil(v.qty/v.snp)+"P" : (v.snp<=0?"SNP未入力":"—");
   el.className = "val"+(v.snp<=0?" warn":"");
-  const snpInput=card.querySelectorAll(".fld input")[2];
+  // .fld input の3番目では、SNPが <select> のカードで個数欄を指してしまう
+  const snpInput=card.querySelector('.fld[data-f="snp"] input');
   if(snpInput && document.activeElement!==snpInput) snpInput.value=v.snp||"";
 }
 function cardType(i,t){
@@ -878,6 +898,145 @@ function cardType(i,t){
   recalcRow(tr); saveLots(); syncCards();
 }
 function cardDelete(i){ const tr=trAt(i); if(!tr)return; tr.remove(); syncCards(); saveLots(); }
+
+/* ---------- 品名のオートコンプリート ----------
+   <datalist> は Android 11 以降、IME がキーボード上の候補ストリップに
+   インライン表示してしまい、ドロップダウンにならない。ブラウザ側の制御手段が無いので自前で描く。
+   リストは body 直下に1つだけ置き、position:fixed で対象の欄に合わせる。
+   カードの入力欄は syncCards() で作り直されるため、リストを欄の親に入れると入力中に消える。 */
+let acInput=null;   // いま候補を出している入力欄。null なら閉じている
+let acIndex=-1;     // ↑↓ で選択中の項目。-1 は未選択
+
+function acBox(){ return document.getElementById("acList"); }
+function acVisible(){ return !!acInput && !acBox().hidden; }
+
+// マスタの品名（重複を除く）
+function acNames(){
+  const names=[]; MASTER.forEach(m=>{ if(!names.includes(m.name)) names.push(m.name); });
+  return names;
+}
+// フォーカスしたとき。まだ何も選んでいない状態で開く
+function acOpen(inp){
+  acInput=inp; acIndex=-1;
+  acRender();
+}
+// 打つたびに呼ぶ。絞り込みが変わるので ↑↓ の選択は捨てる
+function acTyped(inp){
+  acInput=inp; acIndex=-1;
+  acRender();
+}
+function acRender(){
+  const box=acBox();
+  if(!acInput){ box.hidden=true; return; }
+  const q=acInput.value.trim();
+  // 部分一致。1111 で 1111-2222 を引けるようにする
+  const list=acNames().filter(n=>!q || n.indexOf(q)>=0);
+  if(!list.length){ box.hidden=true; return; }
+  if(acIndex>=list.length) acIndex=list.length-1;
+  box.innerHTML=list.map((n,i)=>
+    `<div class="ac-item${i===acIndex?" on":""}" data-name="${esc(n)}">`
+    +`${esc(n)}<span>SNP ${snpsOf(n).join(" / ")}</span></div>`).join("");
+  box.hidden=false;
+  acPosition();
+}
+/* 位置決め。ソフトキーボードが出ていると画面の下半分が隠れるので、
+   visualViewport で可視領域を測り、入らなければ欄の上側に出す。 */
+function acPosition(){
+  const box=acBox();
+  if(!acInput) return;
+  const r=acInput.getBoundingClientRect();
+  const vv=window.visualViewport;
+  const vTop = vv ? vv.offsetTop : 0;
+  const vh   = vv ? vv.height    : window.innerHeight;
+  // 下端には「▶ 自動配置を作成」の固定バーが乗っている。その上までしか使えない
+  const bar=document.getElementById("actionBar");
+  const barH=(bar && bar.style.display!=="none") ? bar.getBoundingClientRect().height : 0;
+  box.style.left  = r.left+"px";
+  box.style.width = r.width+"px";
+  box.style.maxHeight="";                        // 実寸を測るため一旦外す
+  const want=Math.min(box.scrollHeight, vh*0.44);
+  const below=(vTop+vh-barH)-r.bottom-8;         // 欄の下に残っている高さ
+  const above=r.top-vTop-8;                      // 欄の上に残っている高さ
+  if(below>=want || below>=above){ box.style.top=(r.bottom+4)+"px"; box.style.maxHeight=Math.max(Math.min(want,below),60)+"px"; }
+  else                           { const h=Math.max(Math.min(want,above),60); box.style.top=(r.top-h-4)+"px"; box.style.maxHeight=h+"px"; }
+}
+function acClose(){ acInput=null; acIndex=-1; acBox().hidden=true; }
+
+// 候補を確定する。入力欄へ入れ、SNPを自動補完し、ロット欄へ送る
+function acPick(name){
+  const inp=acInput;
+  if(!inp) return;
+  const card=inp.dataset.card;
+  acClose();
+  inp.value=name;
+  if(card!=null){
+    // カード側：テーブルへ書き戻し、SNP欄がプルダウンに変わることがあるので作り直す
+    cardEdit(parseInt(card),1,name);
+    syncCards();
+    focusField(parseInt(card),"lot");
+  }else{
+    nameChanged(inp);
+    const c=[...inp.closest("tr").querySelectorAll("select,input")];
+    const lot=c[2];
+    if(lot){ lot.focus(); try{ lot.setSelectionRange(lot.value.length,lot.value.length); }catch(e){} }
+  }
+}
+
+/* 品名欄の keydown。候補が開いていれば ↑↓ Enter Esc を候補の操作に使う。
+   閉じているときの Enter は Task 5 で「次の欄へ送る」を足す。 */
+function acKey(ev, inp){
+  // 日本語の変換中は何もしない。これが無いと、変換候補を Enter で確定した瞬間に
+  // 次の欄へ飛んでしまう。↑↓ も IME の候補選択を横取りしてしまう。
+  // keyCode 229 は isComposing を出さない古い IME 向けの保険
+  if(ev.isComposing || ev.keyCode===229) return;
+  const open = acVisible() && acInput===inp;
+  const items = open ? [...acBox().querySelectorAll(".ac-item")] : [];
+  if(open && (ev.key==="ArrowDown" || ev.key==="ArrowUp")){
+    ev.preventDefault();
+    acIndex += (ev.key==="ArrowDown" ? 1 : -1);
+    if(acIndex < 0) acIndex = items.length-1;
+    if(acIndex >= items.length) acIndex = 0;
+    acRender();
+    return;
+  }
+  if(ev.key==="Escape"){ if(open){ ev.preventDefault(); acClose(); } return; }
+  if(ev.key!=="Enter") return;
+  ev.preventDefault();
+  if(open && acIndex>=0){ acPick(items[acIndex].dataset.name); return; }
+  acClose();
+}
+
+/* 候補の確定。
+   よくある実装は pointerdown を preventDefault() してフォーカスを保つ形だが、
+   それをやるとリストをタッチでスクロールできなくなる（既定のマスタは24件あるので実害が出る）。
+   代わりに pointerdown で対象と座標を控え、pointerup までの移動が小さいときだけ確定する。
+   要素は pointerdown の時点で確定しているので、キーボードが閉じて位置がずれても影響しない。
+   閉じるのは「外側の pointerdown」「Esc」「確定時」だけで、blur では閉じない。 */
+let acDown=null;
+acBox().addEventListener("pointerdown", ev=>{
+  const it=ev.target.closest(".ac-item");
+  acDown = it ? {el:it, x:ev.clientX, y:ev.clientY} : null;
+});
+acBox().addEventListener("pointerup", ev=>{
+  const d=acDown; acDown=null;
+  if(!d) return;
+  if(Math.abs(ev.clientX-d.x)>8 || Math.abs(ev.clientY-d.y)>8) return;   // スクロールとみなす
+  acPick(d.el.dataset.name);
+});
+// 外側をタップしたら閉じる。品名欄自身と候補の中は除く
+document.addEventListener("pointerdown", ev=>{
+  if(!acVisible()) return;
+  if(ev.target===acInput) return;
+  if(ev.target.closest("#acList")) return;
+  acClose();
+});
+// 欄が動いたら位置を合わせ直す
+window.addEventListener("scroll", ()=>{ if(acVisible()) acPosition(); }, true);
+window.addEventListener("resize", ()=>{ if(acVisible()) acPosition(); });
+if(window.visualViewport){
+  window.visualViewport.addEventListener("resize", ()=>{ if(acVisible()) acPosition(); });
+  window.visualViewport.addEventListener("scroll", ()=>{ if(acVisible()) acPosition(); });
+}
 
 /* ---------- 配置アルゴリズム ---------- */
 function used(c){return c.fills.reduce((a,f)=>a+f.count,0);}
