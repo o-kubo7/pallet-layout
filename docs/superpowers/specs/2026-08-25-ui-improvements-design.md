@@ -82,10 +82,12 @@ Enter を拾っているのは個数欄だけで、`addNextRow()`（index.html:8
 | 設定 | `tab-settings` | 現状のまま |
 
 `sheetMode` と `setView()` は廃止する。表示の分岐はタブが担う。
-`STORE_KEY.view` は「最後に見ていた配置系タブ」を保存する用途に変える（値は `edit` / `sheet`）。
 
-旧バージョンでは同じキーに `sheet` / `block` が入っている。
-`block` を読んだら `edit` に読み替える（`sheet` は値が同じなのでそのまま使える）。
+`STORE_KEY.view` も廃止する。
+これは「配置図タブの中でどちらを見ていたか」を覚えるためのものだった。
+起動時は常に入力タブから始まり、配置を作れば配置編集タブへ飛ぶので、
+復元する場面が無くなる。`initView()`（index.html:2036）ごと削除する。
+localStorage に旧値が残るが、読む側が消えるので無害。
 
 ### 空状態
 
@@ -146,13 +148,32 @@ SNP欄が `<select>`（同名で複数SNP登録時、index.html:741）のとき�
 
 ### 条件
 
-各行について、次をすべて満たすとき登録する。
+各行について、次をすべて満たすとき登録の候補にする。
 
 - 品名が空でない
 - SNP > 0
 - `snpsOf(品名)` にその SNP が含まれていない
 
 同名・別SNPは既存仕様どおり別行として追加する（`addMasterRow()` + `onMasterChange()`）。
+
+### 確認ダイアログ
+
+登録は取り消しが効かない。打ち間違い（`部品A` → `部品AA`、SNP `10` → `35`）も
+そのまま恒久的にマスタへ入り、以後その品名の SNP 欄が `<select>` に化けて入力UIが変わる。
+除去手段は設定タブでの手動削除だけ。
+
+そこで**登録の前に品名と SNP を並べた確認ダイアログを出す**。
+
+```
+次の品目が未登録です。「設定」タブに登録しますか？
+
+　・新部品ZZ　SNP 24
+　・新部品YY　SNP 15
+
+（キャンセルしても配置図は作成します）
+```
+
+断っても配置は作る。登録と配置は別の関心事なので、片方を断ってもう片方が止まるのは避ける。
 
 ### 実装位置
 
@@ -173,8 +194,11 @@ function runFromButton(){
 
 ### 通知
 
-`#messages` に「✅ 品目を3件登録しました」を1行追加する。
+`#messages` に「✅ 「設定」タブに登録しました：新部品ZZ(24) / 新部品YY(15)」を1行追加する。
 `renderResult()` が `#messages` を上書きするので、`run()` の後に追記する。
+
+この行はロットを1つ動かすと `redraw()` → `renderResult()` で消えるが、
+登録そのものは設定タブに残るので実害はない。
 
 既存の `snpEntered()` はそのまま残す（SNP欄「＋」からの即時登録は挙動を変えない）。
 
@@ -317,13 +341,28 @@ CSS は `.cell` の `font-size:calc(var(--cell) * .3)` を `.46` に上げ、`fo
   ブラウザ側の制御手段が無く、自前実装以外に選択肢が無い。
 - **enterkeyhint**: Chrome 77+ / iOS Safari 13.4+ で対応。
   Enter キーのラベルを変えるだけで、フォーカス移動は自前の `keydown` 処理が必要。
+- **iOS のテンキーには Enter キーが無い**: ロット欄は `inputmode="tel"`、
+  SNP と個数は `type="number"`。iOS Safari のこれらのキーボードには実行キーが存在せず、
+  `enterkeyhint` も出しようがない。**Enter 連鎖は Android を対象とする**。
+  iPhone では欄をタップして移る従来の操作になる（既存の機能が減るわけではない）。
+  Android の Gboard は数字レイアウトにも実行キーがあるので成立する。
+  ロット欄に「−（ハイフン）」ボタンがあるのは、同じテンキー制約への既存の回避策である。
+- **日本語入力の変換確定**: IME の変換中に押される Enter も `keydown` に届く。
+  ガードしないと、変換候補を確定した瞬間に次の欄へ飛ぶ。
+  Enter と ↑↓ を扱うハンドラの先頭で `ev.isComposing || ev.keyCode===229` を弾く。
 - **visualViewport**: iOS Safari 13+ / Android Chrome で利用可。
   ソフトキーボード表示時の可視領域を取得できる。未対応環境向けのフォールバックを用意する。
 - **blur とタップの順序**: 候補のタップは `blur` → `click` の順に発火するため、
   `blur` でリストを閉じるとタップが届かない。`pointerdown` の `preventDefault()` で回避する。
-- **PWA キャッシュ**: `index.html` の変更は「軽微」ではない。
-  Service Worker が cache-first のため、`sw.js` の `CACHE_VERSION` を **v16 → v17** に上げ、
-  `index.html` と同一コミットに含める。上げ忘れると更新が端末に届かない。
+- **PWA キャッシュ**: `sw.js` の fetch ハンドラは HTML を**ネットワーク優先**、
+  それ以外のアセットをキャッシュ優先にしている。`index.html` 自体はオンラインなら即届く。
+  それでも `CACHE_VERSION` を **v16 → v17** に上げる理由は3つ。
+  `sw.js` が変わることで新しい Service Worker が install され「新しいバージョンがあります」
+  のバーが出ること、`activate` で旧キャッシュが破棄されること、
+  HTML 以外（`manifest.json`・アイコン）はキャッシュ優先なので上げないと古いものが残ること。
+- **secure context**: `http://<IP>` では Service Worker が登録されず standalone にもならない。
+  ローカルの実機確認では PWA としての挙動（アドレスバーの無い画面高さ、
+  オフライン起動）を見られない。GitHub Pages へ反映後に別途確認する。
 - **色数の上限**: カラーユニバーサル対応の質的色数は 8〜9 が上限。18色では原理的に成立しない。
 
 ## 影響範囲
@@ -342,16 +381,35 @@ CSS は `.cell` の `font-size:calc(var(--cell) * .3)` を `.46` に上げ、`fo
 | index.html:1085 | `cellsOf()` が全マスに id を持つ |
 | index.html:1143 | マスの文字をロット番号に |
 | index.html:1157 | `codeShort()` を削除（参照が無くなる） |
-| index.html:1160 | `switchTab()` を4タブに |
-| index.html:1173 | `showMapState()` を2タブ構成に |
+| index.html:1160 | `switchTab()` を4タブに。edit 以外へ移るとき移動・通路編集モードを解除 |
+| index.html:1173 | `showMapState()` を2タブ構成に。表は配置表タブ表示中だけ描く |
+| index.html:1181 | `setCellSize()` のセレクタを `.sizebtn[data-size]` に絞る（下記） |
+| index.html:823 | `addNextRow()` に PC（テーブル）側のフォーカス処理を足す（下記） |
+| index.html:855 | `updateCardFoot()` の SNP 欄セレクタを直す（下記） |
 | index.html:1346 | `toggleMove()` の `setView` を `switchTab` に |
 | index.html:1433 | `runFromButton()` に未登録品目の登録を追加 |
 | index.html:1605 | `setView()` を削除 |
-| index.html:2036 | `initView()` を「最後に見ていた配置系タブ」の復元に変更（旧値 `block` → `edit`） |
+| index.html:2036 | `initView()` を削除（`STORE_KEY.view` ごと廃止） |
 | sw.js:6 | `CACHE_VERSION` を v17 に |
 
 配置アルゴリズム（`place()` / `placeLot()` / `fillMix()`）と
 配置図の表の描画（`renderSheet()` / 引き出し線）には手を入れない。
+
+### ついでに直す既存の不具合
+
+いずれも今回の変更で踏みやすくなるため、同じ変更に含める。
+
+- **`setCellSize()` が他のボタンの選択を消す**（index.html:1181）
+  `.sizebtn` を属性で絞らずに回しているため、マスの大きさを変えると
+  倍率・矢印・角丸の選択も外れる。同一タブ内だった今までは気づけたが、
+  タブを分けると「別タブの表示が壊れる」ことになり原因が見えない。
+- **`addNextRow()` が PC でフォーカスを飛ばさない**（index.html:823）
+  `.lotcard` にしかフォーカスを当てず、`.lotcards` は 601px 以上で `display:none`。
+  PC では行だけが増えてカーソルが動かない。Enter 連鎖を入れると露見する。
+- **`updateCardFoot()` が個数欄を壊す**（index.html:855）
+  SNP 欄を `.fld input` の3番目で引いているが、SNP が `<select>` のカードでは
+  3番目が個数欄になる。品名やロットを打つたびに個数が SNP の値で上書きされる。
+  自動登録は `<select>` に化ける品名を増やす方向に働くので、踏む頻度が上がる。
 
 ## 検証
 
