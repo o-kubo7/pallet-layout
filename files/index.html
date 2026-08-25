@@ -929,10 +929,17 @@ let acIndex=-1;     // ↑↓ で選択中の項目。-1 は未選択
 function acBox(){ return document.getElementById("acList"); }
 function acVisible(){ return !!acInput && !acBox().hidden; }
 
-// マスタの品名（重複を除く）
+/* マスタの品名（重複を除く）。アルファベットで始まるものを先に、その後を五十音順に並べる。
+   numeric:true は「部品10」が「部品2」より前に来るのを防ぐ（連番を数として比べる）。
+   マスタに読み仮名の欄が無いので、漢字は localeCompare の既定（ほぼ文字コード順）になる。
+   ひらがな・カタカナは五十音で正しく並ぶ。登録順のままだと探しにくいのでここで整える */
 function acNames(){
   const names=[]; MASTER.forEach(m=>{ if(!names.includes(m.name)) names.push(m.name); });
-  return names;
+  return names.sort((a,b)=>{
+    const ga=/^[A-Za-z]/.test(a)?0:1, gb=/^[A-Za-z]/.test(b)?0:1;
+    if(ga!==gb) return ga-gb;
+    return a.localeCompare(b,"ja",{numeric:true});
+  });
 }
 // フォーカスしたとき。まだ何も選んでいない状態で開く
 function acOpen(inp){
@@ -1045,8 +1052,29 @@ acBox().addEventListener("pointerup", ev=>{
   const d=acDown; acDown=null;
   if(!d) return;
   if(Math.abs(ev.clientX-d.x)>8 || Math.abs(ev.clientY-d.y)>8) return;   // スクロールとみなす
+  acSwallowNextClick();
   acPick(d.el.dataset.name);
 });
+/* pointerup のあと、ブラウザは click を合成する。そのターゲットは click の時点の座標で
+   決まるので、acPick() がリストを閉じたあとだと、リストの下に隠れていた要素
+   （「＋ 次の荷物」ボタンや種別ボタンなど）が代わりに押されてしまう。
+   pointerdown を preventDefault() すれば click は出ないが、それだとリストを
+   スクロールできなくなる。そこで確定に伴う click だけを1回捨てる。
+   capture で止めるので、onclick 属性のハンドラにも届かない。 */
+let acSwallowClick=false, acSwallowTimer=0;
+function acSwallowNextClick(){
+  acSwallowClick=true;
+  clearTimeout(acSwallowTimer);
+  // click が来ないまま終わる経路でフラグが残り、次の操作を食わないように解除する
+  acSwallowTimer=setTimeout(()=>{ acSwallowClick=false; }, 500);
+}
+document.addEventListener("click", ev=>{
+  if(!acSwallowClick) return;
+  acSwallowClick=false;
+  clearTimeout(acSwallowTimer);
+  ev.stopPropagation();
+  ev.preventDefault();
+}, true);
 // 外側をタップしたら閉じる。品名欄自身と候補の中は除く
 document.addEventListener("pointerdown", ev=>{
   if(!acVisible()) return;
