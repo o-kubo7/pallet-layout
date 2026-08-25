@@ -63,6 +63,7 @@
   .legend{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
   .legend span{display:inline-flex;align-items:center;gap:5px;font-size:12px;background:#f3f4f6;border-radius:6px;padding:4px 8px}
   .swatch{width:13px;height:13px;border-radius:3px;border:1px solid rgba(0,0,0,.2);flex:none}
+  .legend b.lno{font-weight:800;font-size:12px;min-width:14px;text-align:center;flex:none}
   .zone-title{font-weight:700;margin:6px 0;padding:4px 10px;border-radius:6px;display:inline-block;font-size:13px}
   .zone-near{background:#e8f5e9;color:#1b5e20}
   .zone-far{background:#fff3e0;color:#8a5300}
@@ -93,9 +94,10 @@
   .colwrap.blockgap{margin-left:16px}
   .colwrap.editable{cursor:pointer}
   .colwrap.editable:hover .col,.colwrap.editable:hover .hrow{outline:2px solid var(--accent)}
+  /* 文字はロット番号（1〜）。コードより短いので大きくできる */
   .cell{width:var(--cell);height:var(--cell);border:1px solid #cbd5e1;border-radius:2px;background:#fff;overflow:hidden;
-        display:flex;align-items:center;justify-content:center;font-weight:600;color:#1f2937;
-        font-size:calc(var(--cell) * .3);line-height:1;
+        display:flex;align-items:center;justify-content:center;font-weight:800;color:#1f2937;
+        font-size:calc(var(--cell) * .46);line-height:1;
         user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
   .cell.aisle-empty{background:#e5e7eb}
   /* ---- ロットの手動移動 ---- */
@@ -518,8 +520,13 @@ const SAMPLES = {
   ],
 };
 
-const PALETTE=["#93c5fd","#fca5a5","#86efac","#fcd34d","#c4b5fd","#f9a8d4","#7dd3fc","#fdba74",
-  "#a7f3d0","#d8b4fe","#f0abfc","#bef264","#67e8f9","#fda4af","#a5b4fc","#5eead4","#fbcfe8","#bae6fd"];
+// 薄さ（L* 78〜93）とカラフルさを保ったまま、一般色覚での最小色差 ΔE00 を最大化して選んだ18色。
+// 旧パレットは #fca5a5 と #fda4af が ΔE00 3.7 でほぼ同色だった。この18色は最小 14.5。
+// 色相順に並べたものを前半・後半で交互に差し込み、隣り合うロットの色が近づかないようにしてある。
+// ロットの識別はマスの番号が担うので、色は「同じロットのまとまり」を示す補助と位置づける。
+const PALETTE=["#ffadb1","#71d69e","#ffdbcc","#47ffed","#ffaf7a","#c8efef",
+  "#ffbb3d","#3de2ff","#e3cfa0","#8fc7ff","#ffed47","#d7e0f4",
+  "#aed369","#cdb8ff","#dbefc8","#f4d7ee","#3dff64","#ffa3e8"];
 
 let SPACES = clone(DEFAULT_SPACES);
 let MASTER = [];
@@ -1054,7 +1061,7 @@ function renderResult(lots, unknown, typeMix){
   }
 
   document.getElementById("legend").innerHTML=lots.map(l=>
-    `<span><i class="swatch" style="background:${colorOf[l.id]}"></i>${esc(l.name)} / ${esc(l.lot)||"—"}　${l.pallets}P${l.parts>1?`（${l.parts}件）`:""}</span>`).join("");
+    `<span><b class="lno">${l.id+1}</b><i class="swatch" style="background:${colorOf[l.id]}"></i>${esc(l.name)} / ${esc(l.lot)||"—"}　${l.pallets}P${l.parts>1?`（${l.parts}件）`:""}</span>`).join("");
 
   drawZone("zone-far", sp.filter(s=>s.zone==="far"), colorOf);
   drawZone("zone-near", sp.filter(s=>s.zone==="near"), colorOf);
@@ -1104,11 +1111,10 @@ function run(goMap){
 /* ---------- 描画 ---------- */
 // row は列内の行番号（0始まり）。選択とドラッグでマスを特定するために持たせる。
 function cellsOf(col){
-  const arr=Array.from({length:col.h},(_,i)=>({id:null,seg:false,label:"",row:i}));
+  const arr=Array.from({length:col.h},(_,i)=>({id:null,seg:false,row:i}));
   let r=0;
   col.fills.forEach((f,fi)=>{
-    for(let k=0;k<f.count;k++){ if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),label:"",row:r}; r++; } }
-    if(r-1>=0) arr[r-1].label = f.id;
+    for(let k=0;k<f.count;k++){ if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),row:r}; r++; } }
   });
   return arr;
 }
@@ -1140,7 +1146,9 @@ function drawZone(elId, spaces, colorOf){
         const cls=["cell"];
         if(!filled&&col.aisle)cls.push("aisle-empty");
         if(a.seg)cls.push(horizontal?"segline-h":"segline");
-        const label=filled?(codeShort(a.label)):"";
+        // ロットコードは 1111-2222 のように長いことがあり 30px のマスに入らない。
+        // 凡例と同じ通し番号を出す。id は readLots() が付ける0始まりの連番。
+        const label=filled?String(a.id+1):"";
         cells+=`<div class="${cls.join(' ')}" data-row="${a.row}"${filled?` data-lot="${a.id}"`:""}`
               +` style="${bg?'background:'+bg:''}">${label}</div>`;
       });
@@ -1154,7 +1162,6 @@ function drawZone(elId, spaces, colorOf){
     el.appendChild(wrap);
   });
 }
-function codeShort(id){ const l=lastLots&&lastLots.find(x=>x.id===id); return l?esc(l.code):''; }
 
 /* ---------- タブ / 表示状態 ---------- */
 function switchTab(name){
