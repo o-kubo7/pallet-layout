@@ -1377,7 +1377,12 @@ function toggleEdit(){
 function toggleMove(){
   setMoveMode(!moveMode);
   // 配置表タブから押されると掴めるマスが1つも無いので、配置編集タブへ寄せる。
-  if(moveMode){ setEditMode(false); switchTab('edit'); }
+  // ただし switchTab() は無条件で scrollTo(0,0) するので、既に配置編集タブが
+  // 出ているときに呼ぶとページ先頭へ飛ぶだけの空振りになる。表示中は呼ばない。
+  if(moveMode){
+    setEditMode(false);
+    if(document.getElementById("tab-edit").style.display==="none") switchTab('edit');
+  }
   redraw();
 }
 function clearSel(){
@@ -1638,6 +1643,13 @@ function printSheet(){
   switchTab('sheet');
   window.print();
 }
+// ブラウザのメニュー・ショートカット（Ctrl/Cmd+P）から印刷されると printSheet() を経由しない。
+// 配置編集タブのまま印刷CSSで配置表タブを強制表示すると、#sheetView が空のまま紙に出て白紙になる。
+// switchTab('sheet') は中で renderSheet() を呼ぶので、ここで先に表を埋めておく。
+// printSheet() 経由の場合は switchTab('sheet') が二重に走るが、同じタブへの切替なので無害。
+window.addEventListener('beforeprint', ()=>{
+  if(hasResult) switchTab('sheet');
+});
 
 /* ---------- 引き出し線の矢頭 ---------- */
 let arrowHead=true;   // false なら実線だけにする
