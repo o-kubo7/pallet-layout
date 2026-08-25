@@ -648,10 +648,12 @@ function addRow(d){
     </select></td>
     <td><input enterkeyhint="next" value="${esc(d.name)}" placeholder="品名"
                oninput="nameChanged(this);acTyped(this)" onfocus="acOpen(this)" onkeydown="acKey(event,this)"></td>
-    <td><input inputmode="tel" value="${esc(d.lot)}" placeholder="ロット" oninput="rowChanged(this)"></td>
-    <td><input type="number" inputmode="numeric" min="1" value="${esc(d.snp)}" placeholder="SNP" oninput="rowChanged(this)"></td>
-    <td><input type="number" inputmode="numeric" min="1" value="${esc(d.qty)}" placeholder="個数" oninput="rowChanged(this)"
-               onkeydown="if(event.key==='Enter'){event.preventDefault();addNextRow(rowIndexOf(this));}"></td>
+    <td><input inputmode="tel" enterkeyhint="next" value="${esc(d.lot)}" placeholder="ロット"
+               oninput="rowChanged(this)" onkeydown="enterKey(event,this)"></td>
+    <td><input type="number" inputmode="numeric" min="1" enterkeyhint="next" value="${esc(d.snp)}" placeholder="SNP"
+               oninput="rowChanged(this)" onkeydown="enterKey(event,this)"></td>
+    <td><input type="number" inputmode="numeric" min="1" enterkeyhint="done" value="${esc(d.qty)}" placeholder="個数" oninput="rowChanged(this)"
+               onkeydown="if(event.isComposing||event.keyCode===229)return;if(event.key==='Enter'){event.preventDefault();addNextRow(rowIndexOf(this));}"></td>
     <td class="pallet-cell">-</td>
     <td><button class="btn-mini" onclick="removeRow(this)">削除</button></td>`;
   tb.appendChild(tr);
@@ -766,10 +768,13 @@ function syncCards(){
     if(useSelect){
       const opts=list.map(s=>`<option value="${s}" ${s===v.snp?"selected":""}>${s}</option>`).join("");
       const cur = list.includes(v.snp) ? "" : `<option value="${v.snp}" selected>${v.snp}</option>`;
-      snpField=`<select onchange="cardSnpSelect(${i},this.value)">${cur}${opts}</select>`;
+      snpField=`<select data-card="${i}" onchange="cardSnpSelect(${i},this.value)"
+                        onkeydown="enterKey(event,this)">${cur}${opts}</select>`;
     }else{
-      snpField=`<input type="number" inputmode="numeric" min="1" value="${v.snp||""}" placeholder="SNP"
-                       oninput="cardEdit(${i},3,this.value)" onchange="snpEntered(${i})">`;
+      snpField=`<input type="number" inputmode="numeric" min="1" enterkeyhint="next" data-card="${i}"
+                       value="${v.snp||""}" placeholder="SNP"
+                       oninput="cardEdit(${i},3,this.value)" onchange="snpEntered(${i})"
+                       onkeydown="enterKey(event,this)">`;
     }
     // SNP欄の右のボタン：追加入力中は取り消し、それ以外は「＋（SNPを追加）」
     const snpBtn = custom
@@ -788,13 +793,15 @@ function syncCards(){
                oninput="cardEdit(${i},1,this.value);acTyped(this)" onfocus="acOpen(this)"
                onkeydown="acKey(event,this)"></div>
       <div class="fld" data-f="lot"><label>ロット</label>
-        <input inputmode="tel" value="${esc(v.lot)}" placeholder="ロット" oninput="cardEdit(${i},2,this.value)">
+        <input inputmode="tel" enterkeyhint="next" data-card="${i}" value="${esc(v.lot)}" placeholder="ロット"
+               oninput="cardEdit(${i},2,this.value)" onkeydown="enterKey(event,this)">
         <button class="hyph" onclick="addHyphen(${i})" title="ハイフンを入力">−</button></div>
       <div class="fld" data-f="snp"><label>SNP</label>${snpField}${snpBtn}</div>
       <div class="fld" data-f="qty"><label>個数</label>
-        <input type="number" inputmode="numeric" min="1" value="${v.qty||""}" placeholder="個数"
+        <input type="number" inputmode="numeric" min="1" enterkeyhint="done" data-card="${i}"
+               value="${v.qty||""}" placeholder="個数"
                oninput="cardEdit(${i},4,this.value)"
-               onkeydown="if(event.key==='Enter'){event.preventDefault();addNextRow(${i});}"></div>
+               onkeydown="if(event.isComposing||event.keyCode===229)return;if(event.key==='Enter'){event.preventDefault();addNextRow(${i});}"></div>
       <div class="foot"><span class="hint">パレット数</span><span class="val${warn}">${p.text}</span></div>
       <button class="nextbtn" onclick="addNextRow(${i})">＋ 次の荷物</button>
     </div>`;
@@ -826,7 +833,9 @@ function snpCancel(i){
   recalcRow(tr); saveLots(); syncCards();
 }
 function focusField(i,f){
-  const inp=document.querySelector(`.lotcard[data-i="${i}"] .fld[data-f="${f}"] input`);
+  // SNP欄は候補が2つ以上あると <select> になるので、input だけを探すと当たらない
+  const sel=`.lotcard[data-i="${i}"] .fld[data-f="${f}"] input,.lotcard[data-i="${i}"] .fld[data-f="${f}"] select`;
+  const inp=document.querySelector(sel);
   if(inp){ inp.focus(); try{ inp.setSelectionRange(inp.value.length,inp.value.length); }catch(e){} }
   return inp;
 }
@@ -860,11 +869,21 @@ function addNextRow(i){
   // 末尾が空行ならそこへ移動、そうでなければ追加
   if(!last || rowValues(last).qty>0 || rowValues(last).name){ addRow(); }
   syncCards(); saveLots();
+  // PC はカードが display:none なので、カード側だけを見ていると何も起きない。
+  // 表示されているほうの品名欄へ送る
   const cards=document.querySelectorAll(".lotcard");
   const target=cards[cards.length-1];
-  if(target){
+  if(target && target.offsetParent!==null){
     target.scrollIntoView({behavior:"smooth", block:"center"});
     const inp=target.querySelector('.fld[data-f="name"] input');
+    if(inp) inp.focus();
+    return;
+  }
+  const trs=document.querySelectorAll("#lotTable tbody tr");
+  const tr=trs[trs.length-1];
+  if(tr){
+    tr.scrollIntoView({behavior:"smooth", block:"center"});
+    const inp=tr.querySelectorAll("select,input")[1];   // [0]=種別, [1]=品名
     if(inp) inp.focus();
   }
 }
@@ -1004,6 +1023,7 @@ function acKey(ev, inp){
   ev.preventDefault();
   if(open && acIndex>=0){ acPick(items[acIndex].dataset.name); return; }
   acClose();
+  nextField(inp);   // 候補を選ばずに Enter → ロット欄へ
 }
 
 /* 候補の確定。
@@ -1036,6 +1056,38 @@ window.addEventListener("resize", ()=>{ if(acVisible()) acPosition(); });
 if(window.visualViewport){
   window.visualViewport.addEventListener("resize", ()=>{ if(acVisible()) acPosition(); });
   window.visualViewport.addEventListener("scroll", ()=>{ if(acVisible()) acPosition(); });
+}
+
+/* ---------- 入力欄の Enter 遷移 ----------
+   品名 → ロット → SNP → 個数 → 次の行の品名 の順に送る。種別はボタンなので飛ばす。
+   カードとテーブルのどちらから呼ばれても動くよう、data-card の有無で見分ける。 */
+const FIELD_ORDER=["name","lot","snp","qty"];
+
+function nextField(el){
+  const card=el.dataset.card;
+  if(card!=null){
+    const i=parseInt(card);
+    const cur=el.closest(".fld");
+    const f=cur?cur.dataset.f:null;
+    const k=FIELD_ORDER.indexOf(f);
+    if(k>=0 && k<FIELD_ORDER.length-1){ focusField(i, FIELD_ORDER[k+1]); return; }
+    addNextRow(i);   // 個数まで来たら次の行へ
+    return;
+  }
+  // テーブル側。c は [種別select, 品名, ロット, SNP, 個数] の5つ
+  const c=[...el.closest("tr").querySelectorAll("select,input")];
+  const k=c.indexOf(el);
+  const nx=c[k+1];
+  if(nx){ nx.focus(); try{ nx.setSelectionRange(nx.value.length,nx.value.length); }catch(e){} return; }
+  addNextRow(rowIndexOf(el));
+}
+
+// ロット欄と SNP 欄の keydown。候補は出ないので Enter だけ見る
+function enterKey(ev, el){
+  if(ev.isComposing || ev.keyCode===229) return;   // 日本語の変換確定を奪わない
+  if(ev.key!=="Enter") return;
+  ev.preventDefault();
+  nextField(el);
 }
 
 /* ---------- 配置アルゴリズム ---------- */
