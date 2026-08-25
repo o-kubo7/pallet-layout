@@ -31,8 +31,12 @@
   インライン表示するため、ドロップダウンにならない。ブラウザ側の制御手段は無い
 - **候補リストを入力欄の親の中に置かない。** カードは `syncCards()` で毎回作り直されるため、
   入力中にリストごと消える。`<body>` 直下に1つだけ置き `position:fixed` で位置を合わせる
-- **候補の確定は `pointerdown` の `preventDefault()` とセットで実装する。** そうしないと
-  `blur` が先に走ってリストが閉じ、タップが届かない
+- **候補の確定は `pointerdown` + `pointerup` の移動しきい値で判定し、`blur` では閉じない。**
+  よくある実装は `pointerdown` を `preventDefault()` してフォーカスを保つ形だが、
+  それをやると候補リストをタッチでスクロールできなくなる（既定のマスタは24件あるので実害が出る）。
+  代わりに `pointerdown` で対象と座標を控え、`pointerup` までの移動が小さいときだけ確定する。
+  閉じるのは「外側の `pointerdown`」「Esc」「確定時」だけにし、`blur` のリスナは置かない。
+  そうしないと `blur` が先に走ってリストが閉じ、タップが届かない
 - **`enterkeyhint` はキーの見た目を変えるだけ。** フォーカス移動は `keydown` で自分で行う
 - **マスの文字はロットコードではなくロット番号（素の数字）にする。** ロットコードは
   `1111-2222` のように長く、30px のマスに入らない
@@ -1514,7 +1518,7 @@ function enterKey(ev, el){
                oninput="rowChanged(this)" onkeydown="enterKey(event,this)"></td>
 ```
 
-- [ ] **Step 5: テーブルの個数欄に `enterkeyhint` を足す**
+- [ ] **Step 5: テーブルの個数欄に `enterkeyhint` と IME ガードを足す**
 
 変更前（`onkeydown="if(event.key==='Enter'){event.preventDefault();addNextRow(rowIndexOf(this));}"` で検索。
 テーブル側の1か所）:
@@ -1528,7 +1532,7 @@ function enterKey(ev, el){
 
 ```html
     <td><input type="number" inputmode="numeric" min="1" enterkeyhint="done" value="${esc(d.qty)}" placeholder="個数" oninput="rowChanged(this)"
-               onkeydown="if(event.key==='Enter'){event.preventDefault();addNextRow(rowIndexOf(this));}"></td>
+               onkeydown="if(event.isComposing||event.keyCode===229)return;if(event.key==='Enter'){event.preventDefault();addNextRow(rowIndexOf(this));}"></td>
 ```
 
 - [ ] **Step 6: カードのロット欄に配線する**
@@ -1581,7 +1585,7 @@ function enterKey(ev, el){
     }
 ```
 
-- [ ] **Step 8: カードの個数欄に `enterkeyhint` と `data-card` を足す**
+- [ ] **Step 8: カードの個数欄に `enterkeyhint` と `data-card` と IME ガードを足す**
 
 変更前（`syncCards()` の中。`<div class="fld" data-f="qty"><label>個数</label>` で検索）:
 
@@ -1599,7 +1603,7 @@ function enterKey(ev, el){
         <input type="number" inputmode="numeric" min="1" enterkeyhint="done" data-card="${i}"
                value="${v.qty||""}" placeholder="個数"
                oninput="cardEdit(${i},4,this.value)"
-               onkeydown="if(event.key==='Enter'){event.preventDefault();addNextRow(${i});}"></div>
+               onkeydown="if(event.isComposing||event.keyCode===229)return;if(event.key==='Enter'){event.preventDefault();addNextRow(${i});}"></div>
 ```
 
 - [ ] **Step 9: PC のブラウザで確認する**
