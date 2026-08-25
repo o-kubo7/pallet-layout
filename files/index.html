@@ -26,7 +26,9 @@
 
   /* ---- タブ ---- */
   .tabs{display:flex;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
-  .tab{flex:1;border:0;background:none;padding:13px 6px;font-size:14px;font-weight:700;color:var(--muted);
+  /* 4タブになったので、iPhone SE 幅（375px）でも折り返さないよう詰める */
+  .tab{flex:1;border:0;background:none;padding:13px 3px;font-size:13px;font-weight:700;color:var(--muted);
+       white-space:nowrap;
        cursor:pointer;border-bottom:3px solid transparent;min-height:48px}
   .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
   .tab .dot{display:inline-block;margin-left:5px;font-size:11px;background:#eef2ff;color:#3730a3;
@@ -255,7 +257,10 @@
 
   @media print{
     @page{size:A4 landscape;margin:8mm}
-    header,.tabs,.actionbar,#updateBar,.sizectl,#mapBody,#messages,#regInfo,#saveStatus,.note,.hint{display:none !important}
+    header,.tabs,.actionbar,#updateBar,.sizectl,#messages,#regInfo,#saveStatus,.note,.hint{display:none !important}
+    /* どのタブを開いていても、紙には配置表だけを出す */
+    .tabpanel{display:none !important}
+    #tab-sheet{display:block !important}
     .wrap{padding:0;max-width:none}
     .card{border:0;padding:0;margin:0}
     .card h2{display:none}
@@ -280,7 +285,8 @@
 
 <div class="tabs">
   <button class="tab active" id="tabbtn-input" onclick="switchTab('input')">入力</button>
-  <button class="tab" id="tabbtn-map" onclick="switchTab('map')">配置図</button>
+  <button class="tab" id="tabbtn-edit" onclick="switchTab('edit')">配置編集</button>
+  <button class="tab" id="tabbtn-sheet" onclick="switchTab('sheet')">配置表</button>
   <button class="tab" id="tabbtn-settings" onclick="switchTab('settings')">設定<span class="dot" id="regDot">0</span></button>
 </div>
 
@@ -350,10 +356,10 @@
     </div>
   </div>
 
-  <!-- ===== 配置図タブ ===== -->
-  <div id="tab-map" class="tabpanel" style="display:none">
-    <div class="card" id="resultCard">
-      <h2>配置図
+  <!-- ===== 配置編集タブ（ブロック図：移動と通路編集はここでだけできる） ===== -->
+  <div id="tab-edit" class="tabpanel" style="display:none">
+    <div class="card" id="editCard">
+      <h2>配置編集
         <button id="moveBtn" class="btn btn-ghost" style="margin-left:auto" onclick="toggleMove()">ロットを移動</button>
         <button id="editBtn" class="btn btn-ghost" style="margin-left:8px" onclick="toggleEdit()">通路を編集</button>
       </h2>
@@ -361,31 +367,7 @@
       <div id="moveHint" class="hint" style="display:none;margin-bottom:8px">✋ 移動モード：同じロットのマスをタップして選び、選んだマスをドラッグして別の列へ運びます。
         <button class="btn-mini" onclick="clearSel()">選択解除</button></div>
 
-      <div class="sizectl">
-        <span class="lbl">表示</span>
-        <button class="sizebtn on" data-view="sheet" onclick="setView('sheet')">配置図の表</button>
-        <button class="sizebtn" data-view="block" onclick="setView('block')">ブロック図</button>
-        <button class="btn btn-ghost" style="margin-left:auto" onclick="window.print()">🖨 印刷</button>
-      </div>
-
-      <div class="sizectl" id="zoomCtl">
-        <span class="lbl">表示倍率</span>
-        <button class="sizebtn on" data-zoom="auto" onclick="setSheetZoom('auto')">自動</button>
-        <button class="sizebtn" data-zoom="1" onclick="setSheetZoom('1')">100%</button>
-        <button class="sizebtn" data-zoom="1.5" onclick="setSheetZoom('1.5')">150%</button>
-        <button class="sizebtn" data-zoom="2" onclick="setSheetZoom('2')">200%</button>
-        <span class="grp"><span class="lbl">矢印の先</span>
-          <button class="sizebtn on" data-arrow="1" onclick="setArrowHead(true)">あり</button>
-          <button class="sizebtn" data-arrow="0" onclick="setArrowHead(false)">なし</button></span>
-        <span class="grp"><span class="lbl">角の丸み</span>
-          <button class="sizebtn on" data-corner="1" onclick="setLotCorner(true)">あり</button>
-          <button class="sizebtn" data-corner="0" onclick="setLotCorner(false)">なし</button></span>
-        <span class="lbl" id="zoomNow"></span>
-      </div>
-
-      <div id="sheetView"></div>
-
-      <div class="sizectl" id="sizeCtl" style="display:none">
+      <div class="sizectl" id="sizeCtl">
         <span class="lbl">マスの大きさ</span>
         <button class="sizebtn" data-size="20" onclick="setCellSize(20)">小</button>
         <button class="sizebtn on" data-size="30" onclick="setCellSize(30)">中</button>
@@ -414,7 +396,34 @@
         </div>
         <div class="summary" id="summary"></div>
       </div>
-      <div class="empty" id="mapEmpty">「入力」タブで荷物を入れて<br>「自動配置を作成」を押してください</div>
+      <div class="empty" id="editEmpty">「入力」タブで荷物を入れて<br>「自動配置を作成」を押してください</div>
+    </div>
+  </div>
+
+  <!-- ===== 配置表タブ（印刷はこちら。印刷CSSが配置編集タブを隠す） ===== -->
+  <div id="tab-sheet" class="tabpanel" style="display:none">
+    <div class="card" id="sheetCard">
+      <h2>配置表
+        <button class="btn btn-ghost" style="margin-left:auto" onclick="printSheet()">🖨 印刷</button>
+      </h2>
+
+      <div class="sizectl" id="zoomCtl">
+        <span class="lbl">表示倍率</span>
+        <button class="sizebtn on" data-zoom="auto" onclick="setSheetZoom('auto')">自動</button>
+        <button class="sizebtn" data-zoom="1" onclick="setSheetZoom('1')">100%</button>
+        <button class="sizebtn" data-zoom="1.5" onclick="setSheetZoom('1.5')">150%</button>
+        <button class="sizebtn" data-zoom="2" onclick="setSheetZoom('2')">200%</button>
+        <span class="grp"><span class="lbl">矢印の先</span>
+          <button class="sizebtn on" data-arrow="1" onclick="setArrowHead(true)">あり</button>
+          <button class="sizebtn" data-arrow="0" onclick="setArrowHead(false)">なし</button></span>
+        <span class="grp"><span class="lbl">角の丸み</span>
+          <button class="sizebtn on" data-corner="1" onclick="setLotCorner(true)">あり</button>
+          <button class="sizebtn" data-corner="0" onclick="setLotCorner(false)">なし</button></span>
+        <span class="lbl" id="zoomNow"></span>
+      </div>
+
+      <div id="sheetView"></div>
+      <div class="empty" id="sheetEmpty">「入力」タブで荷物を入れて<br>「自動配置を作成」を押してください</div>
     </div>
   </div>
 
@@ -534,10 +543,9 @@ let editMode=false;
 let lastLots=null, lastColor=null, lastSp=null;
 let hasResult=false;
 let fracMode=false;   // true なら「満載数P 半」表記
-let sheetMode=true;  // 配置図タブの表示（true=配置図の表 / false=ブロック図）
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", view:"palletApp.view", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual"};
 let storageOK=true;
 const memStore={};
 (function(){
@@ -1089,13 +1097,13 @@ function run(goMap){
     hasResult=false; lastLots=null;
     document.getElementById("messages").innerHTML=inputWarnHtml(unknown, typeMix);
     showMapState();
-    document.getElementById("mapEmpty").style.display="none";
+    document.getElementById("editEmpty").style.display="none";
     document.getElementById("mapBody").style.display="block";
     document.getElementById("legend").innerHTML="";
     document.getElementById("zone-far").innerHTML="";
     document.getElementById("zone-near").innerHTML="";
     document.getElementById("summary").textContent="";
-    if(goMap) switchTab('map');
+    if(goMap) switchTab('edit');
     return;
   }
 
@@ -1105,7 +1113,7 @@ function run(goMap){
   clearManual();               // 配置し直したので手動調整は捨てる
 
   renderResult(lots, unknown, typeMix);
-  if(goMap) switchTab('map');
+  if(goMap) switchTab('edit');
 }
 
 /* ---------- 描画 ---------- */
@@ -1165,28 +1173,44 @@ function drawZone(elId, spaces, colorOf){
 
 /* ---------- タブ / 表示状態 ---------- */
 function switchTab(name){
-  ["input","map","settings"].forEach(t=>{
+  ["input","edit","sheet","settings"].forEach(t=>{
     document.getElementById("tab-"+t).style.display = (t===name)?"":"none";
     document.getElementById("tabbtn-"+t).classList.toggle("active", t===name);
   });
   document.getElementById("actionBar").style.display = (name==="input")?"":"none";
   window.scrollTo(0,0);
+  // 移動モードと通路編集モードは配置編集タブでしか操作できない。
+  // 他のタブへ移ったら解除する。残すと、戻ってきたとき「なぜかマスが選べる」状態になる
+  if(name!=="edit" && (moveMode || editMode)){
+    setMoveMode(false); setEditMode(false);
+    redraw();   // editable クラスは DOM に焼き込まれているので描き直して落とす
+  }
   // 表は表示されて初めて幅が測れるので、タブに来たタイミングで再描画・倍率決定する
-  // （表モードで結果があるときは renderSheet() が末尾で applySheetZoom() も呼ぶ）
-  if(name==="map"){
-    if(sheetMode && hasResult) renderSheet(); else applySheetZoom();
+  // （結果があるときは renderSheet() が末尾で applySheetZoom() も呼ぶ）
+  if(name==="sheet"){
+    if(hasResult) renderSheet(); else applySheetZoom();
   }
 }
 function showMapState(){
-  document.getElementById("mapEmpty").style.display = hasResult?"none":"block";
-  document.getElementById("mapBody").style.display  = (hasResult&&!sheetMode)?"block":"none";
-  document.getElementById("sheetView").style.display= sheetMode?"":"none";
-  document.getElementById("sizeCtl").style.display  = sheetMode?"none":"flex";
-  if(hasResult&&sheetMode) renderSheet(); else if(!hasResult) document.getElementById("sheetView").innerHTML="";
+  // 配置編集タブと配置表タブは独立しているので、それぞれの空表示を出し分ける
+  document.getElementById("editEmpty").style.display  = hasResult?"none":"block";
+  document.getElementById("sheetEmpty").style.display = hasResult?"none":"block";
+  document.getElementById("mapBody").style.display    = hasResult?"block":"none";
+  document.getElementById("sizeCtl").style.display    = hasResult?"flex":"none";
+  document.getElementById("zoomCtl").style.display    = hasResult?"flex":"none";
+  // 表を描くのは配置表タブを開いたときだけにする。
+  // ここは renderResult() から呼ばれ、renderResult() は redraw() 経由で
+  // ロットを1マス動かすたびに走る。見ていない表を毎回組み直すのは無駄
+  if(hasResult){
+    if(document.getElementById("tab-sheet").style.display!=="none") renderSheet();
+  }else{
+    document.getElementById("sheetView").innerHTML="";
+  }
 }
 function setCellSize(px){
   document.documentElement.style.setProperty("--cell", px+"px");
-  document.querySelectorAll(".sizebtn").forEach(b=>
+  // [data-size] に絞る。絞らないと配置表タブの倍率・矢印・角丸の選択まで外れる
+  document.querySelectorAll(".sizebtn[data-size]").forEach(b=>
     b.classList.toggle("on", parseInt(b.dataset.size)===px));
   saveData(STORE_KEY.cell, px);
 }
@@ -1352,9 +1376,8 @@ function toggleEdit(){
 // 描き直して落とす。
 function toggleMove(){
   setMoveMode(!moveMode);
-  // 既定は「配置図の表」なので、そのまま移動モードに入ると掴めるマスが1つも無い。
-  // 移動モードに入るときはブロック図へ寄せる。
-  if(moveMode){ setEditMode(false); if(sheetMode) setView('block'); }
+  // 配置表タブから押されると掴めるマスが1つも無いので、配置編集タブへ寄せる。
+  if(moveMode){ setEditMode(false); switchTab('edit'); }
   redraw();
 }
 function clearSel(){
@@ -1609,16 +1632,11 @@ function setTiming(t){
   saveData(STORE_KEY.head,{date:headDate,timing:headTiming});
   if(hasResult) renderSheet();
 }
-function setView(v){
-  sheetMode=(v==="sheet");
-  document.querySelectorAll(".sizebtn[data-view]").forEach(b=>
-    b.classList.toggle("on", b.dataset.view===v));
-  document.getElementById("sheetView").style.display = sheetMode?"":"none";
-  document.getElementById("mapBody").style.display   = (!sheetMode && hasResult)?"block":"none";
-  document.getElementById("sizeCtl").style.display   = sheetMode?"none":"flex";
-  document.getElementById("zoomCtl").style.display   = sheetMode?"flex":"none";
-  saveData(STORE_KEY.view, v);
-  if(sheetMode && hasResult) renderSheet();
+// 印刷は表だけを出す（印刷CSSが #tab-edit を隠す）。
+// 表は表示されて初めて幅が測れるので、印刷の前に配置表タブへ寄せて描き直す。
+function printSheet(){
+  switchTab('sheet');
+  window.print();
 }
 
 /* ---------- 引き出し線の矢頭 ---------- */
@@ -1629,7 +1647,7 @@ function setArrowHead(on){
   document.querySelectorAll(".sizebtn[data-arrow]").forEach(b=>
     b.classList.toggle("on", (b.dataset.arrow==="1")===arrowHead));
   saveData(STORE_KEY.arrow, arrowHead);
-  if(sheetMode && hasResult) renderSheet();
+  if(hasResult) renderSheet();
 }
 
 /* ---------- ロットの太枠の角丸 ---------- */
@@ -1679,7 +1697,7 @@ function applySheetZoom(){
   const now=document.getElementById("zoomNow");
   if(now) now.textContent = (sheetZoom==="auto")?`（${Math.round(z*100)}%）`:"";
 }
-window.addEventListener("resize", ()=>{ if(sheetMode && sheetZoom==="auto") applySheetZoom(); });
+window.addEventListener("resize", ()=>{ if(sheetZoom==="auto") applySheetZoom(); });
 
 // ロットの最後のマスがあるエリア名。分割配置は lastSp の並び順（メイン→軒下→PC横→EV横）に
 // 詰めていくので、そのロットのマスを持つ最後のスペースが末尾になる。
@@ -2037,16 +2055,6 @@ updateSaveStatus();
   document.getElementById("dowHint").textContent=`（${DOW[d.getDay()]}曜日）`;
   document.getElementById("tmAM").classList.toggle("on",headTiming==="あさ");
   document.getElementById("tmPM").classList.toggle("on",headTiming==="ひる");
-})();
-
-// 配置図タブの表示モード
-(function initView(){
-  const v=loadData(STORE_KEY.view);
-  if(v){ sheetMode=(v==="sheet"); }
-  document.querySelectorAll(".sizebtn[data-view]").forEach(b=>
-    b.classList.toggle("on", b.dataset.view===(sheetMode?"sheet":"block")));
-  document.getElementById("sizeCtl").style.display = sheetMode?"none":"flex";
-  document.getElementById("zoomCtl").style.display = sheetMode?"flex":"none";
 })();
 
 // 配置図の表の表示倍率：保存があれば復元
