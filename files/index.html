@@ -1052,29 +1052,35 @@ acBox().addEventListener("pointerup", ev=>{
   const d=acDown; acDown=null;
   if(!d) return;
   if(Math.abs(ev.clientX-d.x)>8 || Math.abs(ev.clientY-d.y)>8) return;   // スクロールとみなす
-  acSwallowNextClick();
+  acSwallowMouseCompat();
   acPick(d.el.dataset.name);
 });
-/* pointerup のあと、ブラウザは click を合成する。そのターゲットは click の時点の座標で
-   決まるので、acPick() がリストを閉じたあとだと、リストの下に隠れていた要素
-   （「＋ 次の荷物」ボタンや種別ボタンなど）が代わりに押されてしまう。
-   pointerdown を preventDefault() すれば click は出ないが、それだとリストを
-   スクロールできなくなる。そこで確定に伴う click だけを1回捨てる。
-   capture で止めるので、onclick 属性のハンドラにも届かない。 */
-let acSwallowClick=false, acSwallowTimer=0;
-function acSwallowNextClick(){
-  acSwallowClick=true;
+/* タッチでは pointerup のあと、ブラウザが mousedown → mouseup → click を合成する
+   （互換マウスイベント）。そのターゲットはどれも発生時点の座標で決まるので、
+   acPick() がリストを閉じたあとだと、リストの下に隠れていた要素が受け取ってしまう。
+   - click が当たると、その要素の onclick が走る（「＋ 次の荷物」ボタンなど）
+   - mousedown が当たると、既定動作でフォーカスがそこへ移り、
+     acPick() がロット欄に置いたフォーカスが奪われる
+   pointerdown を preventDefault() すれば互換イベントは出ないが、それだと
+   リストをスクロールできなくなる。そこで確定に伴う一連の互換イベントを捨てる。
+   capture で止めるので onclick 属性のハンドラにも届かず、
+   mousedown の preventDefault でフォーカス移動も止まる。 */
+let acSwallowTap=false, acSwallowTimer=0;
+function acSwallowMouseCompat(){
+  acSwallowTap=true;
   clearTimeout(acSwallowTimer);
-  // click が来ないまま終わる経路でフラグが残り、次の操作を食わないように解除する
-  acSwallowTimer=setTimeout(()=>{ acSwallowClick=false; }, 500);
+  // 互換イベントが来ないまま終わる経路でフラグが残り、次の操作を食わないように解除する
+  acSwallowTimer=setTimeout(()=>{ acSwallowTap=false; }, 500);
 }
-document.addEventListener("click", ev=>{
-  if(!acSwallowClick) return;
-  acSwallowClick=false;
-  clearTimeout(acSwallowTimer);
-  ev.stopPropagation();
-  ev.preventDefault();
-}, true);
+["mousedown","mouseup","click"].forEach(type=>{
+  document.addEventListener(type, ev=>{
+    if(!acSwallowTap) return;
+    // 一連の最後が click。ここまで来たら解除する
+    if(type==="click"){ acSwallowTap=false; clearTimeout(acSwallowTimer); }
+    ev.stopPropagation();
+    ev.preventDefault();
+  }, true);
+});
 // 外側をタップしたら閉じる。品名欄自身と候補の中は除く
 document.addEventListener("pointerdown", ev=>{
   if(!acVisible()) return;
