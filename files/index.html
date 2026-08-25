@@ -972,12 +972,16 @@ function acPosition(){
   const barH=(bar && bar.style.display!=="none") ? bar.getBoundingClientRect().height : 0;
   box.style.left  = r.left+"px";
   box.style.width = r.width+"px";
+  // maxHeight を外すとリストが実寸まで広がり、スクロール不要になって scrollTop が 0 に潰れる。
+  // キーボードの出入りで visualViewport が動くたびここへ来るので、控えて最後に戻す
+  const keep=box.scrollTop;
   box.style.maxHeight="";                        // 実寸を測るため一旦外す
   const want=Math.min(box.scrollHeight, vh*0.44);
   const below=(vTop+vh-barH)-r.bottom-8;         // 欄の下に残っている高さ
   const above=r.top-vTop-8;                      // 欄の上に残っている高さ
   if(below>=want || below>=above){ box.style.top=(r.bottom+4)+"px"; box.style.maxHeight=Math.max(Math.min(want,below),60)+"px"; }
   else                           { const h=Math.max(Math.min(want,above),60); box.style.top=(r.top-h-4)+"px"; box.style.maxHeight=h+"px"; }
+  box.scrollTop=keep;
 }
 function acClose(){ acInput=null; acIndex=-1; acBox().hidden=true; }
 
@@ -1060,8 +1064,16 @@ document.addEventListener("focusin", ev=>{
   if(ev.target.closest && ev.target.closest("#acList")) return;
   acClose();
 });
-// 欄が動いたら位置を合わせ直す
-window.addEventListener("scroll", ()=>{ if(acVisible()) acPosition(); }, true);
+// 欄が動いたら位置を合わせ直す。
+// capture:true は「祖先のどれがスクロールしても品名欄が動く」を拾うためだが、
+// そのぶん候補リスト自身のスクロールまで届く。それで acPosition() を走らせると
+// リストを指で送るたびに位置決めが割り込み、スクロールが戻される。ここでは無視する
+window.addEventListener("scroll", ev=>{
+  if(!acVisible()) return;
+  const t=ev.target;
+  if(t && t.nodeType===1 && t.closest("#acList")) return;
+  acPosition();
+}, true);
 window.addEventListener("resize", ()=>{ if(acVisible()) acPosition(); });
 if(window.visualViewport){
   window.visualViewport.addEventListener("resize", ()=>{ if(acVisible()) acPosition(); });
