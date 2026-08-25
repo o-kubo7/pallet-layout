@@ -1464,10 +1464,54 @@ function restoreManual(){
     return false;
   }
 }
+/* 入力にあってマスタに無い「品名＋SNP」を集める。ここではマスタを変更しない。
+   seen で重ねているのは、同じ品名＋SNPが2行あるときに2件と数えないため。 */
+function unknownItems(){
+  const out=[], seen={};
+  [...document.querySelectorAll("#lotTable tbody tr")].forEach(tr=>{
+    const v=rowValues(tr);
+    if(!v.name || v.snp<=0) return;
+    if(snpsOf(v.name).includes(v.snp)) return;
+    const key=v.name+"\u0000"+v.snp;   // readLots() と同じ区切り方
+    if(seen[key]) return;
+    seen[key]=1;
+    out.push({name:v.name, snp:v.snp});
+  });
+  return out;
+}
+// 集めた品目をマスタへ足す
+function registerItems(list){
+  if(!list.length) return;
+  list.forEach(m=>addMasterRow(m));
+  onMasterChange();   // 保存・候補更新・パレット数の再計算
+}
 // 「▶ 自動配置を作成」の入口。手動調整があるときだけ確認する。
 function runFromButton(){
   if(hasManual() && !confirm("手動調整を破棄して自動配置し直します。よろしいですか？")) return;
+
+  // 未登録の品目は、何を入れるか見せてから登録する。
+  // 打ち間違いをそのままマスタへ入れると、以後その品名のSNP欄がプルダウンに化ける
+  const add=unknownItems();
+  let added=[];
+  if(add.length){
+    const list=add.map(m=>`　・${m.name}　SNP ${m.snp}`).join("\n");
+    if(confirm(`次の品目が未登録です。「設定」タブに登録しますか？\n\n${list}\n\n`
+              +`（キャンセルしても配置図は作成します）`)){
+      registerItems(add);
+      added=add;
+    }
+  }
+
   run(true);
+
+  // run() の中の renderResult() が #messages を上書きするので、そのあとに足す。
+  // ロットを動かすと redraw() → renderResult() でこの行は消えるが、
+  // 登録そのものは設定タブに残るので実害は無い
+  if(added.length){
+    const names=added.map(m=>`${esc(m.name)}(${m.snp})`).join(" / ");
+    document.getElementById("messages").innerHTML +=
+      `<div class="msg ok">✅ 「設定」タブに登録しました：${names}</div>`;
+  }
 }
 
 function wrapAt(x,y){
