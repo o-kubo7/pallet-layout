@@ -1457,7 +1457,11 @@ function nextField(el){
     const cur=el.closest(".fld");
     const f=cur?cur.dataset.f:null;
     const k=FIELD_ORDER.indexOf(f);
-    if(k>=0 && k<FIELD_ORDER.length-1){ focusField(i, FIELD_ORDER[k+1]); return; }
+    // SNP欄(自由入力)は onchange="snpEntered()" を持ち、そこから saveLots()→syncCards() が
+    // #lotCards を丸ごと作り直す。focusField() を先に呼ぶと、その focus で発生する同期的な
+    // blur で change が発火し、掴んだばかりの次欄が syncCards() の作り直しで DOM から
+    // 消えてフォーカスが body に落ちる。先に blur() で change を確定させてから focusField() する。
+    if(k>=0 && k<FIELD_ORDER.length-1){ el.blur(); focusField(i, FIELD_ORDER[k+1]); return; }
     addNextRow(i);   // 個数まで来たら次の行へ
     return;
   }
@@ -1734,6 +1738,14 @@ DevTools の "Bypass for network" を**外して**リロードする。
 8. 「▶ 自動配置を作成」を押す
 9. 確認ダイアログに `新品目AA　SNP 12` が出るので OK を押す
 10. **配置編集タブ**へ飛び、「✅ 「設定」タブに登録しました：新品目AA(12)」が出ること
+
+> **項目9・10 は PC のテーブル入力で確認する。**
+> カード（スマホ幅）の SNP 欄には `onchange="snpEntered(i)"` が付いており、
+> SNP を自由入力して欄を離れた時点で品目マスタへ即時登録される。これは Task 3 より前からある
+> 意図的な挙動（カードで SNP を自由入力する＝利用者が明示的に確定させた行為）なので、そのまま残す。
+> その結果、カード経路では「▶ 自動配置を作成」を押す時点で `unknownItems()` が空を返し、
+> Task 3 の確認ダイアログは出ない。品目は登録され配置図も作られるので結果は壊れていないが、
+> 「未登録の品目を見せてから登録する」という Task 3 の UI はテーブル入力でのみ現れる。
 11. マスに `1` と `2` の番号が出て、凡例の番号と一致すること
 12. 設定タブに `新品目AA / 12` が登録されていること
 13. 配置表タブに表が出て、印刷できること
