@@ -26,7 +26,9 @@
 
   /* ---- タブ ---- */
   .tabs{display:flex;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
-  .tab{flex:1;border:0;background:none;padding:13px 6px;font-size:14px;font-weight:700;color:var(--muted);
+  /* 4タブになったので、iPhone SE 幅（375px）でも折り返さないよう詰める */
+  .tab{flex:1;border:0;background:none;padding:13px 3px;font-size:13px;font-weight:700;color:var(--muted);
+       white-space:nowrap;
        cursor:pointer;border-bottom:3px solid transparent;min-height:48px}
   .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
   .tab .dot{display:inline-block;margin-left:5px;font-size:11px;background:#eef2ff;color:#3730a3;
@@ -63,6 +65,19 @@
   .legend{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
   .legend span{display:inline-flex;align-items:center;gap:5px;font-size:12px;background:#f3f4f6;border-radius:6px;padding:4px 8px}
   .swatch{width:13px;height:13px;border-radius:3px;border:1px solid rgba(0,0,0,.2);flex:none}
+  .legend b.lno{font-weight:800;font-size:12px;min-width:14px;text-align:center;flex:none}
+
+  /* ---- 品名のオートコンプリート ----
+     datalist は Android の IME がキーボード上の候補ストリップに出してしまい、
+     ドロップダウンにならない。body 直下に1つだけ置いて position:fixed で位置を合わせる。 */
+  .ac-list{position:fixed;z-index:50;background:#fff;border:1px solid var(--line);border-radius:8px;
+           box-shadow:0 8px 24px rgba(0,0,0,.18);overflow-y:auto;-webkit-overflow-scrolling:touch;
+           touch-action:pan-y;padding:4px}
+  .ac-list[hidden]{display:none}
+  .ac-item{padding:10px 12px;border-radius:6px;font-size:14px;cursor:pointer;min-height:44px;
+           display:flex;align-items:center;gap:8px}
+  .ac-item span{margin-left:auto;font-size:11px;color:var(--muted);flex:none}
+  .ac-item.on{background:#eef2ff}
   .zone-title{font-weight:700;margin:6px 0;padding:4px 10px;border-radius:6px;display:inline-block;font-size:13px}
   .zone-near{background:#e8f5e9;color:#1b5e20}
   .zone-far{background:#fff3e0;color:#8a5300}
@@ -93,9 +108,10 @@
   .colwrap.blockgap{margin-left:16px}
   .colwrap.editable{cursor:pointer}
   .colwrap.editable:hover .col,.colwrap.editable:hover .hrow{outline:2px solid var(--accent)}
+  /* 文字はロット番号（1〜）。コードより短いので大きくできる */
   .cell{width:var(--cell);height:var(--cell);border:1px solid #cbd5e1;border-radius:2px;background:#fff;overflow:hidden;
-        display:flex;align-items:center;justify-content:center;font-weight:600;color:#1f2937;
-        font-size:calc(var(--cell) * .3);line-height:1;
+        display:flex;align-items:center;justify-content:center;font-weight:800;color:#1f2937;
+        font-size:calc(var(--cell) * .46);line-height:1;
         user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
   .cell.aisle-empty{background:#e5e7eb}
   /* ---- ロットの手動移動 ---- */
@@ -253,7 +269,10 @@
 
   @media print{
     @page{size:A4 landscape;margin:8mm}
-    header,.tabs,.actionbar,#updateBar,.sizectl,#mapBody,#messages,#regInfo,#saveStatus,.note,.hint{display:none !important}
+    header,.tabs,.actionbar,#updateBar,.sizectl,#messages,#regInfo,#saveStatus,.note,.hint{display:none !important}
+    /* どのタブを開いていても、紙には配置表だけを出す */
+    .tabpanel{display:none !important}
+    #tab-sheet{display:block !important}
     .wrap{padding:0;max-width:none}
     .card{border:0;padding:0;margin:0}
     .card h2{display:none}
@@ -278,7 +297,8 @@
 
 <div class="tabs">
   <button class="tab active" id="tabbtn-input" onclick="switchTab('input')">入力</button>
-  <button class="tab" id="tabbtn-map" onclick="switchTab('map')">配置図</button>
+  <button class="tab" id="tabbtn-edit" onclick="switchTab('edit')">配置編集</button>
+  <button class="tab" id="tabbtn-sheet" onclick="switchTab('sheet')">配置表</button>
   <button class="tab" id="tabbtn-settings" onclick="switchTab('settings')">設定<span class="dot" id="regDot">0</span></button>
 </div>
 
@@ -322,8 +342,6 @@
           <tbody></tbody>
         </table>
       </div>
-      <datalist id="nameOptions"></datalist>
-
       <div class="row-actions">
         <button class="btn btn-ghost" onclick="addRow();syncCards();saveLots()">＋ 行を追加</button>
         <button class="btn btn-ghost" onclick="clearLots()">入力をクリア</button>
@@ -348,10 +366,10 @@
     </div>
   </div>
 
-  <!-- ===== 配置図タブ ===== -->
-  <div id="tab-map" class="tabpanel" style="display:none">
-    <div class="card" id="resultCard">
-      <h2>配置図
+  <!-- ===== 配置編集タブ（ブロック図：移動と通路編集はここでだけできる） ===== -->
+  <div id="tab-edit" class="tabpanel" style="display:none">
+    <div class="card" id="editCard">
+      <h2>配置編集
         <button id="moveBtn" class="btn btn-ghost" style="margin-left:auto" onclick="toggleMove()">ロットを移動</button>
         <button id="editBtn" class="btn btn-ghost" style="margin-left:8px" onclick="toggleEdit()">通路を編集</button>
       </h2>
@@ -359,31 +377,7 @@
       <div id="moveHint" class="hint" style="display:none;margin-bottom:8px">✋ 移動モード：同じロットのマスをタップして選び、選んだマスをドラッグして別の列へ運びます。
         <button class="btn-mini" onclick="clearSel()">選択解除</button></div>
 
-      <div class="sizectl">
-        <span class="lbl">表示</span>
-        <button class="sizebtn on" data-view="sheet" onclick="setView('sheet')">配置図の表</button>
-        <button class="sizebtn" data-view="block" onclick="setView('block')">ブロック図</button>
-        <button class="btn btn-ghost" style="margin-left:auto" onclick="window.print()">🖨 印刷</button>
-      </div>
-
-      <div class="sizectl" id="zoomCtl">
-        <span class="lbl">表示倍率</span>
-        <button class="sizebtn on" data-zoom="auto" onclick="setSheetZoom('auto')">自動</button>
-        <button class="sizebtn" data-zoom="1" onclick="setSheetZoom('1')">100%</button>
-        <button class="sizebtn" data-zoom="1.5" onclick="setSheetZoom('1.5')">150%</button>
-        <button class="sizebtn" data-zoom="2" onclick="setSheetZoom('2')">200%</button>
-        <span class="grp"><span class="lbl">矢印の先</span>
-          <button class="sizebtn on" data-arrow="1" onclick="setArrowHead(true)">あり</button>
-          <button class="sizebtn" data-arrow="0" onclick="setArrowHead(false)">なし</button></span>
-        <span class="grp"><span class="lbl">角の丸み</span>
-          <button class="sizebtn on" data-corner="1" onclick="setLotCorner(true)">あり</button>
-          <button class="sizebtn" data-corner="0" onclick="setLotCorner(false)">なし</button></span>
-        <span class="lbl" id="zoomNow"></span>
-      </div>
-
-      <div id="sheetView"></div>
-
-      <div class="sizectl" id="sizeCtl" style="display:none">
+      <div class="sizectl" id="sizeCtl">
         <span class="lbl">マスの大きさ</span>
         <button class="sizebtn" data-size="20" onclick="setCellSize(20)">小</button>
         <button class="sizebtn on" data-size="30" onclick="setCellSize(30)">中</button>
@@ -412,7 +406,34 @@
         </div>
         <div class="summary" id="summary"></div>
       </div>
-      <div class="empty" id="mapEmpty">「入力」タブで荷物を入れて<br>「自動配置を作成」を押してください</div>
+      <div class="empty" id="editEmpty">「入力」タブで荷物を入れて<br>「自動配置を作成」を押してください</div>
+    </div>
+  </div>
+
+  <!-- ===== 配置表タブ（印刷はこちら。印刷CSSが配置編集タブを隠す） ===== -->
+  <div id="tab-sheet" class="tabpanel" style="display:none">
+    <div class="card" id="sheetCard">
+      <h2>配置表
+        <button class="btn btn-ghost" style="margin-left:auto" onclick="printSheet()">🖨 印刷</button>
+      </h2>
+
+      <div class="sizectl" id="zoomCtl">
+        <span class="lbl">表示倍率</span>
+        <button class="sizebtn on" data-zoom="auto" onclick="setSheetZoom('auto')">自動</button>
+        <button class="sizebtn" data-zoom="1" onclick="setSheetZoom('1')">100%</button>
+        <button class="sizebtn" data-zoom="1.5" onclick="setSheetZoom('1.5')">150%</button>
+        <button class="sizebtn" data-zoom="2" onclick="setSheetZoom('2')">200%</button>
+        <span class="grp"><span class="lbl">矢印の先</span>
+          <button class="sizebtn on" data-arrow="1" onclick="setArrowHead(true)">あり</button>
+          <button class="sizebtn" data-arrow="0" onclick="setArrowHead(false)">なし</button></span>
+        <span class="grp"><span class="lbl">角の丸み</span>
+          <button class="sizebtn on" data-corner="1" onclick="setLotCorner(true)">あり</button>
+          <button class="sizebtn" data-corner="0" onclick="setLotCorner(false)">なし</button></span>
+        <span class="lbl" id="zoomNow"></span>
+      </div>
+
+      <div id="sheetView"></div>
+      <div class="empty" id="sheetEmpty">「入力」タブで荷物を入れて<br>「自動配置を作成」を押してください</div>
     </div>
   </div>
 
@@ -450,6 +471,9 @@
 <div class="actionbar" id="actionBar">
   <button class="btn btn-primary" onclick="runFromButton()">▶ 自動配置を作成</button>
 </div>
+
+<!-- 品名の候補。開いている入力欄に合わせて位置を決めるので body 直下に1つだけ置く -->
+<div id="acList" class="ac-list" hidden></div>
 
 <div id="updateBar">
   <span>新しいバージョンがあります</span>
@@ -518,8 +542,13 @@ const SAMPLES = {
   ],
 };
 
-const PALETTE=["#93c5fd","#fca5a5","#86efac","#fcd34d","#c4b5fd","#f9a8d4","#7dd3fc","#fdba74",
-  "#a7f3d0","#d8b4fe","#f0abfc","#bef264","#67e8f9","#fda4af","#a5b4fc","#5eead4","#fbcfe8","#bae6fd"];
+// 薄さ（L* 78〜93）とカラフルさを保ったまま、一般色覚での最小色差 ΔE00 を最大化して選んだ18色。
+// 旧パレットは #fca5a5 と #fda4af が ΔE00 3.7 でほぼ同色だった。この18色は最小 14.5。
+// 色相順に並べたものを前半・後半で交互に差し込み、隣り合うロットの色が近づかないようにしてある。
+// ロットの識別はマスの番号が担うので、色は「同じロットのまとまり」を示す補助と位置づける。
+const PALETTE=["#ffadb1","#71d69e","#ffdbcc","#47ffed","#ffaf7a","#c8efef",
+  "#ffbb3d","#3de2ff","#e3cfa0","#8fc7ff","#ffed47","#d7e0f4",
+  "#aed369","#cdb8ff","#dbefc8","#f4d7ee","#3dff64","#ffa3e8"];
 
 let SPACES = clone(DEFAULT_SPACES);
 let MASTER = [];
@@ -527,10 +556,9 @@ let editMode=false;
 let lastLots=null, lastColor=null, lastSp=null;
 let hasResult=false;
 let fracMode=false;   // true なら「満載数P 半」表記
-let sheetMode=true;  // 配置図タブの表示（true=配置図の表 / false=ブロック図）
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", view:"palletApp.view", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual"};
 let storageOK=true;
 const memStore={};
 (function(){
@@ -589,10 +617,9 @@ function onMasterChange(){
   updateRegCount();
   saveMaster();
 }
+// マスタが変わったら、開いている候補を描き直す（閉じていれば何もしない）
 function refreshNameOptions(){
-  const names=[]; MASTER.forEach(m=>{ if(!names.includes(m.name)) names.push(m.name); });
-  document.getElementById("nameOptions").innerHTML =
-    names.map(n=>`<option value="${esc(n)}">SNP ${snpsOf(n).join(" / ")}</option>`).join("");
+  if(acVisible()) acRender();
 }
 function loadMaster(){
   document.querySelector("#masterTable tbody").innerHTML="";
@@ -619,11 +646,14 @@ function addRow(d){
       <option ${d.type==="仕掛品"?"selected":""}>仕掛品</option>
       <option ${d.type==="商品"?"selected":""}>商品</option>
     </select></td>
-    <td><input list="nameOptions" value="${esc(d.name)}" placeholder="品名" oninput="nameChanged(this)"></td>
-    <td><input inputmode="tel" value="${esc(d.lot)}" placeholder="ロット" oninput="rowChanged(this)"></td>
-    <td><input type="number" inputmode="numeric" min="1" value="${esc(d.snp)}" placeholder="SNP" oninput="rowChanged(this)"></td>
-    <td><input type="number" inputmode="numeric" min="1" value="${esc(d.qty)}" placeholder="個数" oninput="rowChanged(this)"
-               onkeydown="if(event.key==='Enter'){event.preventDefault();addNextRow(rowIndexOf(this));}"></td>
+    <td><input enterkeyhint="next" value="${esc(d.name)}" placeholder="品名"
+               oninput="nameChanged(this);acTyped(this)" onfocus="acOpen(this)" onkeydown="acKey(event,this)"></td>
+    <td><input inputmode="tel" enterkeyhint="next" value="${esc(d.lot)}" placeholder="ロット"
+               oninput="rowChanged(this)" onkeydown="enterKey(event,this)"></td>
+    <td><input type="number" inputmode="numeric" min="1" enterkeyhint="next" value="${esc(d.snp)}" placeholder="SNP"
+               oninput="rowChanged(this)" onkeydown="enterKey(event,this)"></td>
+    <td><input type="number" inputmode="numeric" min="1" enterkeyhint="done" value="${esc(d.qty)}" placeholder="個数" oninput="rowChanged(this)"
+               onkeydown="if(event.isComposing||event.keyCode===229)return;if(event.key==='Enter'){event.preventDefault();addNextRow(rowIndexOf(this));}"></td>
     <td class="pallet-cell">-</td>
     <td><button class="btn-mini" onclick="removeRow(this)">削除</button></td>`;
   tb.appendChild(tr);
@@ -720,6 +750,10 @@ function loadSample(which){
 
 /* ---------- 入力（スマホカード：テーブルと同期） ---------- */
 function syncCards(){
+  // カードを作り直すと、カード側から開いている候補の参照先が DOM から消える。
+  // テーブル側の欄は作り直されないので、そのままにする
+  // （テーブルの品名入力は rowChanged() 経由でここを毎回通る）
+  if(acInput && acInput.dataset.card!=null) acClose();
   const host=document.getElementById("lotCards");
   const rows=[...document.querySelectorAll("#lotTable tbody tr")];
   host.innerHTML = rows.map((tr,i)=>{
@@ -734,10 +768,13 @@ function syncCards(){
     if(useSelect){
       const opts=list.map(s=>`<option value="${s}" ${s===v.snp?"selected":""}>${s}</option>`).join("");
       const cur = list.includes(v.snp) ? "" : `<option value="${v.snp}" selected>${v.snp}</option>`;
-      snpField=`<select onchange="cardSnpSelect(${i},this.value)">${cur}${opts}</select>`;
+      snpField=`<select data-card="${i}" onchange="cardSnpSelect(${i},this.value)"
+                        onkeydown="enterKey(event,this)">${cur}${opts}</select>`;
     }else{
-      snpField=`<input type="number" inputmode="numeric" min="1" value="${v.snp||""}" placeholder="SNP"
-                       oninput="cardEdit(${i},3,this.value)" onchange="snpEntered(${i})">`;
+      snpField=`<input type="number" inputmode="numeric" min="1" enterkeyhint="next" data-card="${i}"
+                       value="${v.snp||""}" placeholder="SNP"
+                       oninput="cardEdit(${i},3,this.value)" onchange="snpEntered(${i})"
+                       onkeydown="enterKey(event,this)">`;
     }
     // SNP欄の右のボタン：追加入力中は取り消し、それ以外は「＋（SNPを追加）」
     const snpBtn = custom
@@ -752,15 +789,19 @@ function syncCards(){
         <button class="btn-mini" onclick="cardDelete(${i})">削除</button>
       </div>
       <div class="fld" data-f="name"><label>品名</label>
-        <input list="nameOptions" value="${esc(v.name)}" placeholder="品名" oninput="cardEdit(${i},1,this.value)"></div>
+        <input enterkeyhint="next" data-card="${i}" value="${esc(v.name)}" placeholder="品名"
+               oninput="cardEdit(${i},1,this.value);acTyped(this)" onfocus="acOpen(this)"
+               onkeydown="acKey(event,this)"></div>
       <div class="fld" data-f="lot"><label>ロット</label>
-        <input inputmode="tel" value="${esc(v.lot)}" placeholder="ロット" oninput="cardEdit(${i},2,this.value)">
+        <input inputmode="tel" enterkeyhint="next" data-card="${i}" value="${esc(v.lot)}" placeholder="ロット"
+               oninput="cardEdit(${i},2,this.value)" onkeydown="enterKey(event,this)">
         <button class="hyph" onclick="addHyphen(${i})" title="ハイフンを入力">−</button></div>
       <div class="fld" data-f="snp"><label>SNP</label>${snpField}${snpBtn}</div>
       <div class="fld" data-f="qty"><label>個数</label>
-        <input type="number" inputmode="numeric" min="1" value="${v.qty||""}" placeholder="個数"
+        <input type="number" inputmode="numeric" min="1" enterkeyhint="done" data-card="${i}"
+               value="${v.qty||""}" placeholder="個数"
                oninput="cardEdit(${i},4,this.value)"
-               onkeydown="if(event.key==='Enter'){event.preventDefault();addNextRow(${i});}"></div>
+               onkeydown="if(event.isComposing||event.keyCode===229)return;if(event.key==='Enter'){event.preventDefault();addNextRow(${i});}"></div>
       <div class="foot"><span class="hint">パレット数</span><span class="val${warn}">${p.text}</span></div>
       <button class="nextbtn" onclick="addNextRow(${i})">＋ 次の荷物</button>
     </div>`;
@@ -792,7 +833,9 @@ function snpCancel(i){
   recalcRow(tr); saveLots(); syncCards();
 }
 function focusField(i,f){
-  const inp=document.querySelector(`.lotcard[data-i="${i}"] .fld[data-f="${f}"] input`);
+  // SNP欄は候補が2つ以上あると <select> になるので、input だけを探すと当たらない
+  const sel=`.lotcard[data-i="${i}"] .fld[data-f="${f}"] input,.lotcard[data-i="${i}"] .fld[data-f="${f}"] select`;
+  const inp=document.querySelector(sel);
   if(inp){ inp.focus(); try{ inp.setSelectionRange(inp.value.length,inp.value.length); }catch(e){} }
   return inp;
 }
@@ -826,11 +869,21 @@ function addNextRow(i){
   // 末尾が空行ならそこへ移動、そうでなければ追加
   if(!last || rowValues(last).qty>0 || rowValues(last).name){ addRow(); }
   syncCards(); saveLots();
+  // PC はカードが display:none なので、カード側だけを見ていると何も起きない。
+  // 表示されているほうの品名欄へ送る
   const cards=document.querySelectorAll(".lotcard");
   const target=cards[cards.length-1];
-  if(target){
+  if(target && target.offsetParent!==null){
     target.scrollIntoView({behavior:"smooth", block:"center"});
     const inp=target.querySelector('.fld[data-f="name"] input');
+    if(inp) inp.focus();
+    return;
+  }
+  const trs=document.querySelectorAll("#lotTable tbody tr");
+  const tr=trs[trs.length-1];
+  if(tr){
+    tr.scrollIntoView({behavior:"smooth", block:"center"});
+    const inp=tr.querySelectorAll("select,input")[1];   // [0]=種別, [1]=品名
     if(inp) inp.focus();
   }
 }
@@ -854,7 +907,8 @@ function updateCardFoot(i){ // 入力中のフォーカスを保つため、必�
   const el=card.querySelector(".foot .val");
   el.textContent = v.snp>0 && v.qty>0 ? Math.ceil(v.qty/v.snp)+"P" : (v.snp<=0?"SNP未入力":"—");
   el.className = "val"+(v.snp<=0?" warn":"");
-  const snpInput=card.querySelectorAll(".fld input")[2];
+  // .fld input の3番目では、SNPが <select> のカードで個数欄を指してしまう
+  const snpInput=card.querySelector('.fld[data-f="snp"] input');
   if(snpInput && document.activeElement!==snpInput) snpInput.value=v.snp||"";
 }
 function cardType(i,t){
@@ -863,6 +917,241 @@ function cardType(i,t){
   recalcRow(tr); saveLots(); syncCards();
 }
 function cardDelete(i){ const tr=trAt(i); if(!tr)return; tr.remove(); syncCards(); saveLots(); }
+
+/* ---------- 品名のオートコンプリート ----------
+   <datalist> は Android 11 以降、IME がキーボード上の候補ストリップに
+   インライン表示してしまい、ドロップダウンにならない。ブラウザ側の制御手段が無いので自前で描く。
+   リストは body 直下に1つだけ置き、position:fixed で対象の欄に合わせる。
+   カードの入力欄は syncCards() で作り直されるため、リストを欄の親に入れると入力中に消える。 */
+let acInput=null;   // いま候補を出している入力欄。null なら閉じている
+let acIndex=-1;     // ↑↓ で選択中の項目。-1 は未選択
+
+function acBox(){ return document.getElementById("acList"); }
+function acVisible(){ return !!acInput && !acBox().hidden; }
+
+/* マスタの品名（重複を除く）。アルファベットで始まるものを先に、その後を五十音順に並べる。
+   numeric:true は「部品10」が「部品2」より前に来るのを防ぐ（連番を数として比べる）。
+   マスタに読み仮名の欄が無いので、漢字は localeCompare の既定（ほぼ文字コード順）になる。
+   ひらがな・カタカナは五十音で正しく並ぶ。登録順のままだと探しにくいのでここで整える */
+function acNames(){
+  const names=[]; MASTER.forEach(m=>{ if(!names.includes(m.name)) names.push(m.name); });
+  return names.sort((a,b)=>{
+    const ga=/^[A-Za-z]/.test(a)?0:1, gb=/^[A-Za-z]/.test(b)?0:1;
+    if(ga!==gb) return ga-gb;
+    return a.localeCompare(b,"ja",{numeric:true});
+  });
+}
+// フォーカスしたとき。まだ何も選んでいない状態で開く
+function acOpen(inp){
+  acInput=inp; acIndex=-1;
+  acRender();
+}
+// 打つたびに呼ぶ。絞り込みが変わるので ↑↓ の選択は捨てる
+function acTyped(inp){
+  acInput=inp; acIndex=-1;
+  acRender();
+}
+function acRender(){
+  const box=acBox();
+  if(!acInput){ box.hidden=true; return; }
+  const q=acInput.value.trim();
+  // 部分一致。1111 で 1111-2222 を引けるようにする
+  const list=acNames().filter(n=>!q || n.indexOf(q)>=0);
+  if(!list.length){ box.hidden=true; return; }
+  if(acIndex>=list.length) acIndex=list.length-1;
+  box.innerHTML=list.map((n,i)=>
+    `<div class="ac-item${i===acIndex?" on":""}" data-name="${esc(n)}">`
+    +`${esc(n)}<span>SNP ${snpsOf(n).join(" / ")}</span></div>`).join("");
+  box.hidden=false;
+  acPosition();
+}
+/* 位置決め。ソフトキーボードが出ていると画面の下半分が隠れるので、
+   visualViewport で可視領域を測り、入らなければ欄の上側に出す。 */
+function acPosition(){
+  const box=acBox();
+  if(!acInput) return;
+  const r=acInput.getBoundingClientRect();
+  const vv=window.visualViewport;
+  const vTop = vv ? vv.offsetTop : 0;
+  const vh   = vv ? vv.height    : window.innerHeight;
+  // 下端には「▶ 自動配置を作成」の固定バーが乗っている。その上までしか使えない
+  const bar=document.getElementById("actionBar");
+  const barH=(bar && bar.style.display!=="none") ? bar.getBoundingClientRect().height : 0;
+  box.style.left  = r.left+"px";
+  box.style.width = r.width+"px";
+  // maxHeight を外すとリストが実寸まで広がり、スクロール不要になって scrollTop が 0 に潰れる。
+  // キーボードの出入りで visualViewport が動くたびここへ来るので、控えて最後に戻す
+  const keep=box.scrollTop;
+  box.style.maxHeight="";                        // 実寸を測るため一旦外す
+  const want=Math.min(box.scrollHeight, vh*0.44);
+  const below=(vTop+vh-barH)-r.bottom-8;         // 欄の下に残っている高さ
+  const above=r.top-vTop-8;                      // 欄の上に残っている高さ
+  if(below>=want || below>=above){ box.style.top=(r.bottom+4)+"px"; box.style.maxHeight=Math.max(Math.min(want,below),60)+"px"; }
+  else                           { const h=Math.max(Math.min(want,above),60); box.style.top=(r.top-h-4)+"px"; box.style.maxHeight=h+"px"; }
+  box.scrollTop=keep;
+}
+function acClose(){ acInput=null; acIndex=-1; acBox().hidden=true; }
+
+// 候補を確定する。入力欄へ入れ、SNPを自動補完し、ロット欄へ送る
+function acPick(name){
+  const inp=acInput;
+  if(!inp) return;
+  const card=inp.dataset.card;
+  acClose();
+  inp.value=name;
+  if(card!=null){
+    // カード側：テーブルへ書き戻し、SNP欄がプルダウンに変わることがあるので作り直す
+    cardEdit(parseInt(card),1,name);
+    syncCards();
+    focusField(parseInt(card),"lot");
+  }else{
+    nameChanged(inp);
+    const c=[...inp.closest("tr").querySelectorAll("select,input")];
+    const lot=c[2];
+    if(lot){ lot.focus(); try{ lot.setSelectionRange(lot.value.length,lot.value.length); }catch(e){} }
+  }
+}
+
+/* 品名欄の keydown。候補が開いていれば ↑↓ Enter Esc を候補の操作に使う。
+   閉じているときの Enter は Task 5 で「次の欄へ送る」を足す。 */
+function acKey(ev, inp){
+  // 日本語の変換中は何もしない。これが無いと、変換候補を Enter で確定した瞬間に
+  // 次の欄へ飛んでしまう。↑↓ も IME の候補選択を横取りしてしまう。
+  // keyCode 229 は isComposing を出さない古い IME 向けの保険
+  if(ev.isComposing || ev.keyCode===229) return;
+  const open = acVisible() && acInput===inp;
+  const items = open ? [...acBox().querySelectorAll(".ac-item")] : [];
+  if(open && (ev.key==="ArrowDown" || ev.key==="ArrowUp")){
+    ev.preventDefault();
+    acIndex += (ev.key==="ArrowDown" ? 1 : -1);
+    if(acIndex < 0) acIndex = items.length-1;
+    if(acIndex >= items.length) acIndex = 0;
+    acRender();
+    return;
+  }
+  if(ev.key==="Escape"){ if(open){ ev.preventDefault(); acClose(); } return; }
+  if(ev.key!=="Enter") return;
+  ev.preventDefault();
+  if(open && acIndex>=0){ acPick(items[acIndex].dataset.name); return; }
+  acClose();
+  nextField(inp);   // 候補を選ばずに Enter → ロット欄へ
+}
+
+/* 候補の確定。
+   よくある実装は pointerdown を preventDefault() してフォーカスを保つ形だが、
+   それをやるとリストをタッチでスクロールできなくなる（既定のマスタは24件あるので実害が出る）。
+   代わりに pointerdown で対象と座標を控え、pointerup までの移動が小さいときだけ確定する。
+   要素は pointerdown の時点で確定しているので、キーボードが閉じて位置がずれても影響しない。
+   閉じるのは「外側の pointerdown」「Esc」「確定時」だけで、blur では閉じない。 */
+let acDown=null;
+acBox().addEventListener("pointerdown", ev=>{
+  const it=ev.target.closest(".ac-item");
+  acDown = it ? {el:it, x:ev.clientX, y:ev.clientY} : null;
+});
+acBox().addEventListener("pointerup", ev=>{
+  const d=acDown; acDown=null;
+  if(!d) return;
+  if(Math.abs(ev.clientX-d.x)>8 || Math.abs(ev.clientY-d.y)>8) return;   // スクロールとみなす
+  acSwallowMouseCompat();
+  acPick(d.el.dataset.name);
+});
+/* タッチでは pointerup のあと、ブラウザが mousedown → mouseup → click を合成する
+   （互換マウスイベント）。そのターゲットはどれも発生時点の座標で決まるので、
+   acPick() がリストを閉じたあとだと、リストの下に隠れていた要素が受け取ってしまう。
+   - click が当たると、その要素の onclick が走る（「＋ 次の荷物」ボタンなど）
+   - mousedown が当たると、既定動作でフォーカスがそこへ移り、
+     acPick() がロット欄に置いたフォーカスが奪われる
+   pointerdown を preventDefault() すれば互換イベントは出ないが、それだと
+   リストをスクロールできなくなる。そこで確定に伴う一連の互換イベントを捨てる。
+   capture で止めるので onclick 属性のハンドラにも届かず、
+   mousedown の preventDefault でフォーカス移動も止まる。 */
+let acSwallowTap=false, acSwallowTimer=0;
+function acSwallowMouseCompat(){
+  acSwallowTap=true;
+  clearTimeout(acSwallowTimer);
+  // 互換イベントが来ないまま終わる経路でフラグが残り、次の操作を食わないように解除する
+  acSwallowTimer=setTimeout(()=>{ acSwallowTap=false; }, 500);
+}
+["mousedown","mouseup","click"].forEach(type=>{
+  document.addEventListener(type, ev=>{
+    if(!acSwallowTap) return;
+    // 一連の最後が click。ここまで来たら解除する
+    if(type==="click"){ acSwallowTap=false; clearTimeout(acSwallowTimer); }
+    ev.stopPropagation();
+    ev.preventDefault();
+  }, true);
+});
+// 外側をタップしたら閉じる。品名欄自身と候補の中は除く
+document.addEventListener("pointerdown", ev=>{
+  if(!acVisible()) return;
+  if(ev.target===acInput) return;
+  if(ev.target.closest("#acList")) return;
+  acClose();
+});
+// Tab でフォーカスが移ったとき。pointerdown が起きないので外側タップの経路では閉じられず、
+// 移動先の欄には acKey が無いので Esc も効かない。候補の持ち主から離れたら閉じる。
+// blur ではなく focusin で見るのは、候補リストをタッチでスクロールしても閉じないようにするため
+// （.ac-item は div でフォーカスを取らないので focusin は発火しない）。
+document.addEventListener("focusin", ev=>{
+  if(!acVisible()) return;
+  if(ev.target===acInput) return;
+  if(ev.target.closest && ev.target.closest("#acList")) return;
+  acClose();
+});
+// 欄が動いたら位置を合わせ直す。
+// capture:true は「祖先のどれがスクロールしても品名欄が動く」を拾うためだが、
+// そのぶん候補リスト自身のスクロールまで届く。それで acPosition() を走らせると
+// リストを指で送るたびに位置決めが割り込み、スクロールが戻される。ここでは無視する
+window.addEventListener("scroll", ev=>{
+  if(!acVisible()) return;
+  const t=ev.target;
+  if(t && t.nodeType===1 && t.closest("#acList")) return;
+  acPosition();
+}, true);
+window.addEventListener("resize", ()=>{ if(acVisible()) acPosition(); });
+if(window.visualViewport){
+  window.visualViewport.addEventListener("resize", ()=>{ if(acVisible()) acPosition(); });
+  window.visualViewport.addEventListener("scroll", ()=>{ if(acVisible()) acPosition(); });
+}
+
+/* ---------- 入力欄の Enter 遷移 ----------
+   品名 → ロット → SNP → 個数 → 次の行の品名 の順に送る。種別はボタンなので飛ばす。
+   カードとテーブルのどちらから呼ばれても動くよう、data-card の有無で見分ける。 */
+const FIELD_ORDER=["name","lot","snp","qty"];
+
+function nextField(el){
+  const card=el.dataset.card;
+  if(card!=null){
+    const i=parseInt(card);
+    const cur=el.closest(".fld");
+    const f=cur?cur.dataset.f:null;
+    const k=FIELD_ORDER.indexOf(f);
+    // el.blur() はどの欄からの遷移でも無条件に呼んでいる。どの欄の onchange も
+    // #lotCards を丸ごと作り直しうるため。focusField() を先に呼ぶと、その focus で発生する
+    // 同期的な blur で change が発火し、掴んだばかりの次欄が syncCards() の作り直しで DOM から
+    // 消えてフォーカスが body に落ちる。先に blur() で change を確定させてから focusField() する。
+    // 今それが実際に起きるのは SNP欄(onchange="snpEntered()")と SNP の select
+    // (onchange="cardSnpSelect()")。name/lot には onchange が無いので今は空振りだが、
+    // 足したときに壊れないようこの順序を保つ。
+    if(k>=0 && k<FIELD_ORDER.length-1){ el.blur(); focusField(i, FIELD_ORDER[k+1]); return; }
+    addNextRow(i);   // 個数まで来たら次の行へ
+    return;
+  }
+  // テーブル側。c は [種別select, 品名, ロット, SNP, 個数] の5つ
+  const c=[...el.closest("tr").querySelectorAll("select,input")];
+  const k=c.indexOf(el);
+  const nx=c[k+1];
+  if(nx){ nx.focus(); try{ nx.setSelectionRange(nx.value.length,nx.value.length); }catch(e){} return; }
+  addNextRow(rowIndexOf(el));
+}
+
+// ロット欄と SNP 欄の keydown。候補は出ないので Enter だけ見る
+function enterKey(ev, el){
+  if(ev.isComposing || ev.keyCode===229) return;   // 日本語の変換確定を奪わない
+  if(ev.key!=="Enter") return;
+  ev.preventDefault();
+  nextField(el);
+}
 
 /* ---------- 配置アルゴリズム ---------- */
 function used(c){return c.fills.reduce((a,f)=>a+f.count,0);}
@@ -1054,7 +1343,7 @@ function renderResult(lots, unknown, typeMix){
   }
 
   document.getElementById("legend").innerHTML=lots.map(l=>
-    `<span><i class="swatch" style="background:${colorOf[l.id]}"></i>${esc(l.name)} / ${esc(l.lot)||"—"}　${l.pallets}P${l.parts>1?`（${l.parts}件）`:""}</span>`).join("");
+    `<span><b class="lno">${l.id+1}</b><i class="swatch" style="background:${colorOf[l.id]}"></i>${esc(l.name)} / ${esc(l.lot)||"—"}　${l.pallets}P${l.parts>1?`（${l.parts}件）`:""}</span>`).join("");
 
   drawZone("zone-far", sp.filter(s=>s.zone==="far"), colorOf);
   drawZone("zone-near", sp.filter(s=>s.zone==="near"), colorOf);
@@ -1082,13 +1371,13 @@ function run(goMap){
     hasResult=false; lastLots=null;
     document.getElementById("messages").innerHTML=inputWarnHtml(unknown, typeMix);
     showMapState();
-    document.getElementById("mapEmpty").style.display="none";
+    document.getElementById("editEmpty").style.display="none";
     document.getElementById("mapBody").style.display="block";
     document.getElementById("legend").innerHTML="";
     document.getElementById("zone-far").innerHTML="";
     document.getElementById("zone-near").innerHTML="";
     document.getElementById("summary").textContent="";
-    if(goMap) switchTab('map');
+    if(goMap) switchTab('edit');
     return;
   }
 
@@ -1098,17 +1387,16 @@ function run(goMap){
   clearManual();               // 配置し直したので手動調整は捨てる
 
   renderResult(lots, unknown, typeMix);
-  if(goMap) switchTab('map');
+  if(goMap) switchTab('edit');
 }
 
 /* ---------- 描画 ---------- */
 // row は列内の行番号（0始まり）。選択とドラッグでマスを特定するために持たせる。
 function cellsOf(col){
-  const arr=Array.from({length:col.h},(_,i)=>({id:null,seg:false,label:"",row:i}));
+  const arr=Array.from({length:col.h},(_,i)=>({id:null,seg:false,row:i}));
   let r=0;
   col.fills.forEach((f,fi)=>{
-    for(let k=0;k<f.count;k++){ if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),label:"",row:r}; r++; } }
-    if(r-1>=0) arr[r-1].label = f.id;
+    for(let k=0;k<f.count;k++){ if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),row:r}; r++; } }
   });
   return arr;
 }
@@ -1140,7 +1428,9 @@ function drawZone(elId, spaces, colorOf){
         const cls=["cell"];
         if(!filled&&col.aisle)cls.push("aisle-empty");
         if(a.seg)cls.push(horizontal?"segline-h":"segline");
-        const label=filled?(codeShort(a.label)):"";
+        // ロットコードは 1111-2222 のように長いことがあり 30px のマスに入らない。
+        // 凡例と同じ通し番号を出す。id は readLots() が付ける0始まりの連番。
+        const label=filled?String(a.id+1):"";
         cells+=`<div class="${cls.join(' ')}" data-row="${a.row}"${filled?` data-lot="${a.id}"`:""}`
               +` style="${bg?'background:'+bg:''}">${label}</div>`;
       });
@@ -1154,32 +1444,47 @@ function drawZone(elId, spaces, colorOf){
     el.appendChild(wrap);
   });
 }
-function codeShort(id){ const l=lastLots&&lastLots.find(x=>x.id===id); return l?esc(l.code):''; }
 
 /* ---------- タブ / 表示状態 ---------- */
 function switchTab(name){
-  ["input","map","settings"].forEach(t=>{
+  ["input","edit","sheet","settings"].forEach(t=>{
     document.getElementById("tab-"+t).style.display = (t===name)?"":"none";
     document.getElementById("tabbtn-"+t).classList.toggle("active", t===name);
   });
   document.getElementById("actionBar").style.display = (name==="input")?"":"none";
   window.scrollTo(0,0);
+  // 移動モードと通路編集モードは配置編集タブでしか操作できない。
+  // 他のタブへ移ったら解除する。残すと、戻ってきたとき「なぜかマスが選べる」状態になる
+  if(name!=="edit" && (moveMode || editMode)){
+    setMoveMode(false); setEditMode(false);
+    redraw();   // editable クラスは DOM に焼き込まれているので描き直して落とす
+  }
   // 表は表示されて初めて幅が測れるので、タブに来たタイミングで再描画・倍率決定する
-  // （表モードで結果があるときは renderSheet() が末尾で applySheetZoom() も呼ぶ）
-  if(name==="map"){
-    if(sheetMode && hasResult) renderSheet(); else applySheetZoom();
+  // （結果があるときは renderSheet() が末尾で applySheetZoom() も呼ぶ）
+  if(name==="sheet"){
+    if(hasResult) renderSheet(); else applySheetZoom();
   }
 }
 function showMapState(){
-  document.getElementById("mapEmpty").style.display = hasResult?"none":"block";
-  document.getElementById("mapBody").style.display  = (hasResult&&!sheetMode)?"block":"none";
-  document.getElementById("sheetView").style.display= sheetMode?"":"none";
-  document.getElementById("sizeCtl").style.display  = sheetMode?"none":"flex";
-  if(hasResult&&sheetMode) renderSheet(); else if(!hasResult) document.getElementById("sheetView").innerHTML="";
+  // 配置編集タブと配置表タブは独立しているので、それぞれの空表示を出し分ける
+  document.getElementById("editEmpty").style.display  = hasResult?"none":"block";
+  document.getElementById("sheetEmpty").style.display = hasResult?"none":"block";
+  document.getElementById("mapBody").style.display    = hasResult?"block":"none";
+  document.getElementById("sizeCtl").style.display    = hasResult?"flex":"none";
+  document.getElementById("zoomCtl").style.display    = hasResult?"flex":"none";
+  // 表を描くのは配置表タブを開いたときだけにする。
+  // ここは renderResult() から呼ばれ、renderResult() は redraw() 経由で
+  // ロットを1マス動かすたびに走る。見ていない表を毎回組み直すのは無駄
+  if(hasResult){
+    if(document.getElementById("tab-sheet").style.display!=="none") renderSheet();
+  }else{
+    document.getElementById("sheetView").innerHTML="";
+  }
 }
 function setCellSize(px){
   document.documentElement.style.setProperty("--cell", px+"px");
-  document.querySelectorAll(".sizebtn").forEach(b=>
+  // [data-size] に絞る。絞らないと配置表タブの倍率・矢印・角丸の選択まで外れる
+  document.querySelectorAll(".sizebtn[data-size]").forEach(b=>
     b.classList.toggle("on", parseInt(b.dataset.size)===px));
   saveData(STORE_KEY.cell, px);
 }
@@ -1345,9 +1650,13 @@ function toggleEdit(){
 // 描き直して落とす。
 function toggleMove(){
   setMoveMode(!moveMode);
-  // 既定は「配置図の表」なので、そのまま移動モードに入ると掴めるマスが1つも無い。
-  // 移動モードに入るときはブロック図へ寄せる。
-  if(moveMode){ setEditMode(false); if(sheetMode) setView('block'); }
+  // 配置表タブから押されると掴めるマスが1つも無いので、配置編集タブへ寄せる。
+  // ただし switchTab() は無条件で scrollTo(0,0) するので、既に配置編集タブが
+  // 出ているときに呼ぶとページ先頭へ飛ぶだけの空振りになる。表示中は呼ばない。
+  if(moveMode){
+    setEditMode(false);
+    if(document.getElementById("tab-edit").style.display==="none") switchTab('edit');
+  }
   redraw();
 }
 function clearSel(){
@@ -1429,10 +1738,54 @@ function restoreManual(){
     return false;
   }
 }
+/* 入力にあってマスタに無い「品名＋SNP」を集める。ここではマスタを変更しない。
+   seen で重ねているのは、同じ品名＋SNPが2行あるときに2件と数えないため。 */
+function unknownItems(){
+  const out=[], seen={};
+  [...document.querySelectorAll("#lotTable tbody tr")].forEach(tr=>{
+    const v=rowValues(tr);
+    if(!v.name || v.snp<=0) return;
+    if(snpsOf(v.name).includes(v.snp)) return;
+    const key=v.name+"\u0000"+v.snp;   // readLots() と同じ区切り方
+    if(seen[key]) return;
+    seen[key]=1;
+    out.push({name:v.name, snp:v.snp});
+  });
+  return out;
+}
+// 集めた品目をマスタへ足す
+function registerItems(list){
+  if(!list.length) return;
+  list.forEach(m=>addMasterRow(m));
+  onMasterChange();   // 保存・候補更新・パレット数の再計算
+}
 // 「▶ 自動配置を作成」の入口。手動調整があるときだけ確認する。
 function runFromButton(){
   if(hasManual() && !confirm("手動調整を破棄して自動配置し直します。よろしいですか？")) return;
+
+  // 未登録の品目は、何を入れるか見せてから登録する。
+  // 打ち間違いをそのままマスタへ入れると、以後その品名のSNP欄がプルダウンに化ける
+  const add=unknownItems();
+  let added=[];
+  if(add.length){
+    const list=add.map(m=>`　・${m.name}　SNP ${m.snp}`).join("\n");
+    if(confirm(`次の品目が未登録です。「設定」タブに登録しますか？\n\n${list}\n\n`
+              +`（キャンセルしても配置図は作成します）`)){
+      registerItems(add);
+      added=add;
+    }
+  }
+
   run(true);
+
+  // run() の中の renderResult() が #messages を上書きするので、そのあとに足す。
+  // ロットを動かすと redraw() → renderResult() でこの行は消えるが、
+  // 登録そのものは設定タブに残るので実害は無い
+  if(added.length){
+    const names=added.map(m=>`${esc(m.name)}(${m.snp})`).join(" / ");
+    document.getElementById("messages").innerHTML +=
+      `<div class="msg ok">✅ 「設定」タブに登録しました：${names}</div>`;
+  }
 }
 
 function wrapAt(x,y){
@@ -1602,17 +1955,19 @@ function setTiming(t){
   saveData(STORE_KEY.head,{date:headDate,timing:headTiming});
   if(hasResult) renderSheet();
 }
-function setView(v){
-  sheetMode=(v==="sheet");
-  document.querySelectorAll(".sizebtn[data-view]").forEach(b=>
-    b.classList.toggle("on", b.dataset.view===v));
-  document.getElementById("sheetView").style.display = sheetMode?"":"none";
-  document.getElementById("mapBody").style.display   = (!sheetMode && hasResult)?"block":"none";
-  document.getElementById("sizeCtl").style.display   = sheetMode?"none":"flex";
-  document.getElementById("zoomCtl").style.display   = sheetMode?"flex":"none";
-  saveData(STORE_KEY.view, v);
-  if(sheetMode && hasResult) renderSheet();
+// 印刷は表だけを出す（印刷CSSが #tab-edit を隠す）。
+// 表は表示されて初めて幅が測れるので、印刷の前に配置表タブへ寄せて描き直す。
+function printSheet(){
+  switchTab('sheet');
+  window.print();
 }
+// ブラウザのメニュー・ショートカット（Ctrl/Cmd+P）から印刷されると printSheet() を経由しない。
+// 配置編集タブのまま印刷CSSで配置表タブを強制表示すると、#sheetView が空のまま紙に出て白紙になる。
+// switchTab('sheet') は中で renderSheet() を呼ぶので、ここで先に表を埋めておく。
+// printSheet() 経由の場合は switchTab('sheet') が二重に走るが、同じタブへの切替なので無害。
+window.addEventListener('beforeprint', ()=>{
+  if(hasResult) switchTab('sheet');
+});
 
 /* ---------- 引き出し線の矢頭 ---------- */
 let arrowHead=true;   // false なら実線だけにする
@@ -1622,7 +1977,7 @@ function setArrowHead(on){
   document.querySelectorAll(".sizebtn[data-arrow]").forEach(b=>
     b.classList.toggle("on", (b.dataset.arrow==="1")===arrowHead));
   saveData(STORE_KEY.arrow, arrowHead);
-  if(sheetMode && hasResult) renderSheet();
+  if(hasResult) renderSheet();
 }
 
 /* ---------- ロットの太枠の角丸 ---------- */
@@ -1672,7 +2027,7 @@ function applySheetZoom(){
   const now=document.getElementById("zoomNow");
   if(now) now.textContent = (sheetZoom==="auto")?`（${Math.round(z*100)}%）`:"";
 }
-window.addEventListener("resize", ()=>{ if(sheetMode && sheetZoom==="auto") applySheetZoom(); });
+window.addEventListener("resize", ()=>{ if(sheetZoom==="auto") applySheetZoom(); });
 
 // ロットの最後のマスがあるエリア名。分割配置は lastSp の並び順（メイン→軒下→PC横→EV横）に
 // 詰めていくので、そのロットのマスを持つ最後のスペースが末尾になる。
@@ -2030,16 +2385,6 @@ updateSaveStatus();
   document.getElementById("dowHint").textContent=`（${DOW[d.getDay()]}曜日）`;
   document.getElementById("tmAM").classList.toggle("on",headTiming==="あさ");
   document.getElementById("tmPM").classList.toggle("on",headTiming==="ひる");
-})();
-
-// 配置図タブの表示モード
-(function initView(){
-  const v=loadData(STORE_KEY.view);
-  if(v){ sheetMode=(v==="sheet"); }
-  document.querySelectorAll(".sizebtn[data-view]").forEach(b=>
-    b.classList.toggle("on", b.dataset.view===(sheetMode?"sheet":"block")));
-  document.getElementById("sizeCtl").style.display = sheetMode?"none":"flex";
-  document.getElementById("zoomCtl").style.display = sheetMode?"flex":"none";
 })();
 
 // 配置図の表の表示倍率：保存があれば復元
