@@ -14,8 +14,8 @@
 - **編集位置は行番号ではなくコード片で指定している。** 各ステップの「変更前」の文字列を検索して置き換えること
 - 自動テストの基盤が無いため、各タスクの検証はブラウザの DevTools コンソールと手動確認で行う
 - 検証用のローカルサーバはリポジトリのルートで `python3 -m http.server 50999` を起動し、
-  `http://localhost:50999/files/index.html` を開く。**ウィンドウ幅は 600px より広くしておく**
-  （テーブルとカードが両方 DOM に居る状態で数えたいため）
+  `http://localhost:50999/files/index.html` を開く。**特に指定が無いステップはウィンドウ幅を
+  600px より広くして行う**（カードは幅によらず常に DOM にあるが、フォーカス先の判定が変わる）
 - **必須は品名・個数・SNP。ロットは任意。** 種別（`<select>`）は常に値を持つので判定に含めない
 - **空行（品名・ロット・SNP・個数がすべて空）はエラーにしない。** 末尾に常に空行がある UI なので、
   弾かないと常にエラーになる
@@ -24,6 +24,12 @@
 - **`.err` は `border-color` と `background` の両方に `!important` が要る。**
   カードの `.fld input{...;background:#fff}` は詳細度が `.err` より高く、そのままでは白背景に負ける
 - **カードに後から付けたクラスは `syncCards()` の再生成で消える。** 再生成のたびに貼り直すこと
+- **帯の `top` を CSS に焼き込まない。** `.tabs` は `position:sticky;top:0;z-index:30` なので、
+  帯を `top:0` にするとタブの裏に潜り込む。`.tabs` の実測高を JS で入れる
+- **`scrollIntoView` に `behavior:"smooth"` を使わない。** 直後に走るキーボード追随が
+  スクロール途中の座標を読み、2つのスクロールが競合する
+- **「品名必須」は既存機能の回帰。** 現状の `readLots()` は品名が空でもロットを識別子にして
+  配置する。承知のうえで受け入れると決めた（設計書「既知の影響と制限」1）
 - **`readLots()` / `inputWarnHtml()` / `run(goMap)` / `alert("荷物を1件以上入力してください。")` には
   手を入れない。** バリデーションは `runFromButton()` にだけ置く
 - 最後に `files/sw.js` の `CACHE_VERSION` を `v17` から `v18` にする（Task 3）
@@ -88,6 +94,7 @@ DevTools のコンソールに貼り付けて実行する。以降のタスク�
   - `updateErrBanner() -> void` … `#inputErr` の表示と文言
   - `showLotErrors(bad) -> void` … `validateLots()` の結果を画面に出し、最初の欠け欄へ連れていく
   - `focusFirstErr(r) -> void` … 可視な側（テーブル or カード）の欄へフォーカス＋スクロール
+  - `keepErrVisible(el) -> void` … キーボードが開いたあと、欄が可視領域に入るよう押し戻す
 
 - [ ] **Step 1: `.err` と `.inputerr` の CSS を足す**
 
@@ -105,10 +112,15 @@ DevTools のコンソールに貼り付けて実行する。以降のタスク�
   .lotcard .foot .val.warn{color:#b45309;font-size:15px}
 
   /* ---- 入力の不備 ---- */
-  /* background にも !important が要る。カードの .fld input{...;background:#fff} は
-     詳細度が .err より高く、border だけ !important にすると白背景のままになる */
+  /* background の !important が効くのはカード側。.fld input{...;background:#fff} は
+     詳細度 (0,1,1) で .err の (0,1,0) より高く、border だけ !important にすると白背景のまま。
+     テーブルの td input,td select は (0,0,2) なので素で勝つが、面ごとに書き分けない */
   .err{border-color:#dc2626 !important;background:#fef2f2 !important}
-  .inputerr{margin:0 0 10px;padding:9px 12px;border-radius:8px;font-size:13px;font-weight:600;
+  /* 不完全な行までスクロールすると見出し直下の帯は画面外へ流れるので sticky にする。
+     top は .tabs の実測高を updateErrBanner() が入れる（.tabs 自身が sticky top:0 z-index:30 で、
+     0 にすると裏に潜り込む）。.card にも .wrap にも overflow は無いので sticky は素直に効く */
+  .inputerr{position:sticky;z-index:20;margin:0 0 10px;padding:9px 12px;border-radius:8px;
+            font-size:13px;font-weight:600;
             background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
 ```
 
@@ -202,7 +214,11 @@ function updateErrBanner(){
   const n=document.querySelectorAll("#lotTable tbody tr[data-err]").length;
   const el=document.getElementById("inputErr");
   el.style.display = n ? "block" : "none";
-  if(n) el.textContent=`⚠ 入力が足りない荷物が ${n} 件あります（品名・個数・SNP は必須）`;
+  if(!n) return;
+  el.textContent=`⚠ 入力が足りない荷物が ${n} 件あります（品名・個数・SNP は必須）`;
+  // sticky の止まる位置。タブの高さは4タブぶんの min-height とフォントで決まるので毎回測る
+  const tabs=document.querySelector(".tabs");
+  el.style.top = (tabs ? tabs.getBoundingClientRect().height : 0)+"px";
 }
 
 // ボタンを押して不完全な行が見つかったとき
@@ -223,9 +239,31 @@ function focusFirstErr(r){
     : document.querySelector(`.lotcard[data-i="${r.i}"] .fld[data-f="${f}"] input,`
                             +`.lotcard[data-i="${r.i}"] .fld[data-f="${f}"] select`);
   if(!el) return;
-  // focus() の既定スクロールに任せると位置が中途半端になるので、止めてから自分で寄せる
+  // focus() の既定スクロールに任せると位置が中途半端になるので、止めてから自分で寄せる。
+  // behavior:"smooth" は使わない。非同期なので、下の追随が途中の座標を読んで競合する
   try{ el.focus({preventScroll:true}); }catch(e){ el.focus(); }
-  el.scrollIntoView({behavior:"smooth", block:"center"});
+  el.scrollIntoView({block:"center"});
+  // Gboard は focus() の直後ではなく少し遅れて開き、visualViewport を縮める。
+  // 縮んだあとに寄せ直さないと、赤枠の欄がキーボードの下に隠れる。resize を1回だけ拾う
+  const vv=window.visualViewport;
+  if(vv){
+    const again=()=>{ vv.removeEventListener("resize",again); keepErrVisible(el); };
+    vv.addEventListener("resize", again);
+    setTimeout(()=>vv.removeEventListener("resize",again), 1200);   // 開かなかったときの後始末
+  }
+}
+
+// 欄が可視領域に入っていなければ押し戻す。
+// 可視領域の出し方は acPosition()（品名候補の位置決め）と同じ考え方。
+// 画面下端には「▶ 自動配置を作成」の固定バーが乗っているので、その高さを引く
+function keepErrVisible(el){
+  const vv=window.visualViewport; if(!vv) return;
+  const bar=document.getElementById("actionBar");
+  const barH=(bar && bar.style.display!=="none") ? bar.getBoundingClientRect().height : 0;
+  const r=el.getBoundingClientRect();
+  const top=vv.offsetTop+12, bottom=vv.offsetTop+vv.height-barH-12;
+  if(r.bottom>bottom)    window.scrollBy(0, r.bottom-bottom);
+  else if(r.top<top)     window.scrollBy(0, r.top-top);
 }
 
 /* ---------- 品名のオートコンプリート ----------
@@ -525,7 +563,29 @@ document.getElementById("tabbtn-input").classList.contains("active")+" / "+docum
 ```
 
 ページ最上部にいる状態で「▶ 自動配置を作成」を押す。
-最下行の個数欄まで自動でスクロールし、赤枠が画面の中ほどに見える状態で止まること。
+
+確認すること:
+
+- 最下行の個数欄まで自動でスクロールし、赤枠が画面の中ほどに見える状態で止まる
+- **帯がタブ直下に貼り付いたまま見えている**（見出しは画面外へ流れているが帯は残る）
+- 帯がタブの裏に潜り込んでいない
+
+コンソールで裏取りする:
+
+```js
+(function(){
+  const b=document.getElementById("inputErr").getBoundingClientRect();
+  const t=document.querySelector(".tabs").getBoundingClientRect();
+  return "banner.top="+Math.round(b.top)+" / tabs.bottom="+Math.round(t.bottom)
+       +" / ok="+(Math.abs(b.top-t.bottom)<2);
+})()
+```
+
+期待される出力（`ok=true` であること。数値は環境で変わる）:
+
+```
+'banner.top=49 / tabs.bottom=49 / ok=true'
+```
 
 - [ ] **Step 8: カード表示でも動くことを確かめる**
 
@@ -625,7 +685,11 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 6. 行を10行ほど増やし、画面外になる最下行だけ不完全にしてボタン
    → その行まで自動でスクロールし、赤枠が見える状態で止まる
 7. 完全な行と不完全な行が混在する状態でボタン → 配置は作られず、不完全な行だけが赤枠
-8. Gboard が開いた状態でも、赤枠の欄がキーボードに隠れていない
+8. 6 の状態で Gboard が開いたあとも、赤枠の欄がキーボードと下部バーの上に見えている
+   （`focusFirstErr()` が `visualViewport` の `resize` を1回拾って押し戻す）
+9. 6 の状態で帯（「入力が足りない荷物が N 件」）がタブ直下に貼り付いて見えている
+10. 数字キーボードと文字キーボードで高さが違うので、5 の「品名だけの行」（文字キーボード）でも
+    8 が成り立つことを見る
 
-**8 で隠れる場合は停止して相談する。** `scrollIntoView` のタイミングを
-`visualViewport` の `resize` まで遅らせる必要があり、設計の範囲を超える。
+**8〜10 のいずれかが崩れる場合は停止して相談する。** キーボードの高さと
+`visualViewport` の値の対応は端末とキーボードアプリに依存し、机上では詰められない。

@@ -90,8 +90,10 @@ tr.dataset.err = "name,qty";   // 欠けている欄だけをカンマ区切り�
 .err{border-color:#dc2626 !important;background:#fef2f2 !important}
 ```
 
-`background` にも `!important` が要る。カードの `.fld input{...;background:#fff}` は
-セレクタの詳細度が `.err` より高く、そのままでは白背景に負ける。
+`background` の `!important` が効くのは**カード側**。`.fld input{...;background:#fff}` は
+詳細度 (0,1,1) で `.err` の (0,1,0) より高く、そのままでは白背景に負ける。
+テーブル側の `td input,td select` は (0,0,2) なので `.err` が素で勝つが、
+面ごとに書き分けず1つのルールで済ませる。
 
 クラスは状態そのものではなく `tr.dataset.err` の写しとして扱う。
 `applyRowErr(tr, i)` 1本が dataset を読んで、テーブル側（`cells[1]/[3]/[4]`）と
@@ -124,6 +126,17 @@ SNP 欄は候補が2つ以上あると `<select>` になるので、`<input>` �
 
 件数は**行数**で数える（欠けている欄の数ではない）。
 既存の `#messages` は `#tab-edit` の中にあるので入力タブでは使えない。
+
+**帯は `position:sticky` にする。** フォーカスは不完全な行までスクロールするので、
+行数が多いと見出し直下の帯は画面外へ流れ、ユーザーには赤枠が1つ見えるだけで
+件数が届かない。
+
+`top` は JS で `.tabs` の実測高から入れる。`.tabs` 自身が `position:sticky;top:0;z-index:30` なので、
+帯を `top:0` にすると**タブの裏に潜り込む**。タブの高さは 4 タブぶんの `min-height` と
+フォントサイズで決まるため、CSS に数値を焼き込まず毎回測る。
+
+`.card` にも `.wrap` にも `overflow` は指定されていないので、sticky は素直に効く。
+効く範囲は「荷物の入力」カードの中だけで、表を抜ければ帯も一緒に流れる（意図どおり）。
 
 ### 解除
 
@@ -166,9 +179,24 @@ const tableVisible = document.getElementById("lotTableWrap").offsetParent !== nu
 `focus()` を `preventScroll` 無しで呼ぶ。今回フォーカスするのは必ず**空の欄**なので
 キャレット位置は意味を持たず、`preventScroll` を使えないほうが害になる。
 
-呼ぶ順序は `focus({preventScroll:true})` → `scrollIntoView({behavior:"smooth", block:"center"})`。
+呼ぶ順序は `focus({preventScroll:true})` → `scrollIntoView({block:"center"})`。
 先に `focus()` させておき、そのあと自前で位置を決める。逆順だと `focus()` の既定スクロールで
 せっかく合わせた位置が飛ぶ。
+
+**`behavior:"smooth"` は使わない。** 滑らかなスクロールは非同期で、直後に走る
+キーボード追随（下記）が途中の座標を読んでしまい、2つのスクロールが競合する。即時に寄せる。
+
+### キーボードで隠れないようにする
+
+Gboard は `focus()` の直後ではなく少し遅れて開き、`visualViewport` を縮める。
+寄せたあとにキーボードが出ると、赤枠の欄がその下に隠れる。
+
+`visualViewport` の `resize` を**1回だけ**拾い、欄が可視領域に入っていなければ
+`window.scrollBy()` で押し戻す。1.2 秒でリスナを外す（キーボードが開かなかったときの後始末）。
+
+可視領域の出し方は既存の `acPosition()`（品名候補の位置決め）と同じ考え方にする。
+あちらも `vv.offsetTop` / `vv.height` を読み、画面下端に居座る `#actionBar` の高さを引いている。
+`visualViewport` の `resize` / `scroll` の購読はすでにファイル内にあるので、新しい依存は増えない。
 
 ### 触らないもの
 
@@ -186,6 +214,8 @@ const tableVisible = document.getElementById("lotTableWrap").offsetParent !== nu
 | `scrollIntoView({behavior, block})` | 全モダンブラウザ対応 |
 | `HTMLElement.dataset` | 制約なし |
 | `offsetParent === null` による可視判定 | `position:fixed` の要素では使えないが、`#lotTableWrap` は static なので問題ない |
+| `window.visualViewport` | Chrome 61+ / Safari 13+ / Firefox 91+。既に `acPosition()` で使っている。無い環境では追随を諦める（`if(!vv) return`） |
+| `position:sticky` | 全モダンブラウザ対応。祖先に `overflow` が無いことが条件で、`.card` / `.wrap` とも指定なし |
 
 **PWA:** `files/sw.js` は HTML を network-first で配るので `index.html` の変更は届く。
 ただしファイル先頭の注記どおり `CACHE_VERSION` を `v17` → `v18` に上げる。
@@ -212,7 +242,9 @@ const tableVisible = document.getElementById("lotTableWrap").offsetParent !== nu
 6. 行を10行ほど増やし、画面外になる最下行だけ不完全にしてボタン
    → その行まで自動でスクロールし、赤枠が見える状態で止まる
 7. 完全な行と不完全な行が混在する状態でボタン → 配置は作られず、不完全な行だけが赤枠
-8. PC 幅（ウィンドウを 600px より広く）でも 2〜7 が同じように動く
+8. 6 の状態で Gboard が開いたあとも、赤枠の欄がキーボードと下部バーの上に見えている
+9. 6 の状態で帯（「入力が足りない荷物が N 件」）がタブ直下に貼り付いて見えている
+10. PC 幅（ウィンドウを 600px より広く）でも 2〜7 が同じように動く
 
 ## 対象ファイル
 
@@ -220,8 +252,39 @@ const tableVisible = document.getElementById("lotTableWrap").offsetParent !== nu
   `syncCards()` / `cardEdit()` / `runFromButton()` に手を入れる
 - `files/sw.js` … `CACHE_VERSION` を `v17` → `v18`
 
+## 既知の影響と制限
+
+設計レビュー（`/dig`）で洗い出し、いずれも承知のうえで受け入れる。
+
+**1. 「品名必須」は既存機能の回帰。**
+現状の `readLots()` は品名が空でも配置する（`code:v.lot||v.name||("行"+(i+1))` と
+フォールバックし、`key` も品名なしを想定している）。`inputWarnHtml()` には
+`${u.name||"(品名なし)"}` という分岐まである。つまり「ロット番号だけ分かっていて
+品名が未確定の荷物」は今は置ける。今回の変更でこれが赤枠になり配置できなくなる。
+実務で品名不明の荷物は考えにくいという判断で、回帰を受け入れる。
+
+**2. `run(false)` の経路はバリデーションを通らない。**
+通路編集モード、列の通路トグル、設定の反映・リセット、起動時復元の6か所は
+`runFromButton()` を経由せず `run(false)` を直接呼ぶ。赤枠が出たまま設定タブで
+列構成を変えると、`readLots()` が個数0の行を黙って捨てた配置図だけが更新され、
+入力タブの赤枠と食い違う。既存挙動の延長だが、赤枠が出ることで初めて目に見えるようになる。
+
+**3. 未入力と「0 と打った」を区別しない。**
+`parseInt("0")||0` は 0 なので、個数に明示的に 0 を入れた行も「足りない」と表示される。
+どちらも配置できない値なので実害は無いが、文言とは厳密には合わない。
+
+**4. 赤枠と帯はリロードで消える。**
+`readRowData()` は `{type, name, lot, snp, qty}` しか保存しないので `dataset.err` は残らない。
+PWA をバックグラウンドから復帰させると赤枠は消え、入力は不完全なまま残る。
+次にボタンを押せばまた出るので、意図した挙動として扱う。
+
+**5. 不完全な行が1件でもあると、未登録品目の登録に到達しない。**
+「10行入力して1行だけ個数を忘れた」場合、他の行の未登録品目もマスタに入らない。
+入力を直してもう一度押せば登録される。止めることを優先した設計の帰結。
+
 ## スコープ外
 
 - 入力中のリアルタイムバリデーション（ボタンを押すまで赤枠は出さない）
 - 帯をタップして該当行へ飛ぶ導線
+- `aria-invalid` / `role="alert"` などのアクセシビリティ属性
 - `readLots()` / `inputWarnHtml()` のリファクタリング
