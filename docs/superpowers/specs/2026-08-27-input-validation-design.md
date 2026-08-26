@@ -69,7 +69,7 @@ brainstorming で5点を確認し、すべて確定した。
 [{ tr, i, fields: ["name", "qty"] }, ...]   // i は 0 始まりの行番号
 ```
 
-`i` はカード側の `focusField(i, f)` が `.lotcard[data-i="${i}"]` で引くために要る。
+`i` はカード側の欄を `.lotcard[data-i="${i}"]` で引くために要る。
 
 ### エラー状態の持ち方 — `tr.dataset.err`
 
@@ -87,15 +87,25 @@ tr.dataset.err = "name,qty";   // 欠けている欄だけをカンマ区切り�
 ### 見た目
 
 ```css
-.err{border-color:#dc2626 !important;background:#fef2f2}
+.err{border-color:#dc2626 !important;background:#fef2f2 !important}
 ```
 
-- **テーブル側** … `tr.dataset.err` を読み、`cells[1]` / `cells[3]` / `cells[4]` に `.err` を付け外しする
-- **カード側** … `syncCards()` の中で `tr.dataset.err` を読み、組み立て時に `class="err"` を埋め込む
+`background` にも `!important` が要る。カードの `.fld input{...;background:#fff}` は
+セレクタの詳細度が `.err` より高く、そのままでは白背景に負ける。
 
-**カードに後から `classList.add()` してはいけない。** カードは `syncCards()` で毎回作り直されるため、
-次の再生成で消える。組み立て時に埋め込むこと。
+クラスは状態そのものではなく `tr.dataset.err` の写しとして扱う。
+`applyRowErr(tr, i)` 1本が dataset を読んで、テーブル側（`cells[1]/[3]/[4]`）と
+カード側（`.fld[data-f="…"]` の中の `input` / `select`）の両方に `classList.toggle()` する。
+
+**カードは `syncCards()` で毎回作り直されるので、後から付けたクラスは次の再生成で消える。**
+そこで `syncCards()` の末尾で全行ぶんを付け直す。
 （同じ罠はオートコンプリートの `#acList` を `<body>` 直下に置いた理由と同根。）
+
+**再適用のフックは2か所で足りる。**
+`rowChanged()` / `cardSnpSelect()` / `acPick()` / `snpAdd()` / `cardType()` / `removeRow()` は
+いずれも中で `syncCards()` を呼ぶので、末尾のフック1つで拾える。
+唯一 `cardEdit()` だけは入力中のフォーカスを保つため `syncCards()` を呼ばず
+`updateCardFoot()` で済ませているので、ここにも呼び出しを足す。
 
 SNP 欄は候補が2つ以上あると `<select>` になるので、`<input>` だけを対象にすると当たらない。
 `<select>` にも `.err` を付けられるようにする。
@@ -117,7 +127,7 @@ SNP 欄は候補が2つ以上あると `<select>` になるので、`<input>` �
 
 ### 解除
 
-`rowChanged()` と `cardEdit()` の中で、**その行に `dataset.err` があるときだけ**再判定する。
+**その行に `dataset.err` があるときだけ**再判定する。
 
 - 埋まった欄の `.err` を外し、`dataset.err` を残りの欠け欄で更新する
 - 全部埋まったら `dataset.err` を削除する
@@ -149,8 +159,12 @@ SNP 欄は候補が2つ以上あると `<select>` になるので、`<input>` �
 const tableVisible = document.getElementById("lotTableWrap").offsetParent !== null;
 ```
 
-- 表示中がテーブル → `tr.querySelectorAll("select,input")[idx]` を直接 focus
-- 表示中がカード → 既存の `focusField(i, f)` を使う（`f` は `"name"` / `"snp"` / `"qty"`）
+- 表示中がテーブル → `tr.querySelectorAll("select,input")[idx]` を引く
+- 表示中がカード → `.lotcard[data-i="i"] .fld[data-f="f"]` の中の `input` / `select` を引く
+
+既存の `focusField(i, f)` は使わない。あれはカード専用なうえ、キャレットを末尾へ送るために
+`focus()` を `preventScroll` 無しで呼ぶ。今回フォーカスするのは必ず**空の欄**なので
+キャレット位置は意味を持たず、`preventScroll` を使えないほうが害になる。
 
 呼ぶ順序は `focus({preventScroll:true})` → `scrollIntoView({behavior:"smooth", block:"center"})`。
 先に `focus()` させておき、そのあと自前で位置を決める。逆順だと `focus()` の既定スクロールで
@@ -202,8 +216,8 @@ const tableVisible = document.getElementById("lotTableWrap").offsetParent !== nu
 
 ## 対象ファイル
 
-- `files/index.html` … CSS 1行、`#inputErr` 要素、`validateLots()` ほか関数追加、
-  `rowChanged()` / `cardEdit()` / `syncCards()` / `runFromButton()` に手を入れる
+- `files/index.html` … CSS 2行、`#inputErr` 要素、`validateLots()` ほか関数追加、
+  `syncCards()` / `cardEdit()` / `runFromButton()` に手を入れる
 - `files/sw.js` … `CACHE_VERSION` を `v17` → `v18`
 
 ## スコープ外
