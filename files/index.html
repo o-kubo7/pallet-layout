@@ -1883,6 +1883,10 @@ function registerItems(list){
 }
 // 「▶ 自動配置を作成」の入口。手動調整があるときだけ確認する。
 function runFromButton(){
+  // 入力が不完全なら、ここで止める。手動調整の破棄を聞く前に返すので、破棄せずに直せる
+  const bad=validateLots();
+  if(bad.length){ showLotErrors(bad); return; }
+
   if(hasManual() && !confirm("手動調整を破棄して自動配置し直します。よろしいですか？")) return;
 
   // 未登録の品目は、何を入れるか見せてから登録する。
