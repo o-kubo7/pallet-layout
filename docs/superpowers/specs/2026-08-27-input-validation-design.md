@@ -53,9 +53,13 @@ brainstorming で5点を確認し、すべて確定した。
 
 | 分類 | 条件 | 扱い |
 |---|---|---|
-| 空行 | `!v.name && !v.lot && v.snp<=0 && v.qty<=0` | スキップ |
+| 空行 | `!v.name && !v.lot && v.qty<=0` | スキップ |
 | 不完全 | 空行ではなく、`!v.name` / `v.snp<=0` / `v.qty<=0` のいずれか | エラー |
 | 完全 | 上記以外 | 通す |
+
+空行の判定に SNP は入れない。`nameChanged()` が品名から SNP を自動補完するため、
+品名を消しても補完済みの SNP だけが残ることがある。ここで SNP を条件に含めると、
+その行は空行と判定されずエラーのまま抜け出せなくなる（品名を入れて消すと再現）。
 
 種別（`<select>`）は常に値を持つので判定に含めない。
 末尾に常に空行がある UI なので、空行をスキップしないと常にエラーになる。
@@ -197,6 +201,11 @@ Gboard は `focus()` の直後ではなく少し遅れて開き、`visualViewpor
 可視領域の出し方は既存の `acPosition()`（品名候補の位置決め）と同じ考え方にする。
 あちらも `vv.offsetTop` / `vv.height` を読み、画面下端に居座る `#actionBar` の高さを引いている。
 `visualViewport` の `resize` / `scroll` の購読はすでにファイル内にあるので、新しい依存は増えない。
+
+ハンドラとタイマーは既存の `acSwallowTap` / `acSwallowTimer` と同じ流儀で、
+モジュールスコープにそれぞれ1本だけ持つ（`errViewportEl` / `errViewportTimer`）。
+`focusFirstErr()` が連続で走っても、張り直す前に前回ぶんを `removeEventListener` /
+`clearTimeout` してから登録するため、生きている `resize` リスナは常に最大1本になる。
 
 ### 触らないもの
 

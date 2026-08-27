@@ -944,11 +944,13 @@ function cardDelete(i){ const tr=trAt(i); if(!tr)return; tr.remove(); syncCards(
 const ERR_FIELDS=["name","snp","qty"];    // 欄の並び順。先頭が「最初の欠け欄」になる
 const ERR_CELL={name:1, snp:3, qty:4};    // tr.querySelectorAll("select,input") の添字
 
-// その行に足りない欄を返す。空行（種別以外すべて空）は対象外なので空配列。
-// 末尾には常に空行があるので、これを弾かないと常にエラーになる
+// その行に足りない欄を返す。空行（品名・ロット・個数がすべて空）は対象外なので空配列。
+// 末尾には常に空行があるので、これを弾かないと常にエラーになる。
+// 判定にSNPは入れない。品名を消してもnameChanged()が自動補完したSNPだけが残る
+// ことがあり、SNPを条件に含めると空行扱いにならず抜け出せない行ができてしまう
 function missingFields(tr){
   const v=rowValues(tr);
-  if(!v.name && !v.lot && v.snp<=0 && v.qty<=0) return [];
+  if(!v.name && !v.lot && v.qty<=0) return [];
   const m=[];
   if(!v.name) m.push("name");
   if(v.snp<=0) m.push("snp");
@@ -1021,10 +1023,21 @@ function focusFirstErr(r){
   // 縮んだあとに寄せ直さないと、赤枠の欄がキーボードの下に隠れる。resize を1回だけ拾う
   const vv=window.visualViewport;
   if(vv){
-    const again=()=>{ vv.removeEventListener("resize",again); keepErrVisible(el); };
-    vv.addEventListener("resize", again);
-    setTimeout(()=>vv.removeEventListener("resize",again), 1200);   // 開かなかったときの後始末
+    // acSwallowTap/acSwallowTimer と同じ流儀で、ハンドラとタイマーを1本だけ
+    // モジュールスコープに持つ。連打で resize リスナが積み上がらないよう、
+    // 張り直す前に前回ぶんを外してから登録し直す
+    vv.removeEventListener("resize", errViewportResize);
+    clearTimeout(errViewportTimer);
+    errViewportEl=el;
+    vv.addEventListener("resize", errViewportResize);
+    errViewportTimer=setTimeout(()=>vv.removeEventListener("resize",errViewportResize), 1200);   // 開かなかったときの後始末
   }
+}
+let errViewportEl=null;      // resize時にkeepErrVisible()へ渡す対象。focusFirstErr()の呼び出しごとに更新
+let errViewportTimer=0;      // 上のリスナを後始末するタイマー。1本だけ持ち、張り直す前にclearTimeoutする
+function errViewportResize(){
+  window.visualViewport.removeEventListener("resize", errViewportResize);
+  if(errViewportEl) keepErrVisible(errViewportEl);
 }
 
 // 欄が可視領域に入っていなければ押し戻す。
