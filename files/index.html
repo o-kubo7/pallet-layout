@@ -178,6 +178,18 @@
   .lotcard .foot .val{font-size:22px;font-weight:800}
   .lotcard .foot .val.warn{color:#b45309;font-size:15px}
 
+  /* ---- 入力の不備 ---- */
+  /* background の !important が効くのはカード側。.fld input{...;background:#fff} は
+     詳細度 (0,1,1) で .err の (0,1,0) より高く、border だけ !important にすると白背景のまま。
+     テーブルの td input,td select は (0,0,2) なので素で勝つが、面ごとに書き分けない */
+  .err{border-color:#dc2626 !important;background:#fef2f2 !important}
+  /* 不完全な行までスクロールすると見出し直下の帯は画面外へ流れるので sticky にする。
+     top は .tabs の実測高を updateErrBanner() が入れる（.tabs 自身が sticky top:0 z-index:30 で、
+     0 にすると裏に潜り込む）。.card にも .wrap にも overflow は無いので sticky は素直に効く */
+  .inputerr{position:sticky;z-index:20;margin:0 0 10px;padding:9px 12px;border-radius:8px;
+            font-size:13px;font-weight:600;
+            background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+
   @media (max-width:600px){
     .wrap{padding:12px 12px calc(96px + var(--safe))}
     .card{padding:12px;border-radius:12px}
@@ -327,6 +339,8 @@
 
     <div class="card">
       <h2>荷物の入力 <span class="badge">個数 ÷ SNP → パレット数</span></h2>
+
+      <div id="inputErr" class="inputerr" style="display:none"></div>
 
       <!-- スマホ: カード -->
       <div class="lotcards" id="lotCards"></div>
@@ -806,6 +820,8 @@ function syncCards(){
       <button class="nextbtn" onclick="addNextRow(${i})">＋ 次の荷物</button>
     </div>`;
   }).join("");
+  rows.forEach((tr,i)=>refreshRowErr(tr,i));   // カードを作り直したので赤枠を貼り直す
+  updateErrBanner();
 }
 // SNPプルダウンの選択
 function cardSnpSelect(i,val){
@@ -899,6 +915,7 @@ function cardEdit(i,idx,val){
     }
   }
   recalcRow(tr); saveLots(); updateCardFoot(i);
+  refreshRowErr(tr,i); updateErrBanner();   // syncCards() を通らない唯一の入力経路
 }
 function updateCardFoot(i){ // 入力中のフォーカスを保つため、必要箇所だけ更新
   const tr=trAt(i), card=document.querySelector(`.lotcard[data-i="${i}"]`);
@@ -917,6 +934,124 @@ function cardType(i,t){
   recalcRow(tr); saveLots(); syncCards();
 }
 function cardDelete(i){ const tr=trAt(i); if(!tr)return; tr.remove(); syncCards(); saveLots(); }
+
+/* ---------- 入力のバリデーション ----------
+   「▶ 自動配置を作成」を押したときだけ赤枠を出す。押す前は何も光らせない。
+   状態は tr.dataset.err（欠けている欄をカンマ区切り）に持つ。
+   行番号の配列で持つと、行を消したときに番号がずれて無関係な行が赤くなる。
+   クラスは状態そのものではなく dataset.err の写しとして扱う。 */
+
+const ERR_FIELDS=["name","snp","qty"];    // 欄の並び順。先頭が「最初の欠け欄」になる
+const ERR_CELL={name:1, snp:3, qty:4};    // tr.querySelectorAll("select,input") の添字
+
+// その行に足りない欄を返す。空行（品名・ロット・個数がすべて空）は対象外なので空配列。
+// 末尾には常に空行があるので、これを弾かないと常にエラーになる。
+// 判定にSNPは入れない。品名を消してもnameChanged()が自動補完したSNPだけが残る
+// ことがあり、SNPを条件に含めると空行扱いにならず抜け出せない行ができてしまう
+function missingFields(tr){
+  const v=rowValues(tr);
+  if(!v.name && !v.lot && v.qty<=0) return [];
+  const m=[];
+  if(!v.name) m.push("name");
+  if(v.snp<=0) m.push("snp");
+  if(v.qty<=0) m.push("qty");
+  return m;
+}
+
+function validateLots(){
+  return [...document.querySelectorAll("#lotTable tbody tr")]
+    .map((tr,i)=>({tr:tr, i:i, fields:missingFields(tr)}))
+    .filter(r=>r.fields.length>0);
+}
+
+// dataset.err どおりにクラスを貼り直す。テーブルとカードの両方に同じ内容を貼る
+function applyRowErr(tr,i){
+  const on=(tr.dataset.err||"").split(",").filter(Boolean);
+  const c=tr.querySelectorAll("select,input");
+  const card=document.querySelector(`.lotcard[data-i="${i}"]`);
+  ERR_FIELDS.forEach(f=>{
+    const cell=c[ERR_CELL[f]];
+    if(cell) cell.classList.toggle("err", on.includes(f));
+    // SNP欄は候補が2つ以上あると <select> になるので、input だけを探すと当たらない
+    const fld=card && card.querySelector(`.fld[data-f="${f}"] input,.fld[data-f="${f}"] select`);
+    if(fld) fld.classList.toggle("err", on.includes(f));
+  });
+}
+
+// 赤枠の付いている行だけを取り直す。付いていない行は触らない（押す前は静かなまま）
+function refreshRowErr(tr,i){
+  if(tr.dataset.err==null) return;
+  const m=missingFields(tr);
+  if(m.length) tr.dataset.err=m.join(","); else delete tr.dataset.err;
+  applyRowErr(tr,i);
+}
+
+function updateErrBanner(){
+  const n=document.querySelectorAll("#lotTable tbody tr[data-err]").length;
+  const el=document.getElementById("inputErr");
+  el.style.display = n ? "block" : "none";
+  if(!n) return;
+  el.textContent=`⚠ 入力が足りない荷物が ${n} 件あります（品名・個数・SNP は必須）`;
+  // sticky の止まる位置。タブの高さは4タブぶんの min-height とフォントで決まるので毎回測る
+  const tabs=document.querySelector(".tabs");
+  el.style.top = (tabs ? tabs.getBoundingClientRect().height : 0)+"px";
+}
+
+// ボタンを押して不完全な行が見つかったとき
+function showLotErrors(bad){
+  document.querySelectorAll("#lotTable tbody tr").forEach(tr=>{ delete tr.dataset.err; });
+  bad.forEach(r=>{ r.tr.dataset.err=r.fields.join(","); });
+  syncCards();   // カードを作り直す。末尾で applyRowErr() と updateErrBanner() が走る
+  focusFirstErr(bad[0]);
+}
+
+// 最初の欠け欄へ連れていく。
+// テーブルとカードは幅で排他表示されるので、非表示側に focus() しても効かない。可視な側を選ぶ
+function focusFirstErr(r){
+  const f=r.fields[0];
+  const tableVisible=document.getElementById("lotTableWrap").offsetParent!==null;
+  const el = tableVisible
+    ? r.tr.querySelectorAll("select,input")[ERR_CELL[f]]
+    : document.querySelector(`.lotcard[data-i="${r.i}"] .fld[data-f="${f}"] input,`
+                            +`.lotcard[data-i="${r.i}"] .fld[data-f="${f}"] select`);
+  if(!el) return;
+  // focus() の既定スクロールに任せると位置が中途半端になるので、止めてから自分で寄せる。
+  // behavior:"smooth" は使わない。非同期なので、下の追随が途中の座標を読んで競合する
+  try{ el.focus({preventScroll:true}); }catch(e){ el.focus(); }
+  el.scrollIntoView({block:"center"});
+  // Gboard は focus() の直後ではなく少し遅れて開き、visualViewport を縮める。
+  // 縮んだあとに寄せ直さないと、赤枠の欄がキーボードの下に隠れる。resize を1回だけ拾う
+  const vv=window.visualViewport;
+  if(vv){
+    // acSwallowTap/acSwallowTimer と同じ流儀で、ハンドラとタイマーを1本だけ
+    // モジュールスコープに持つ。連打で resize リスナが積み上がらないよう、
+    // 張り直す前に前回ぶんを外してから登録し直す
+    vv.removeEventListener("resize", errViewportResize);
+    clearTimeout(errViewportTimer);
+    errViewportEl=el;
+    vv.addEventListener("resize", errViewportResize);
+    errViewportTimer=setTimeout(()=>vv.removeEventListener("resize",errViewportResize), 1200);   // 開かなかったときの後始末
+  }
+}
+let errViewportEl=null;      // resize時にkeepErrVisible()へ渡す対象。focusFirstErr()の呼び出しごとに更新
+let errViewportTimer=0;      // 上のリスナを後始末するタイマー。1本だけ持ち、張り直す前にclearTimeoutする
+function errViewportResize(){
+  window.visualViewport.removeEventListener("resize", errViewportResize);
+  if(errViewportEl) keepErrVisible(errViewportEl);
+}
+
+// 欄が可視領域に入っていなければ押し戻す。
+// 可視領域の出し方は acPosition()（品名候補の位置決め）と同じ考え方。
+// 画面下端には「▶ 自動配置を作成」の固定バーが乗っているので、その高さを引く
+function keepErrVisible(el){
+  const vv=window.visualViewport; if(!vv) return;
+  const bar=document.getElementById("actionBar");
+  const barH=(bar && bar.style.display!=="none") ? bar.getBoundingClientRect().height : 0;
+  const r=el.getBoundingClientRect();
+  const top=vv.offsetTop+12, bottom=vv.offsetTop+vv.height-barH-12;
+  if(r.bottom>bottom)    window.scrollBy(0, r.bottom-bottom);
+  else if(r.top<top)     window.scrollBy(0, r.top-top);
+}
 
 /* ---------- 品名のオートコンプリート ----------
    <datalist> は Android 11 以降、IME がキーボード上の候補ストリップに
@@ -1761,6 +1896,10 @@ function registerItems(list){
 }
 // 「▶ 自動配置を作成」の入口。手動調整があるときだけ確認する。
 function runFromButton(){
+  // 入力が不完全なら、ここで止める。手動調整の破棄を聞く前に返すので、破棄せずに直せる
+  const bad=validateLots();
+  if(bad.length){ showLotErrors(bad); return; }
+
   if(hasManual() && !confirm("手動調整を破棄して自動配置し直します。よろしいですか？")) return;
 
   // 未登録の品目は、何を入れるか見せてから登録する。
