@@ -470,7 +470,7 @@
 
     <div class="card cfg">
       <h2>スペース設定 <span class="badge">微調整用・保存されません</span></h2>
-      <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路)</b></div>
+      <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路) | 掲載先(top/bottom/over)</b><br>掲載先は配置図の表のどこに欄を書くかです。top＝上段、bottom＝下段、over＝あふれブロック。省略すると今の設定を引き継ぎます。<b>あふれブロックは未実装</b>なので、over にしたエリアには荷物を置きません。<br><b>行の順番には意味があります。</b>上の行から順に自動配置で試します。また bottom の先頭の行が配置図の表の基準になり、その欄には注釈が付かず、大きなグリッドもそのエリアを描きます。並べ替えると配置のしかたが変わり、手動で調整した配置は破棄されます。</div>
       <textarea id="cfgText"></textarea>
       <div class="row-actions">
         <button class="btn btn-ghost" onclick="applyConfig()">設定を反映</button>
@@ -2045,10 +2045,15 @@ document.addEventListener("pointercancel",e=>{ if(drag && e.pointerId===drag.id)
 document.addEventListener("lostpointercapture",e=>{ if(drag && e.pointerId===drag.id) endDrag(); });
 
 /* ---------- スペース設定 ---------- */
-function spacesToText(){
+/* 設定テキストへの書き出し。
+   withSheet を偽にすると掲載先を除いた 5 項目になる。
+   inputFingerprint() が使う。掲載先は紙のどこに書くかであって倉庫の形ではないので、
+   手動調整を残すかどうかの判定には入れない。 */
+function spacesToText(withSheet=true){
   return SPACES.map(s=>{
     const cols=s.cols.map(c=>c.h+(c.aisle?"*":"")).join(",");
-    return `${s.name} | ${s.zone} | ${s.orient||"v"} | ${s.block||99} | ${cols}`;
+    const base=`${s.name} | ${s.zone} | ${s.orient||"v"} | ${s.block||99} | ${cols}`;
+    return withSheet ? `${base} | ${s.sheet||"bottom"}` : base;
   }).join("\n");
 }
 function applyConfig(){
@@ -2065,8 +2070,17 @@ function applyConfig(){
     }).filter(c=>c.h>0);
     if(!cols.length){alert("列の指定がありません:\n"+ln);return;}
     const prev=SPACES.find(s=>s.name===p[0]);
-    out.push({name:p[0], zone:p[1], orient, block, align:prev?prev.align:undefined, cols});
+    // 掲載先は省略できる。省略したら今の設定を引き継ぎ、無ければ下段にする。
+    const sheetRaw=(p[5]||"").trim();
+    let sheet;
+    if(sheetRaw===""){ sheet=(prev&&prev.sheet)?prev.sheet:"bottom"; }
+    else if(["top","bottom","over"].includes(sheetRaw)){ sheet=sheetRaw; }
+    else { alert("掲載先は top / bottom / over のどれか:\n"+ln); return; }
+    out.push({name:p[0], zone:p[1], orient, block, align:prev?prev.align:undefined, cols, sheet});
   }
+  if(!out.length){alert("設定が空です。1行以上必要です。");return;}
+  const dup=out.map(s=>s.name).find((n,i,a)=>a.indexOf(n)!==i);
+  if(dup){alert("同じ名前のエリアが2行あります:\n"+dup);return;}
   SPACES=out; showCapacity();
   if(lastLots) run(false);
   alert("設定を反映しました。");
