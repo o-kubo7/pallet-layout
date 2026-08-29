@@ -1861,11 +1861,11 @@ let edge={x:0, y:0, raf:0};          // 端の自動スクロール
    保存時の入力を指紋にすると {編集後の指紋, 編集前の配置} という食い違った組が残り、
    リロード時に一致してしまって古い配置が復元される。
 
-   列構成を含めるのは、SPACES が localStorage に保存されておらず
-   リロードで DEFAULT_SPACES に戻るため。設定を変えてから調整すると
-   復元した配置と SPACES のジオメトリが食い違う。 */
+   列構成を含めるのは、列の数や高さが変わると復元した配置がそのまま乗らないため。
+   掲載先（sheet）は含めない。紙のどこに欄を書くかであって倉庫の形ではないので、
+   変えても保存済みの配置はそのまま使える。spacesToText(false) で 5 項目に落とす。 */
 let lastFp=null;
-function inputFingerprint(){ return JSON.stringify(readRowData())+"|#|"+spacesToText(); }
+function inputFingerprint(){ return JSON.stringify(readRowData())+"|#|"+spacesToText(false); }
 function saveManual(){
   if(lastFp==null) return;
   saveData(STORE_KEY.manual, {fp:lastFp, sp:lastSp, lots:lastLots});
@@ -2087,19 +2087,30 @@ function applyConfig(){
   if(!out.length){alert("設定が空です。1行以上必要です。");return;}
   const dup=out.map(s=>s.name).find((n,i,a)=>a.indexOf(n)!==i);
   if(dup){alert("同じ名前のエリアが2行あります:\n"+dup);return;}
+  // 掲載先だけの変更なら再配置しない。run() は clearManual() を呼ぶので、
+  // 通すとブロック図で手動調整した配置が消える。
+  const geomBefore=spacesToText(false);
   SPACES=out;
   saveData(STORE_KEY.spaces, {v:SPACES_SAVE_VERSION, spaces:SPACES});
   clearCfgNote();
   showCapacity();
-  if(lastLots) run(false);
+  if(lastLots){
+    if(spacesToText(false)===geomBefore) redraw();
+    else run(false);
+  }
   alert("設定を反映しました。");
 }
 function resetConfig(){
+  const geomBefore=spacesToText(false);
   SPACES=clone(DEFAULT_SPACES);
   saveData(STORE_KEY.spaces, null);   // 「初期値に戻す」は保存も消す
   clearCfgNote();
   document.getElementById("cfgText").value=spacesToText();
-  showCapacity(); if(lastLots) run(false);
+  showCapacity();
+  if(lastLots){
+    if(spacesToText(false)===geomBefore) redraw();
+    else run(false);
+  }
 }
 /* 起動時の描画を包む。保存された設定が壊れていて描画に失敗すると、
    単一 script なのでここから下（Service Worker の登録を含む）が全部実行されない。
