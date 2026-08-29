@@ -498,13 +498,15 @@
 /* ===== スペース定義（配列の順＝自動配置でエリアを試す順）===== */
 const DEFAULT_SPACES = [
   // 配列の順＝自動配置でエリアを試す順（メイン ＞ 軒下 ＞ PC横・EV横）。
+  // 配置図の表では、下段の先頭にあたるエリアが基準になる（注釈を付けない・グリッドを描く）。
   // zone はブロック図の倉庫内／外の並べ分けにだけ使う。
-  {name:"メイン", zone:"near", orient:"v", block:3, align:"top", cols:[
+  // sheet は配置図の表のどのブロックに欄を書くか（top＝上段 / bottom＝下段 / over＝あふれブロック）。
+  {name:"メイン", zone:"near", orient:"v", block:3, align:"top", sheet:"bottom", cols:[
      {h:6,aisle:true},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:5,aisle:true}]},
-  {name:"軒下①", zone:"far", orient:"h", block:99, cols:[{h:11},{h:11},{h:8}]},
-  {name:"軒下②", zone:"far", orient:"v", block:99, cols:[{h:4},{h:4}]},
-  {name:"PC横", zone:"near", orient:"h", block:99, cols:[{h:8},{h:4}]},
-  {name:"EV横", zone:"near", orient:"h", block:99, cols:[{h:6},{h:4}]},
+  {name:"軒下①", zone:"far", orient:"h", block:99, sheet:"top", cols:[{h:11},{h:11},{h:8}]},
+  {name:"軒下②", zone:"far", orient:"v", block:99, sheet:"top", cols:[{h:4},{h:4}]},
+  {name:"PC横", zone:"near", orient:"h", block:99, sheet:"bottom", cols:[{h:8},{h:4}]},
+  {name:"EV横", zone:"near", orient:"h", block:99, sheet:"bottom", cols:[{h:6},{h:4}]},
 ];
 // 運用上ひとつづきに使うエリア。①が埋まったら②へ、と列を連結して連続窓を探す。
 // 設定でスペース名を変えるとこの連結は外れ、別エリア扱いになる。
@@ -517,10 +519,10 @@ const FLOOR_POS = {
   "軒下②":{c:1,r:1}, "軒下①":{c:2,r:1},
   "メイン":{c:2,r:1}, "PC横":{c:1,r:2,flip:true}, "EV横":{c:2,r:2,flip:true},
 };
-// 「配置図の表」での欄の割り当て
-const SHEET_TOP = ["軒下①","軒下②"];        // 上段4区画
-const SHEET_BOTTOM = ["メイン","PC横","EV横"]; // 下段7区画（メイン以外は注記を付ける）
-const SHEET_TOP_SLOTS = 4, SHEET_BOTTOM_SLOTS = 7; // 上の区画数と一致させる。renderSheet と欄数超過の警告で共有
+// 「配置図の表」での欄の割り当て。エリア名は SPACES の sheet 属性から引く。
+// 返す順は SPACES の並び順。下段の先頭が基準エリアで、注釈を付けず、グリッドを描く。
+function sheetAreas(tier){ return SPACES.filter(s=>(s.sheet||"bottom")===tier).map(s=>s.name); }
+const SHEET_TOP_SLOTS = 4, SHEET_BOTTOM_SLOTS = 7; // 紙のレイアウトで決まる欄数。renderSheet と欄数超過の警告で共有
 
 /* ===== 品目マスタ（品名 → SNP。同じ品名で複数SNP可）===== */
 const DEFAULT_MASTER = (function(){
@@ -1325,6 +1327,12 @@ function buildWork(){
    「メインを使い切ったら軒下より先にメインの通路を使う」が成立する。
    AREA_GROUPS のエリアは列を連結して1つの候補にする（軒下①が埋まったら②へ）。 */
 function areaCandidates(sp){
+  // 掲載先が「あふれブロック」のエリアは配置図の表に欄が無い。
+  // 荷物を置くと「倉庫にはあるのに紙のどこにも無い」ロットになるので、配置の対象から外す。
+  // buildWork() ではなくここで外すのは、エリア自体は倉庫に実在するのでブロック図には
+  // 空のまま残したいため。AREA_GROUPS の連結も byName に入らないことで自然に外れる。
+  const overNames=new Set(sheetAreas("over"));
+  sp=sp.filter(s=>!overNames.has(s.name));
   const byName={}; sp.forEach(s=>byName[s.name]=s);
   const done=new Set(), out=[];
   const push=members=>{
@@ -1456,18 +1464,20 @@ function renderResult(lots, unknown, typeMix){
   const usedAisle=sp.some(s=>s.cols.some(c=>c.aisle&&c.fills.length));
   const usedMix=sp.some(s=>s.cols.some(c=>c.fills.length>1));
   // 配置図の表は上段SHEET_TOP_SLOTS欄・下段SHEET_BOTTOM_SLOTS欄しかない。載りきらないロットは黙って消えるので知らせる。
-  const overTop=sheetEntries(SHEET_TOP,null).length-SHEET_TOP_SLOTS;
-  const overBottom=sheetEntries(SHEET_BOTTOM,"メイン").length-SHEET_BOTTOM_SLOTS;
-  // 設定でスペース名を変えると SHEET_TOP/SHEET_BOTTOM のどちらにも属さないエリアができる。
-  // そこに置かれたロットは欄自体が無く、上のカウントにも表れずに表から消える。
-  const sheetNames=new Set([...SHEET_TOP, ...SHEET_BOTTOM]);
-  const noSlotAreas=sp.filter(s=>!sheetNames.has(s.name) && s.cols.some(c=>c.fills.length)).map(s=>s.name);
-  if(overTop>0 || overBottom>0 || noSlotAreas.length){
+  const topAreas=sheetAreas("top"), bottomAreas=sheetAreas("bottom");
+  const overTop=sheetEntries(topAreas,null).length-SHEET_TOP_SLOTS;
+  const overBottom=sheetEntries(bottomAreas, bottomAreas[0]||null).length-SHEET_BOTTOM_SLOTS;
+  if(overTop>0 || overBottom>0){
     const parts=[];
-    if(overTop>0) parts.push(`軒下 ${overTop}件`);
-    if(overBottom>0) parts.push(`倉庫内 ${overBottom}件`);
-    if(noSlotAreas.length) parts.push(`表に欄のないエリア: ${noSlotAreas.join("・")}`);
+    if(overTop>0) parts.push(`上段 ${overTop}件`);
+    if(overBottom>0) parts.push(`下段 ${overBottom}件`);
     warnHtml+=`<div class="msg warn">⚠ 配置図の表に載りきらないロットがあります：${parts.join(" / ")}。ブロック図で確認してください。</div>`;
+  }
+  // あふれブロックの描画が未実装なので、掲載先が over のエリアは配置の対象から外してある
+  // （areaCandidates 参照）。使えない場所があることを知らせる。
+  const overAreas=sheetAreas("over");
+  if(overAreas.length){
+    warnHtml+=`<div class="msg warn">⚠ あふれブロックは未実装のため、次のエリアには荷物を置きません：${overAreas.join("・")}</div>`;
   }
 
   if(over.length){
@@ -2067,10 +2077,14 @@ function resetConfig(){
   showCapacity(); if(lastLots) run(false);
 }
 function showCapacity(){
-  const sum=(z,f)=>SPACES.filter(s=>s.zone===z).reduce((a,s)=>a+s.cols.filter(f).reduce((x,c)=>x+c.h,0),0);
+  // 掲載先が over のエリアは配置の対象外なので、収容能力からも除く。
+  const overNames=new Set(sheetAreas("over"));
+  const live=SPACES.filter(s=>!overNames.has(s.name));
+  const sum=(z,f)=>live.filter(s=>s.zone===z).reduce((a,s)=>a+s.cols.filter(f).reduce((x,c)=>x+c.h,0),0);
+  const excluded=[...overNames].length?`　（あふれ指定のため除外：${[...overNames].join("・")}）`:"";
   document.getElementById("capacity").textContent=
     `収容能力 — 倉庫内: 通常${sum("near",c=>!c.aisle)}P＋通路${sum("near",c=>c.aisle)}P ／ `+
-    `倉庫外: 通常${sum("far",c=>!c.aisle)}P＋通路${sum("far",c=>c.aisle)}P`;
+    `倉庫外: 通常${sum("far",c=>!c.aisle)}P＋通路${sum("far",c=>c.aisle)}P`+excluded;
 }
 
 
@@ -2210,9 +2224,10 @@ function renderSheet(){
   const host=document.getElementById("sheetView");
   if(!hasResult || !lastSp){ host.innerHTML=""; return; }
 
-  // 上段：軒下（①→②の順・注釈なし） / 下段：メイン→PC横→EV横（メイン以外を注釈に）
-  const top=sheetEntries(SHEET_TOP, null);
-  const bottom=sheetEntries(SHEET_BOTTOM, "メイン");
+  // 上段・下段に出すエリアは掲載先の属性から引く。下段の先頭エリアは注釈を付けない基準にする。
+  const topAreas=sheetAreas("top"), bottomAreas=sheetAreas("bottom");
+  const top=sheetEntries(topAreas, null);
+  const bottom=sheetEntries(bottomAreas, bottomAreas[0]||null);
   const d=headDate?new Date(headDate+"T00:00:00"):null;
   const mm=d?d.getMonth()+1:"", dd=d?d.getDate():"", dw=d?DOW[d.getDay()]:"";
   const totalP=lastLots.reduce((a,l)=>a+l.pallets,0);
@@ -2293,11 +2308,22 @@ function slotCells(entries,count,kind,extra){
   return out;
 }
 
-// メインのグリッド行（○／半／太枠）
+// 下段の先頭エリアのグリッド行（○／半／太枠）。
+// drawLeaders() は下段の欄からこのグリッドへ線を引くので、
+// 欄の基準エリア（sheetEntries の baseArea）と必ず同じエリアにする。
+// ここを固定名にしておくと、基準エリアの掲載先を変えたときに
+// 欄とグリッドが別のエリアを指し、引き出し線が的外れになる。
 function gridRows(){
-  const sp=lastSp.find(s=>s.name==="メイン");
-  // 設定でエリア名を変えると「メイン」が無くなることがある
+  const sp=lastSp.find(s=>s.name===sheetAreas("bottom")[0]);
+  // 下段が空、または設定でエリア名を変えて見つからないことがある
   if(!sp) return {html:"", anchors:[]};
+  // 14列の並び：通路 | 1-3 | 段番号 | 4-6 | 段番号 | 7-9 | 通路 | 段番号
+  // 段番号の l/r は左右に隣り合うレーン。最後の段番号は右隣がないので跨がない
+  const order=[{c:0,aisle:true},{c:1},{c:2},{c:3},{lab:true,l:3,r:4},{c:4},{c:5},{c:6},{lab:true,l:6,r:7},
+               {c:7},{c:8},{c:9},{c:10,aisle:true},{lab:true}];
+  // 紙の様式に合わせた固定の列並びなので、下段の先頭エリアの列構成がこれと合わないと
+  // sp.cols[o.c] が undefined になって描画全体が落ちる。合わないときは大きなグリッドを描かない。
+  if(order.some(o=>!o.lab && !sp.cols[o.c])) return {html:"", anchors:[]};
   // 各列の中身（上詰め）
   const colCells=sp.cols.map(col=>{
     const arr=Array(col.h).fill(null); let r=0;
@@ -2351,10 +2377,6 @@ function gridRows(){
     if(!list.length) return null;
     return {id, k:list[Math.floor((list.length-1)/2)], row};
   };
-  // 14列の並び：通路 | 1-3 | 段番号 | 4-6 | 段番号 | 7-9 | 通路 | 段番号
-  // 段番号の l/r は左右に隣り合うレーン。最後の段番号は右隣がないので跨がない
-  const order=[{c:0,aisle:true},{c:1},{c:2},{c:3},{lab:true,l:3,r:4},{c:4},{c:5},{c:6},{lab:true,l:6,r:7},
-               {c:7},{c:8},{c:9},{c:10,aisle:true},{lab:true}];
   const circled=["①","②","③","④","⑤","⑥","⑦"];
 
   let rows="";
