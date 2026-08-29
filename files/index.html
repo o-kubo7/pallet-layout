@@ -471,7 +471,7 @@
     <div class="card cfg">
       <h2>スペース設定 <span class="badge" id="cfgBadge">この端末に保存</span></h2>
       <div class="hint" id="cfgNote" style="margin-bottom:8px;color:#b45309" hidden></div>
-      <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路) | 掲載先(top/bottom/over)</b><br>掲載先は配置図の表のどこに欄を書くかです。top＝上段、bottom＝下段、over＝あふれブロック。省略すると今の設定を引き継ぎます。<b>あふれブロックは未実装</b>なので、over にしたエリアには荷物を置きません。<br><b>行の順番には意味があります。</b>上の行から順に自動配置で試します。また bottom の先頭の行が配置図の表の基準になり、その欄には注釈が付かず、大きなグリッドもそのエリアを描きます。並べ替えると配置のしかたが変わり、手動で調整した配置は破棄されます。</div>
+      <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路) | 掲載先(top/bottom/over)</b><br>掲載先は配置図の表のどこに欄を書くかです。top＝上段、bottom＝下段、over＝あふれブロック。省略すると今の設定を引き継ぎます。<b>あふれブロックは未実装</b>なので、over にしたエリアには新しく荷物を置きません。すでにそのエリアにある荷物は残り、配置図の表には出ません。<br><b>行の順番には意味があります。</b>上の行から順に自動配置で試します。また bottom の先頭の行が配置図の表の基準になり、その欄には注釈が付かず、大きなグリッドもそのエリアを描きます。並べ替えると配置のしかたが変わり、手動で調整した配置は破棄されます。</div>
       <textarea id="cfgText"></textarea>
       <div class="row-actions">
         <button class="btn btn-ghost" onclick="applyConfig()">設定を反映</button>
