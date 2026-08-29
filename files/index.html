@@ -579,6 +579,12 @@ const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletA
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
 const SPACES_SAVE_VERSION = 1;
+// 列の高さ・列数・エリア数の上限。drawZone() は col.h 個の div を innerHTML で
+// 組み立てるので、上限のない値（打ち間違いの桁違い等）はタブを固まらせる。
+// 例外にならないので bootDraw() の try/catch では捕まえられない。
+const SPACES_MAX_COL_H = 99;
+const SPACES_MAX_COLS = 40;
+const SPACES_MAX_AREAS = 20;
 let storageOK=true;
 const memStore={};
 (function(){
@@ -1481,9 +1487,23 @@ function renderResult(lots, unknown, typeMix){
   }
   // あふれブロックの描画が未実装なので、掲載先が over のエリアは配置の対象から外してある
   // （areaCandidates 参照）。使えない場所があることを知らせる。
+  // 「置きません」は新規配置の話であって、既にそこにある荷物が消えるわけではない
+  // （下の「荷物が残っています」参照）。両方を満たす言い方にする。
   const overAreas=sheetAreas("over");
   if(overAreas.length){
-    warnHtml+=`<div class="msg warn">⚠ あふれブロックは未実装のため、次のエリアには荷物を置きません：${overAreas.join("・")}</div>`;
+    warnHtml+=`<div class="msg warn">⚠ あふれブロックは未実装のため、次のエリアには新しく荷物を置きません：${overAreas.join("・")}</div>`;
+  }
+  // 掲載先だけの変更は applyConfig() が redraw() を呼び run() を呼ばないので、
+  // 既存の荷物は消えない（clearManual() を避けるため）。そのため、あるエリアの
+  // 掲載先を bottom/top から over に変えても、そこに乗っていたパレットはそのまま
+  // 残る。配置図の表には over のエリアが載らないので、紙と現物がずれる。
+  // 削除済みに見えても実は死んでいないチェックなので、消さないこと。
+  const overStillFilled=overAreas.filter(name=>{
+    const s=sp.find(s=>s.name===name);
+    return s && s.cols.some(c=>c.fills.length);
+  });
+  if(overStillFilled.length){
+    warnHtml+=`<div class="msg warn">⚠ 次のエリアには荷物が残っています（配置図の表には出ません）：${overStillFilled.join("・")}。「▶ 自動配置を作成」をもう一度押すか、掲載先を戻してください。</div>`;
   }
 
   if(over.length){
@@ -2075,6 +2095,8 @@ function applyConfig(){
       const aisle=x.endsWith("*"); const h=parseInt(x); return {h, aisle};
     }).filter(c=>c.h>0);
     if(!cols.length){alert("列の指定がありません:\n"+ln);return;}
+    if(cols.some(c=>c.h>SPACES_MAX_COL_H)){alert(`列の高さは${SPACES_MAX_COL_H}以下にしてください:\n`+ln);return;}
+    if(cols.length>SPACES_MAX_COLS){alert(`列数は${SPACES_MAX_COLS}以下にしてください:\n`+ln);return;}
     const prev=SPACES.find(s=>s.name===p[0]);
     // 掲載先は省略できる。省略したら今の設定を引き継ぎ、無ければ下段にする。
     const sheetRaw=(p[5]||"").trim();
@@ -2087,6 +2109,7 @@ function applyConfig(){
   if(!out.length){alert("設定が空です。1行以上必要です。");return;}
   const dup=out.map(s=>s.name).find((n,i,a)=>a.indexOf(n)!==i);
   if(dup){alert("同じ名前のエリアが2行あります:\n"+dup);return;}
+  if(out.length>SPACES_MAX_AREAS){alert(`エリア数は${SPACES_MAX_AREAS}以下にしてください。`);return;}
   // 掲載先だけの変更なら再配置しない。run() は clearManual() を呼ぶので、
   // 通すとブロック図で手動調整した配置が消える。
   const geomBefore=spacesToText(false);
@@ -2139,14 +2162,19 @@ function showCfgNote(msg){
    （Service Worker の登録を含む）が丸ごと実行されなくなる。ここで止める。
    必須は名前と列だけ。それ以外は normalizeSpaces() で矯正して読む。
    名前は重複禁止：SPACES.find() / lastSp.find() / byName はどれも先頭か末尾の
-   一致しか残さないので、重複があると容量表示と実際の配置がずれる。 */
+   一致しか残さないので、重複があると容量表示と実際の配置がずれる。
+   列の高さ・列数・エリア数にも上限が要る：drawZone() は col.h 個の div を
+   innerHTML で組み立てるだけなので、上限のない値は例外にならずタブごと
+   固まる。bootDraw() の try/catch は例外しか捕まえないので効かない。
+   しかも applyConfig() は描画より先に保存するので、一度固まった値は
+   次に開いたときも initSpaces() が同じ値を読み直してまた固まる。 */
 function validSpaces(a){
-  if(!Array.isArray(a) || !a.length) return false;
+  if(!Array.isArray(a) || !a.length || a.length>SPACES_MAX_AREAS) return false;
   if(!a.every(s=>
        s && typeof s==="object" && !Array.isArray(s)
     && typeof s.name==="string" && s.name!==""
-    && Array.isArray(s.cols) && s.cols.length
-    && s.cols.every(c=>c && Number.isFinite(c.h) && c.h>0))) return false;
+    && Array.isArray(s.cols) && s.cols.length && s.cols.length<=SPACES_MAX_COLS
+    && s.cols.every(c=>c && Number.isFinite(c.h) && c.h>0 && c.h<=SPACES_MAX_COL_H))) return false;
   const dup=a.map(s=>s.name).find((n,i,arr)=>arr.indexOf(n)!==i);
   if(dup) return false;
   return true;
