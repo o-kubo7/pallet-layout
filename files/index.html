@@ -469,7 +469,8 @@
     </div>
 
     <div class="card cfg">
-      <h2>スペース設定 <span class="badge">微調整用・保存されません</span></h2>
+      <h2>スペース設定 <span class="badge" id="cfgBadge">この端末に保存</span></h2>
+      <div class="hint" id="cfgNote" style="margin-bottom:8px;color:#b45309" hidden></div>
       <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路) | 掲載先(top/bottom/over)</b><br>掲載先は配置図の表のどこに欄を書くかです。top＝上段、bottom＝下段、over＝あふれブロック。省略すると今の設定を引き継ぎます。<b>あふれブロックは未実装</b>なので、over にしたエリアには荷物を置きません。<br><b>行の順番には意味があります。</b>上の行から順に自動配置で試します。また bottom の先頭の行が配置図の表の基準になり、その欄には注釈が付かず、大きなグリッドもそのエリアを描きます。並べ替えると配置のしかたが変わり、手動で調整した配置は破棄されます。</div>
       <textarea id="cfgText"></textarea>
       <div class="row-actions">
@@ -574,7 +575,10 @@ let hasResult=false;
 let fracMode=false;   // true なら「満載数P 半」表記
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces"};
+// DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
+// 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
+const SPACES_SAVE_VERSION = 1;
 let storageOK=true;
 const memStore={};
 (function(){
@@ -596,6 +600,8 @@ function updateSaveStatus(){
   const el=document.getElementById("saveStatus"); if(!el)return;
   el.textContent = storageOK ? "自動保存中（この端末に保存）" : "この環境では保存されません";
   el.className = "savestat"+(storageOK?"":" warn");
+  const badge=document.getElementById("cfgBadge");
+  if(badge) badge.textContent = storageOK ? "この端末に保存" : "この環境では保存されません";
 }
 function saveMaster(){ saveData(STORE_KEY.master, MASTER); }
 function saveLots(){ saveData(STORE_KEY.lots, readRowData()); }
@@ -2081,14 +2087,69 @@ function applyConfig(){
   if(!out.length){alert("設定が空です。1行以上必要です。");return;}
   const dup=out.map(s=>s.name).find((n,i,a)=>a.indexOf(n)!==i);
   if(dup){alert("同じ名前のエリアが2行あります:\n"+dup);return;}
-  SPACES=out; showCapacity();
+  SPACES=out;
+  saveData(STORE_KEY.spaces, {v:SPACES_SAVE_VERSION, spaces:SPACES});
+  clearCfgNote();
+  showCapacity();
   if(lastLots) run(false);
   alert("設定を反映しました。");
 }
 function resetConfig(){
   SPACES=clone(DEFAULT_SPACES);
+  saveData(STORE_KEY.spaces, null);   // 「初期値に戻す」は保存も消す
+  clearCfgNote();
   document.getElementById("cfgText").value=spacesToText();
   showCapacity(); if(lastLots) run(false);
+}
+/* 起動時の描画を包む。保存された設定が壊れていて描画に失敗すると、
+   単一 script なのでここから下（Service Worker の登録を含む）が全部実行されない。
+   そうなると「初期値に戻す」ボタンにも届かず、SW は cache-first なので
+   新しい HTML も落ちてこない。保存を捨てて、次のリロードで初期値に戻れるようにする。 */
+function bootDraw(fn){
+  try{ fn(); }
+  catch(e){
+    saveData(STORE_KEY.spaces, null);
+    clearManual();
+    showCfgNote("保存されていた設定で配置図を作れませんでした。設定タブの「初期値に戻す」を押すか、画面を再読み込みしてください。");
+  }
+}
+// 起動時に出した「読み込めなかった」の知らせを消す。設定を直したら用済みになる。
+function clearCfgNote(){
+  const note=document.getElementById("cfgNote");
+  if(note){ note.textContent=""; note.hidden=true; }
+}
+function showCfgNote(msg){
+  const note=document.getElementById("cfgNote");
+  if(note){ note.textContent=msg; note.hidden=false; }
+}
+/* 保存された SPACES の検証。
+   loadData() は JSON.parse の失敗しか握らないので、JSON として正しく構造が壊れている
+   保存は素通りする。単一 script なので drawZone() で例外が飛ぶとそこから下
+   （Service Worker の登録を含む）が丸ごと実行されなくなる。ここで止める。
+   必須は名前と列だけ。それ以外は normalizeSpaces() で矯正して読む。 */
+function validSpaces(a){
+  if(!Array.isArray(a) || !a.length) return false;
+  return a.every(s=>
+       s && typeof s==="object" && !Array.isArray(s)
+    && typeof s.name==="string" && s.name!==""
+    && Array.isArray(s.cols) && s.cols.length
+    && s.cols.every(c=>c && Number.isFinite(c.h) && c.h>0));
+}
+// 欠けた値・知らない値を既定に寄せる。捨てるのは validSpaces() が偽のときだけ。
+function normalizeSpaces(a){
+  const SHEETS=["top","bottom","over"];
+  return a.map(s=>{
+    const def=DEFAULT_SPACES.find(d=>d.name===s.name);
+    return {
+      name:s.name,
+      zone:(s.zone==="near"||s.zone==="far")?s.zone:(def?def.zone:"near"),
+      orient:(s.orient==="h")?"h":"v",
+      block:Number.isFinite(s.block)?s.block:99,
+      align:s.align,
+      cols:s.cols.map(c=>({h:c.h, aisle:!!c.aisle})),
+      sheet:SHEETS.includes(s.sheet)?s.sheet:"bottom",
+    };
+  });
 }
 function showCapacity(){
   // 掲載先が over のエリアは配置の対象外なので、収容能力からも除く。
@@ -2507,6 +2568,17 @@ function clone(o){return JSON.parse(JSON.stringify(o));}
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 
 /* ---------- init ---------- */
+// スペース設定：保存があれば復元。壊れていたら捨てて初期値に戻し、その旨を設定タブに出す。
+(function initSpaces(){
+  const d=loadData(STORE_KEY.spaces);
+  if(!d) return;
+  if(d.v!==SPACES_SAVE_VERSION || !validSpaces(d.spaces)){
+    saveData(STORE_KEY.spaces, null);
+    showCfgNote("保存されていた設定を読み込めなかったので、初期値に戻しました。");
+    return;
+  }
+  SPACES=normalizeSpaces(d.spaces);
+})();
 document.getElementById("cfgText").value=spacesToText();
 showCapacity();
 updateSaveStatus();
@@ -2536,10 +2608,10 @@ updateSaveStatus();
     });
     syncCards(); saveLots();
     // 入力と列構成が保存時と同じなら、手動調整した配置をそのまま出す
-    if(!restoreManual()) run(false);
+    bootDraw(()=>{ if(!restoreManual()) run(false); });
   }else{
     SAMPLES.basic.forEach(addRow);
-    syncCards(); saveLots(); run(false);
+    syncCards(); saveLots(); bootDraw(()=>run(false));
   }
 })();
 
