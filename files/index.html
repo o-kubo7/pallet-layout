@@ -2126,14 +2126,19 @@ function showCfgNote(msg){
    loadData() は JSON.parse の失敗しか握らないので、JSON として正しく構造が壊れている
    保存は素通りする。単一 script なので drawZone() で例外が飛ぶとそこから下
    （Service Worker の登録を含む）が丸ごと実行されなくなる。ここで止める。
-   必須は名前と列だけ。それ以外は normalizeSpaces() で矯正して読む。 */
+   必須は名前と列だけ。それ以外は normalizeSpaces() で矯正して読む。
+   名前は重複禁止：SPACES.find() / lastSp.find() / byName はどれも先頭か末尾の
+   一致しか残さないので、重複があると容量表示と実際の配置がずれる。 */
 function validSpaces(a){
   if(!Array.isArray(a) || !a.length) return false;
-  return a.every(s=>
+  if(!a.every(s=>
        s && typeof s==="object" && !Array.isArray(s)
     && typeof s.name==="string" && s.name!==""
     && Array.isArray(s.cols) && s.cols.length
-    && s.cols.every(c=>c && Number.isFinite(c.h) && c.h>0));
+    && s.cols.every(c=>c && Number.isFinite(c.h) && c.h>0))) return false;
+  const dup=a.map(s=>s.name).find((n,i,arr)=>arr.indexOf(n)!==i);
+  if(dup) return false;
+  return true;
 }
 // 欠けた値・知らない値を既定に寄せる。捨てるのは validSpaces() が偽のときだけ。
 function normalizeSpaces(a){
