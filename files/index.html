@@ -384,7 +384,7 @@
       </div>
 
       <div class="note">
-        <span><b>ルール:</b> メイン → 軒下 → PC横・EV横 の順に配置</span>
+        <span><b>ルール:</b> メイン → 軒下 → PC横・EV横 → あふれ受け(出庫口横・5棟壁際) の順に配置</span>
         <span>原則 1列＝1品目</span>
         <span><b>ロット単位</b>で連続した列にまとめる</span>
         <span>通路はメインが埋まってから使用</span>
@@ -486,7 +486,7 @@
     <div class="card cfg">
       <h2>スペース設定 <span class="badge" id="cfgBadge">この端末に保存</span></h2>
       <div class="hint" id="cfgNote" style="margin-bottom:8px;color:#b45309" hidden></div>
-      <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路) | 掲載先(top/bottom/over)</b><br>掲載先は配置図の表のどこに欄を書くかです。top＝上段、bottom＝下段、over＝あふれブロック。省略すると今の設定を引き継ぎます。<b>あふれブロックは未実装</b>なので、over にしたエリアには新しく荷物を置きません。すでにそのエリアにある荷物は残り、配置図の表には出ません。<br><b>行の順番には意味があります。</b>上の行から順に自動配置で試します。また bottom の先頭の行が配置図の表の基準になり、その欄には注釈が付かず、大きなグリッドもそのエリアを描きます。並べ替えると配置のしかたが変わり、手動で調整した配置は破棄されます。</div>
+      <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路) | 掲載先(top/bottom/over)</b><br>掲載先は配置図の表のどこに欄を書くかです。top＝上段、bottom＝下段、over＝あふれブロック。省略すると今の設定を引き継ぎます。<b>あふれブロックは未実装</b>なので、over にしたエリアには新しく荷物を置きません。すでにそのエリアにある荷物は残り、配置図の表には出ません。<br><b>行の順番には意味があります。</b>上の行から順に自動配置で試します。また上段・下段それぞれの先頭の行が配置図の表の基準になり、その欄には注釈が付きません。大きなグリッドは下段の基準エリアを描きます。並べ替えると配置のしかたが変わり、手動で調整した配置は破棄されます。</div>
       <textarea id="cfgText"></textarea>
       <div class="row-actions">
         <button class="btn btn-ghost" onclick="applyConfig()">設定を反映</button>
@@ -1831,7 +1831,7 @@ function movingCount(counts, destSpaceName, destColIndex){
 // 移動を適用する。next は lastSp のコピーを渡すこと（破壊的に書き換える）。
 // 移動先には自動配置の fillMix と同じく fills の先頭へ差し込む。
 // 見た目でどちら側になるかはエリアによって違う
-// （メインは上端、軒下②は下端、横向きのエリアは左端）。
+// （メインは上端、横向きのエリアは左端）。
 function moveCells(next, lotId, counts, destSpaceName, destColIndex){
   const ds=next.find(x=>x.name===destSpaceName);
   const dc=ds?ds.cols[destColIndex]:null;
@@ -2190,10 +2190,13 @@ function applyConfig(){
     if(cols.some(c=>c.h>SPACES_MAX_COL_H)){alert(`列の高さは${SPACES_MAX_COL_H}以下にしてください:\n`+ln);return;}
     if(cols.length>SPACES_MAX_COLS){alert(`列数は${SPACES_MAX_COLS}以下にしてください:\n`+ln);return;}
     const prev=SPACES.find(s=>s.name===p[0]);
-    // 描画位置（row/off）は設定テキストに出ない。列の本数が変わらないなら
-    // 列インデックスで引き継ぎ、変わったら捨てて従来どおり詰めて描く。
-    // 初期値に戻せば resetConfig() が DEFAULT_SPACES ごと形も戻す。
-    if(prev && prev.cols.length===cols.length){
+    // 描画位置（row/off）は設定テキストに出ない。列の本数と各列の高さが
+    // どちらも変わらない場合だけ列インデックスで引き継ぐ。高さを1つでも
+    // 変えると off（絶対トラック位置）が別の列と衝突しうるので、位置指定は
+    // 捨てて従来どおり詰めて描く（見た目で分かり、初期値に戻せば
+    // resetConfig() が DEFAULT_SPACES ごと形も戻す）。
+    if(prev && prev.cols.length===cols.length
+       && prev.cols.every((p,i)=>p.h===cols[i].h)){
       cols.forEach((c,i)=>{
         if(prev.cols[i].row!==undefined) c.row=prev.cols[i].row;
         if(prev.cols[i].off!==undefined) c.off=prev.cols[i].off;
@@ -2376,8 +2379,10 @@ function applyLotCorner(){
 }
 
 /* ---------- 配置図の表の表示倍率 ---------- */
-// 表の実寸（.sheet の padding 10px×2 を含む）
-const SHEET_W=675+20, SHEET_H=469+20;
+// 表の実寸（.sheet の padding 10px×2 を含む）。
+// SHEET_H の 503 は注釈行が2行に折り返した場合の最悪ケースの高さ。
+// 印刷CSSのコメント（.sheet の zoom 指定の近く）と必ず一致させること。
+const SHEET_W=675+20, SHEET_H=503+20;
 let sheetZoom="auto";   // "auto" または倍率の文字列
 
 function setSheetZoom(z){
@@ -2407,7 +2412,8 @@ function applySheetZoom(){
 }
 window.addEventListener("resize", ()=>{ if(sheetZoom==="auto") applySheetZoom(); });
 
-// ロットの最後のマスがあるエリア名。分割配置は lastSp の並び順（メイン→軒下→PC横→EV横）に
+// ロットの最後のマスがあるエリア名。分割配置は lastSp の並び順
+// （メイン→軒下①→軒下②→PC横→EV横→出庫口横→5棟壁際）に
 // 詰めていくので、そのロットのマスを持つ最後のスペースが末尾になる。
 function tailAreaOf(id){
   let last=null;
