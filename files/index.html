@@ -1496,7 +1496,7 @@ function areaCandidates(sp){
   };
   sp.forEach(s=>{
     if(done.has(s.name)) return;
-    const g=AREA_GROUPS.find(g=>g.includes(s.name));
+    const g=AREA_GROUPS.find(x=>x.includes(s.name));
     const members = g ? g.map(n=>byName[n]).filter(Boolean) : [s];
     members.forEach(m=>done.add(m.name));
     push(members);
@@ -1640,7 +1640,7 @@ function renderResult(lots, unknown, typeMix){
   // 残る。配置図の表には over のエリアが載らないので、紙と現物がずれる。
   // 削除済みに見えても実は死んでいないチェックなので、消さないこと。
   const overStillFilled=overAreas.filter(name=>{
-    const s=sp.find(s=>s.name===name);
+    const s=sp.find(x=>x.name===name);
     return s && s.cols.some(c=>c.fills.length);
   });
   if(overStillFilled.length){
@@ -1878,7 +1878,7 @@ function selCounts(cells){
 // 運用上ひとつづきに使うエリア（AREA_GROUPS）は、分割の判定でも1つの束として扱う。
 // 束にしないと 軒下①から軒下② への移動が毎回「2か所に分かれます」になる。
 function areaKeyOf(name){
-  const g=AREA_GROUPS.find(g=>g.includes(name));
+  const g=AREA_GROUPS.find(x=>x.includes(name));
   return g?g.join("+"):name;
 }
 
@@ -2289,6 +2289,9 @@ function applyConfig(){
   for(const ln of lines){
     const p=ln.split("|").map(x=>x.trim());
     if(p.length<5){alert("形式が不正な行があります（5項目必要）:\n"+ln);return;}
+    // 空のエリア名は validSpaces() が起動時に拒否する。ここで通すと
+    // 「保存できたのに次回の起動で設定全体が消える」ので、入口で弾く。
+    if(!p[0]){alert("エリア名がありません:\n"+ln);return;}
     if(!["near","far"].includes(p[1])){alert("区分は near か far:\n"+ln);return;}
     const orient=p[2]==="h"?"h":"v";
     const block=parseInt(p[3])||99;
@@ -2312,7 +2315,7 @@ function applyConfig(){
       });
     }
     // 掲載先は省略できる。省略したら今の設定を引き継ぎ、無ければ下段にする。
-    const sheetRaw=(p[5]||"").trim();
+    const sheetRaw=p[5]||"";
     let sheet;
     if(sheetRaw===""){ sheet=(prev&&prev.sheet)?prev.sheet:"bottom"; }
     else if(["top","bottom","over"].includes(sheetRaw)){ sheet=sheetRaw; }
@@ -2328,6 +2331,9 @@ function applyConfig(){
   const geomBefore=spacesToText(false);
   SPACES=out;
   saveData(STORE_KEY.spaces, {v:SPACES_SAVE_VERSION, spaces:SPACES});
+  // 省略された掲載先は上で解決済み。resetConfig() と同じく正規形を書き戻して、
+  // 実際に保存された内容が画面に出るようにする。
+  document.getElementById("cfgText").value=spacesToText();
   clearCfgNote();
   showCapacity();
   if(lastLots){
@@ -2355,6 +2361,7 @@ function resetConfig(){
 function bootDraw(fn){
   try{ fn(); }
   catch(e){
+    console.error("起動時の描画に失敗したので保存を捨てました", e);
     saveData(STORE_KEY.spaces, null);
     clearManual();
     showCfgNote("保存されていた設定で配置図を作れませんでした。設定タブの「初期値に戻す」を押すか、画面を再読み込みしてください。");
@@ -2423,7 +2430,7 @@ function showCapacity(){
   const overNames=new Set(sheetAreas("over"));
   const live=SPACES.filter(s=>!overNames.has(s.name));
   const sum=(z,f)=>live.filter(s=>s.zone===z).reduce((a,s)=>a+s.cols.filter(f).reduce((x,c)=>x+c.h,0),0);
-  const excluded=[...overNames].length?`　（あふれ指定のため除外：${[...overNames].join("・")}）`:"";
+  const excluded=overNames.size?`　（あふれ指定のため除外：${[...overNames].join("・")}）`:"";
   document.getElementById("capacity").textContent=
     `収容能力 — 倉庫内: 通常${sum("near",c=>!c.aisle)}P＋通路${sum("near",c=>c.aisle)}P ／ `+
     `倉庫外: 通常${sum("far",c=>!c.aisle)}P＋通路${sum("far",c=>c.aisle)}P`+excluded;

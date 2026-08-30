@@ -3,7 +3,7 @@
    ★アプリを更新したら CACHE_VERSION の数字を必ず上げてください。
      （上げないと古い版が表示され続けます）
    =========================================================== */
-const CACHE_VERSION = "v22";
+const CACHE_VERSION = "v23";
 const CACHE_NAME = "pallet-layout-" + CACHE_VERSION;
 
 // オフラインで動かすために必要なファイル（リポジトリ直下に置く構成）
