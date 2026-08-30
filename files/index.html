@@ -264,6 +264,11 @@
                padding:0 3px;white-space:nowrap;
                border:2px solid #000;border-radius:999px;font-size:11px;font-weight:700}
   .sheet td.slot{font-size:10px;line-height:1.2;height:26px;word-break:break-all}
+  /* 欄に入りきらない文字を横に縮めて1行に収める入れ物。
+     transform-origin:left center の scaleX だけでよい。translateX で中央へ
+     戻す補正を入れてはいけない（自然幅が欄を超えた時点でブラウザが左端基準に
+     置くので、補正を足すと右へはみ出す）。 */
+  .sheet .fit{display:inline-block;white-space:nowrap;transform-origin:left center}
   .sheet tr.gap td{height:8px;border:0;background:transparent}
   .sheet tr.gap td.sep{border-bottom:2px solid #000}
   /* 注記行（グローバルの .note と衝突させないため別名） */
@@ -309,7 +314,7 @@
 
   @media print{
     @page{size:A4 landscape;margin:8mm}
-    header,.tabs,.actionbar,#updateBar,.sizectl,#messages,#regInfo,#saveStatus,.note,.hint{display:none !important}
+    header,.tabs,.actionbar,#updateBar,.sizectl,#messages,#sheetMsg,#regInfo,#saveStatus,.note,.hint{display:none !important}
     /* どのタブを開いていても、紙には配置表だけを出す */
     .tabpanel{display:none !important}
     #tab-sheet{display:block !important}
@@ -477,6 +482,7 @@
         <span class="lbl" id="zoomNow"></span>
       </div>
 
+      <div id="sheetMsg"></div>
       <div id="sheetView"></div>
       <div class="empty" id="sheetEmpty">「入力」タブで荷物を入れて<br>「自動配置を作成」を押してください</div>
     </div>
@@ -2503,6 +2509,67 @@ function sheetEntries(names, baseArea){
     return {lot:e.lot, pallets:e.pallets, half, note: extra.length ? ("※"+extra.join("・")) : ""};
   });
 }
+/* 欄に入りきらない文字を水平に縮めて1行に収める。
+   ・自然幅は .sheet の zoom で割って CSS px に直してから比を取る。
+     getBoundingClientRect() は zoom 込み、clientWidth は CSS px なので、
+     割らずに混ぜると zoom が 1 でない画面で倍率が狂う。
+   ・下限まで縮めても入らない欄は折り返しに落として警告する。紙に出る情報を
+     欠けさせないため。
+   ・非表示タブでは幅が 0 なので何もしない（drawLeaders() と同じ理由）。 */
+const FIT_MIN_SCALE = 0.4;
+const FIT_LABEL = {name:"品名", lot:"ロット", pal:"P数", note:"注釈"};
+const PRINT_ZOOM = 1.4;                 // 印刷CSSの .sheet{zoom} と必ず揃える
+const PRINT_H_PX = 733.2;               // A4横・余白8mm の印刷領域の高さ
+const PRINT_H_LIMIT = PRINT_H_PX*0.98;  // ブラウザごとの余白差を見込んで 98% を上限にする
+function fitSheetText(){
+  const box=document.getElementById("sheetMsg");
+  const sheet=document.querySelector("#sheetView .sheet");
+  if(!sheet){ if(box) box.innerHTML=""; return; }
+  const z=parseFloat(getComputedStyle(sheet).zoom)||1;
+  const over={};
+  sheet.querySelectorAll(".fit").forEach(sp=>{
+    const td=sp.parentElement; if(!td) return;
+    // 幅の判定は前回の結果を消す前に。消してから抜けると、非表示タブで
+    // 呼ばれたときに圧縮が外れたまま残る
+    const avail=td.clientWidth-2;            // 左右の padding 1px ずつ
+    if(avail<=0) return;                     // 非表示タブでは測れない
+    sp.style.transform="none";
+    sp.style.whiteSpace="nowrap";
+    sp.style.width="";                       // 前回広げた幅を戻してから測る
+    const natural=sp.getBoundingClientRect().width/z;
+    if(natural<=0) return;
+    let k=Math.min(1, avail/natural);
+    if(k<FIT_MIN_SCALE){
+      k=FIT_MIN_SCALE;
+      // 折り返しの基準幅を先に広げる。広げずに normal へ戻すと、欄幅で
+      // 折り返してから 40% に潰れ、6行・インク幅37px の読めない塊になる
+      sp.style.width=(avail/FIT_MIN_SCALE)+"px";
+      sp.style.whiteSpace="normal";
+      const kind=td.dataset.fit||"";
+      over[kind]=(over[kind]||0)+1;
+    }
+    sp.style.transform = (k<1) ? `scaleX(${k.toFixed(4)})` : "none";
+  });
+  if(!box) return;
+  let html="";
+  const parts=Object.keys(over).map(k=>`${FIT_LABEL[k]||k} ${over[k]}件`);
+  if(parts.length){
+    html+=`<div class="msg warn">⚠ 文字が入りきらない欄があります：${parts.join(" / ")}。`
+        + `設定タブの「表示設定」で文字を小さくするか、品名を短くしてください。</div>`;
+  }
+  // 縦のはみ出し。autoSheetZoom() は Math.max(1,...) で 1 倍を下回らないので、
+  // 文字を大きくして表が伸びても自動では救われない
+  const t=sheet.querySelector("table");
+  if(t){
+    const h=t.getBoundingClientRect().height/z;
+    if(h>0 && h*PRINT_ZOOM>PRINT_H_LIMIT){
+      const pct=Math.round(h*PRINT_ZOOM/PRINT_H_PX*100);
+      html+=`<div class="msg warn">⚠ 文字が大きくて印刷が1ページに収まりません`
+          + `（用紙の高さの${pct}%）。設定タブの「表示設定」で文字を小さくしてください。</div>`;
+    }
+  }
+  box.innerHTML=html;
+}
 function renderSheet(){
   const host=document.getElementById("sheetView");
   if(!hasResult || !lastSp){ host.innerHTML=""; return; }
@@ -2567,6 +2634,7 @@ function renderSheet(){
   host.innerHTML=`<div class="sheet"><div class="sheetbox"><table>
     <colgroup>${Array(14).fill('<col style="width:48px">').join("")}</colgroup>
     ${rows}</table></div></div>`;
+  fitSheetText();                 // 折り返しは行の高さを変えるので線より先に確定させる
   drawLeaders(grid.anchors, bottom.map(e=>e.lot.id));
   applySheetZoom();
 }
@@ -2581,6 +2649,9 @@ function palletSlotText(e){
 // 区画セル（2列ぶんの幅）。kind: name / lot / pallet / pallet2 / note
 // extra: 全セルに足すクラス（品名行の太罫など）。品名行は左右の端も太罫にする
 function slotCells(entries,count,kind,extra){
+  // data-fit は fitSheetText() が「どの種類の欄が入りきらなかったか」を数えるのに使う
+  const FIT={name:"name", lot:"lot", pallet:"pal", note:"note"};
+  const fk=FIT[kind]||"";
   let out="";
   for(let i=0;i<count;i++){
     const e=entries[i], l=e&&e.lot;
@@ -2589,12 +2660,15 @@ function slotCells(entries,count,kind,extra){
     else if(kind==="lot")    v=l?l.lot:"";
     else if(kind==="pallet") v=e?palletSlotText(e):"";
     else if(kind==="note"){  v=e&&e.note?e.note:""; cls="none snote"; }
+    if(kind!=="note") cls+=" c-"+fk;
     if(extra && kind!=="note"){
       cls+=" "+extra;
       if(i===0)       cls+=" bl2";
       if(i===count-1) cls+=" br2";
     }
-    out+=`<td class="${cls}" colspan="2">${esc(v)}</td>`;
+    // 空欄は包まない。包むと高さ0の span が残って測定対象が無駄に増える
+    const inner = v ? `<span class="fit">${esc(v)}</span>` : "";
+    out+=`<td class="${cls}" data-fit="${fk}" colspan="2">${inner}</td>`;
   }
   // 4区画のときは左半分（6列）を空ける
   return out;
