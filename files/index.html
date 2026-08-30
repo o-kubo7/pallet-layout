@@ -2196,7 +2196,7 @@ function applyConfig(){
     // 捨てて従来どおり詰めて描く（見た目で分かり、初期値に戻せば
     // resetConfig() が DEFAULT_SPACES ごと形も戻す）。
     if(prev && prev.cols.length===cols.length
-       && prev.cols.every((p,i)=>p.h===cols[i].h)){
+       && prev.cols.every((pc,i)=>pc.h===cols[i].h)){
       cols.forEach((c,i)=>{
         if(prev.cols[i].row!==undefined) c.row=prev.cols[i].row;
         if(prev.cols[i].off!==undefined) c.off=prev.cols[i].off;
