@@ -333,12 +333,11 @@
     .wrap{padding:0;max-width:none}
     .card{border:0;padding:0;margin:0}
     .card h2{display:none}
-    /* 表は 675×491px 固定（注釈が2行に折り返した場合の高さ）。
+    /* 表は 675×475px（文字サイズが初期値のとき）。
        A4横・余白8mm の印刷領域は 281×194mm＝約1062×733px。
-       1.4倍で 945×687px＝250×182mm。用紙の高さを 94% 使い、
+       1.4倍で 945×665px。用紙の高さを 90.7% 使い、
        ブラウザごとの余白差で2ページに割れない範囲に収める。
-       1.5倍のままだと注釈行のぶんで 103% になり、page-break-inside:avoid で
-       表ごと2ページ目に落ちる */
+       欄に入りきらない文字は圧縮で1行に収まるので、日によって高さが変わらない */
     .sheet{padding:0;overflow:visible;max-width:none;zoom:1.4;page-break-inside:avoid}
     body{background:#fff}
   }
@@ -2556,9 +2555,11 @@ function clearDisplayNote(){
 
 /* ---------- 配置図の表の表示倍率 ---------- */
 // 表の実寸（.sheet の padding 10px×2 を含む）。
-// SHEET_H の 491 は注釈行が2行に折り返した場合の最悪ケースの高さ。
+// SHEET_H は文字サイズが初期値のときの高さ。文字を大きくすると伸びるが、
+// 入りきらない文字は圧縮で1行に収まるので、行が増えるのは下限40%を割った
+// 異常時だけ（そのときは #sheetMsg に警告も出る）。
 // 印刷CSSのコメント（.sheet の zoom 指定の近く）と必ず一致させること。
-const SHEET_W=675+20, SHEET_H=491+20;
+const SHEET_W=675+20, SHEET_H=475+20;
 let sheetZoom="auto";   // "auto" または倍率の文字列
 
 function setSheetZoom(z){
