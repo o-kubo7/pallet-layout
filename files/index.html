@@ -510,27 +510,52 @@
 <script>
 /* ===== スペース定義（配列の順＝自動配置でエリアを試す順）===== */
 const DEFAULT_SPACES = [
-  // 配列の順＝自動配置でエリアを試す順（メイン ＞ 軒下 ＞ PC横・EV横）。
-  // 配置図の表では、下段の先頭にあたるエリアが基準になる（注釈を付けない・グリッドを描く）。
+  // 配列の順＝自動配置でエリアを試す順（倉庫内のメイン ＞ 軒下 ＞ PC横・EV横 ＞ あふれ受け）。
+  // 配置図の表では、上段・下段それぞれの先頭にあたるエリアが基準になる
+  // （注釈を付けない。下段の基準はグリッドも描く）。
   // zone はブロック図の倉庫内／外の並べ分けにだけ使う。
   // sheet は配置図の表のどのブロックに欄を書くか（top＝上段 / bottom＝下段 / over＝あふれブロック）。
+  // row / off は描画専用（row＝ブロック図の何行目、off＝行内の何マス目から）。
+  // 2026-08-30 の現場実測（配置図の表/配置マス.xlsx）に合わせてある。
+  // 省略した列は「順に積む・左端から」の意味になる。
   {name:"メイン", zone:"near", orient:"v", block:3, align:"top", sheet:"bottom", cols:[
      {h:6,aisle:true},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:5,aisle:true}]},
-  {name:"軒下①", zone:"far", orient:"h", block:99, sheet:"top", cols:[{h:11},{h:11},{h:8}]},
-  {name:"軒下②", zone:"far", orient:"v", block:99, sheet:"top", cols:[{h:4},{h:4}]},
-  {name:"PC横", zone:"near", orient:"h", block:99, sheet:"bottom", cols:[{h:8},{h:4}]},
-  {name:"EV横", zone:"near", orient:"h", block:99, sheet:"bottom", cols:[{h:6},{h:4}]},
+  // 軒下①：現場で振った番号がそのまま配置順。列はどれも柱をまたがない
+  {name:"軒下①", zone:"far", orient:"h", block:99, sheet:"top", cols:[
+     {h:8,  row:4, off:0},    // 1-8
+     {h:11, row:3, off:0},    // 9-19
+     {h:2,  row:4, off:9},    // 20-21（1-8 との間に柱 1 マス）
+     {h:3,  row:0, off:9},    // 22-24
+     {h:11, row:2, off:0}]},  // 25-35　※ row1 は通路の空き行
+  {name:"軒下②", zone:"far", orient:"h", block:99, sheet:"top", cols:[{h:4},{h:4}]},
+  // PC横：1-4 と 5-12 の間の row1 が通路。flip なので行の中は右起点
+  {name:"PC横", zone:"near", orient:"h", block:99, sheet:"bottom", cols:[
+     {h:4, row:0},            // 1-4
+     {h:8, row:2}]},          // 5-12　※ row1 は通路の空き行
+  // EV横：L 字なので列を分ける。5 と 6 は直角の位置関係で、連続しては置けない
+  {name:"EV横", zone:"near", orient:"h", block:99, sheet:"bottom", cols:[
+     {h:5, row:2, off:0},     // 1-5
+     {h:1, row:3, off:4},     // 6
+     {h:2, row:1, off:6},     // 7-8
+     {h:2, row:0, off:6}]},   // 9-10
+  // あふれ受け。普段はここまで来ない
+  {name:"出庫口横", zone:"far", orient:"h", block:99, sheet:"top", cols:[{h:2},{h:2}]},
+  {name:"5棟壁際", zone:"far", orient:"h", block:99, sheet:"top", cols:[{h:6},{h:6},{h:6}]},
 ];
 // 運用上ひとつづきに使うエリア。①が埋まったら②へ、と列を連結して連続窓を探す。
 // 設定でスペース名を変えるとこの連結は外れ、別エリア扱いになる。
 const AREA_GROUPS = [["軒下①","軒下②"]];
 // 実際の倉庫の位置関係（ブロック図の並び）。列・行はフロア図のマス目
-//   倉庫外: 軒下②＝左 ／ 軒下①＝右
+//   倉庫外: 5棟壁際＝右上 ／ 下の行は左から 軒下②・出庫口横・軒下①
 //   倉庫内: メイン＝右上 ／ PC横＝左下 ／ EV横＝右下
-// flip＝実際の図と同じく短い段を上・右寄せにする
+// 倉庫外と倉庫内は別コンテナ（#zone-far / #zone-near）に描くので c/r が重なってよい。
+// flip＝実際の図と同じく右寄せにする。位置指定モードのエリアでは
+// 行の中の並びが右起点になり、off も右からのオフセットとして効く。
+// EV横は実測では 1 が左端なので flip を付けない（以前の flip:true は誤りだった）。
 const FLOOR_POS = {
-  "軒下②":{c:1,r:1}, "軒下①":{c:2,r:1},
-  "メイン":{c:2,r:1}, "PC横":{c:1,r:2,flip:true}, "EV横":{c:2,r:2,flip:true},
+  "5棟壁際":{c:3,r:1},
+  "軒下②":{c:1,r:2}, "出庫口横":{c:2,r:2}, "軒下①":{c:3,r:2},
+  "メイン":{c:2,r:1}, "PC横":{c:1,r:2,flip:true}, "EV横":{c:2,r:2},
 };
 // 「配置図の表」での欄の割り当て。エリア名は SPACES の sheet 属性から引く。
 // 返す順は SPACES の並び順。下段の先頭が基準エリアで、注釈を付けず、グリッドを描く。
@@ -590,7 +615,7 @@ let fracMode=false;   // true なら「満載数P 半」表記
 const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
-const SPACES_SAVE_VERSION = 1;
+const SPACES_SAVE_VERSION = 2;
 // 列の高さ・列数・エリア数の上限。drawZone() は col.h 個の div を innerHTML で
 // 組み立てるので、上限のない値（打ち間違いの桁違い等）はタブを固まらせる。
 // 例外にならないので bootDraw() の try/catch では捕まえられない。
@@ -2694,7 +2719,16 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","
 (function initSpaces(){
   const d=loadData(STORE_KEY.spaces);
   if(!d) return;
-  if(d.v!==SPACES_SAVE_VERSION || !validSpaces(d.spaces)){
+  // バージョン不一致は「壊れていた」のではなく、こちらが既定値を更新した合図。
+  // 同じ文言にすると利用者は自分の設定が壊れたと読む。手動調整も
+  // restoreManual() が指紋不一致で無言に捨てるので、ここで一緒に知らせる
+  if(d.v!==SPACES_SAVE_VERSION){
+    saveData(STORE_KEY.spaces, null);
+    clearManual();
+    showCfgNote("配置マスを現場の実測に合わせて更新したので、スペース設定と手動調整を初期値に戻しました。");
+    return;
+  }
+  if(!validSpaces(d.spaces)){
     saveData(STORE_KEY.spaces, null);
     showCfgNote("保存されていた設定を読み込めなかったので、初期値に戻しました。");
     return;
