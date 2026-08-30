@@ -408,7 +408,6 @@
         <button class="btn btn-ghost" onclick="addRow();syncCards();saveLots()">＋ 行を追加</button>
         <button class="btn btn-ghost" onclick="clearLots()">入力をクリア</button>
         <label class="chk"><input type="checkbox" id="mixChk" checked> 満杯時に混載を許可</label>
-        <label class="chk"><input type="checkbox" id="fracChk" onchange="toggleFrac()"> 端数を「半」で表示</label>
         <button class="btn btn-primary" id="runBtnInline" onclick="runFromButton()">▶ 自動配置を作成</button>
       </div>
       <div class="row-actions">
@@ -485,12 +484,6 @@
         <button class="sizebtn" data-zoom="1" onclick="setSheetZoom('1')">100%</button>
         <button class="sizebtn" data-zoom="1.5" onclick="setSheetZoom('1.5')">150%</button>
         <button class="sizebtn" data-zoom="2" onclick="setSheetZoom('2')">200%</button>
-        <span class="grp"><span class="lbl">矢印の先</span>
-          <button class="sizebtn on" data-arrow="1" onclick="setArrowHead(true)">あり</button>
-          <button class="sizebtn" data-arrow="0" onclick="setArrowHead(false)">なし</button></span>
-        <span class="grp"><span class="lbl">角の丸み</span>
-          <button class="sizebtn on" data-corner="1" onclick="setLotCorner(true)">あり</button>
-          <button class="sizebtn" data-corner="0" onclick="setLotCorner(false)">なし</button></span>
         <span class="lbl" id="zoomNow"></span>
       </div>
 
@@ -558,6 +551,16 @@
           <label class="chk"><input type="checkbox" id="fwPal"  onchange="displayChanged()"> パレット数を太字</label>
           <label class="chk"><input type="checkbox" id="fwNote" onchange="displayChanged()"> 注釈を太字</label>
         </div>
+        <div class="hint" style="margin:12px 0 6px"><b>そのほかの表示</b></div>
+        <div class="sizectl">
+          <span class="lbl">矢印の先</span>
+          <button class="sizebtn on" data-arrow="1" onclick="setArrowHead(true)">あり</button>
+          <button class="sizebtn" data-arrow="0" onclick="setArrowHead(false)">なし</button>
+          <span class="grp"><span class="lbl">角の丸み</span>
+            <button class="sizebtn on" data-corner="1" onclick="setLotCorner(true)">あり</button>
+            <button class="sizebtn" data-corner="0" onclick="setLotCorner(false)">なし</button></span>
+        </div>
+        <label class="chk"><input type="checkbox" id="fracChk" onchange="toggleFrac()"> 端数を「半」で表示</label>
         <div class="row-actions">
           <button class="btn btn-ghost" onclick="resetDisplay()">初期値に戻す</button>
         </div>
