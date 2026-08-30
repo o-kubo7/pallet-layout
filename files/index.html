@@ -585,6 +585,11 @@ const SPACES_SAVE_VERSION = 1;
 const SPACES_MAX_COL_H = 99;
 const SPACES_MAX_COLS = 40;
 const SPACES_MAX_AREAS = 20;
+// 列の描画位置（row＝描画上の行、off＝行内の開始オフセット）の上限。
+// drawZone() は row を 0 から最大値まで数えて空き行の div を作るので、
+// 桁違いの値は例外にならずタブごと固まる。col.h と同じ理由で歯止めが要る。
+const SPACES_MAX_ROW = 99;
+const SPACES_MAX_OFF = 99;
 let storageOK=true;
 const memStore={};
 (function(){
@@ -1331,7 +1336,9 @@ function findRun(cols, rem, useAisle){
 function buildWork(){
   return SPACES.map(s=>({
     name:s.name, zone:s.zone, orient:s.orient||"v", block:s.block||99, align:s.align||"bottom",
-    cols:s.cols.map(c=>({h:c.h, aisle:!!c.aisle, fills:[]}))
+    // row / off は描画専用。配置ロジックは見ないが、drawZone() が受け取るのは
+    // ここで作った lastSp なので、落とすと一度も実形で描かれない
+    cols:s.cols.map(c=>({h:c.h, aisle:!!c.aisle, row:c.row, off:c.off, fills:[]}))
   }));
 }
 /* 優先順に「どの列を対象に、通路を使うか」の候補を並べる。
@@ -2098,6 +2105,15 @@ function applyConfig(){
     if(cols.some(c=>c.h>SPACES_MAX_COL_H)){alert(`列の高さは${SPACES_MAX_COL_H}以下にしてください:\n`+ln);return;}
     if(cols.length>SPACES_MAX_COLS){alert(`列数は${SPACES_MAX_COLS}以下にしてください:\n`+ln);return;}
     const prev=SPACES.find(s=>s.name===p[0]);
+    // 描画位置（row/off）は設定テキストに出ない。列の本数が変わらないなら
+    // 列インデックスで引き継ぎ、変わったら捨てて従来どおり詰めて描く。
+    // 初期値に戻せば resetConfig() が DEFAULT_SPACES ごと形も戻す。
+    if(prev && prev.cols.length===cols.length){
+      cols.forEach((c,i)=>{
+        if(prev.cols[i].row!==undefined) c.row=prev.cols[i].row;
+        if(prev.cols[i].off!==undefined) c.off=prev.cols[i].off;
+      });
+    }
     // 掲載先は省略できる。省略したら今の設定を引き継ぎ、無ければ下段にする。
     const sheetRaw=(p[5]||"").trim();
     let sheet;
@@ -2174,7 +2190,11 @@ function validSpaces(a){
        s && typeof s==="object" && !Array.isArray(s)
     && typeof s.name==="string" && s.name!==""
     && Array.isArray(s.cols) && s.cols.length && s.cols.length<=SPACES_MAX_COLS
-    && s.cols.every(c=>c && Number.isFinite(c.h) && c.h>0 && c.h<=SPACES_MAX_COL_H))) return false;
+    && s.cols.every(c=>c && Number.isFinite(c.h) && c.h>0 && c.h<=SPACES_MAX_COL_H
+        // row / off は任意。無いのは正常な状態なので、あるときだけ範囲を見る
+        && (c.row===undefined || (Number.isFinite(c.row) && c.row>=0 && c.row<=SPACES_MAX_ROW))
+        && (c.off===undefined || (Number.isFinite(c.off) && c.off>=0 && c.off<=SPACES_MAX_OFF))
+       ))) return false;
   const dup=a.map(s=>s.name).find((n,i,arr)=>arr.indexOf(n)!==i);
   if(dup) return false;
   return true;
@@ -2190,7 +2210,8 @@ function normalizeSpaces(a){
       orient:(s.orient==="h")?"h":"v",
       block:Number.isFinite(s.block)?s.block:99,
       align:s.align,
-      cols:s.cols.map(c=>({h:c.h, aisle:!!c.aisle})),
+      // row / off は保存に無ければ undefined のまま。既定の「順に詰める」の意味になる
+      cols:s.cols.map(c=>({h:c.h, aisle:!!c.aisle, row:c.row, off:c.off})),
       sheet:SHEETS.includes(s.sheet)?s.sheet:"bottom",
     };
   });
