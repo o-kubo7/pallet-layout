@@ -101,6 +101,18 @@
   .grid-h{display:flex;flex-direction:column;gap:5px}
   /* PC横・EV横：実際の図と同じく短い段が上・右寄せ */
   .space.flip .grid-h{flex-direction:column-reverse;align-items:flex-end}
+  /* 位置指定モード：列が row / off を持つエリア。1マス幅のトラックを並べた grid で、
+     列は grid-column: off+1 / span h に置く。同じ off の列が必ず縦に揃う。
+     flex とマージンで組むと .hrow の枠と gap が先行列の本数だけ積み上がり、
+     同じ off の列が13pxずれた（軒下①のマス22とマス20）。
+     列の実幅はトラックより約8px広く右へはみ出すが、空きマス1つ（32px）より
+     小さいので隣とはぶつからない。
+     flip のエリアは列位置を JS で反転して入れるので、CSS 側の反転は要らない。
+     空き行のクラスが .hgap なのは、グローバルの .empty（padding:26px）に
+     当たると 30px のはずが 52px になり、色とセンタリングまで拾うため */
+  .grid-h.pos{display:grid;grid-auto-rows:auto;gap:5px 0;justify-content:start}
+  .space.flip .grid-h.pos{align-items:stretch}
+  .hgap{height:var(--cell)}
   .col{display:flex;flex-direction:column-reverse;gap:2px;border:2px solid #111;padding:3px;border-radius:4px;background:#fafafa}
   .col.top{flex-direction:column}
   .hrow{display:flex;gap:2px;border:2px solid #111;padding:3px;border-radius:4px;background:#fafafa}
@@ -1592,12 +1604,20 @@ function drawZone(elId, spaces, colorOf){
       wrap.style.gridColumn=pos.c; wrap.style.gridRow=pos.r;
       if(pos.flip) wrap.classList.add("flip");
     }
-    let lines="";
-    const grouping = sp.block>0 && sp.block<sp.cols.length;
+    // 列が row を持つエリアは「位置指定モード」。1マス幅のトラックを並べた grid に
+    // grid-column: off+1 / span h で置く。列が 1 つも無い row が通路の空き行になる。
+    // 位置指定モードでは block による隙間（blockgap）は使わない。
+    // 隙間は off が決めるので、二重に空けると実形からずれる。
+    const positioned = horizontal && sp.cols.some(c=>Number.isFinite(c.row));
+    const grouping = !positioned && sp.block>0 && sp.block<sp.cols.length;
+    // エリアの幅（マス数）。flip のとき列位置を反転するのに使う
+    const width = positioned
+      ? Math.max(...sp.cols.map(c=>(Number.isFinite(c.off)?c.off:0)+c.h))
+      : 0;
     let nonAisleSeen=0;
-    sp.cols.forEach((col,ci)=>{
-      const blockStart = grouping && !col.aisle && nonAisleSeen>0 && (nonAisleSeen % sp.block===0);
-      if(!col.aisle) nonAisleSeen++;
+    // 1 列ぶんの HTML を作る。blockStart は位置指定モードでは常に false。
+    // place は位置指定モードのときだけ渡す grid-area の指定
+    const colHtml=(col,ci,blockStart,place)=>{
       const arr=cellsOf(col);
       let cells="";
       arr.forEach(a=>{
@@ -1616,9 +1636,46 @@ function drawZone(elId, spaces, colorOf){
       const cap = `<div class="colcap">${used(col)}/${col.h}${col.aisle?' 通':''}</div>`;
       const editCls = editMode? " editable":"";
       const gapCls = blockStart? " blockgap":"";
-      lines+=`<div class="colwrap${col.aisle?' aisle':''}${editCls}${gapCls}" data-space="${sp.name}" data-col="${ci}">${inner}${cap}</div>`;
-    });
-    wrap.innerHTML=`<div class="name">${sp.name}</div><div class="${horizontal?'grid-h':'grid'}${topAlign?' top':''}">${lines}</div>`;
+      const style = place ? ` style="${place}"` : "";
+      return `<div class="colwrap${col.aisle?' aisle':''}${editCls}${gapCls}"`
+           + ` data-space="${sp.name}" data-col="${ci}"${style}>${inner}${cap}</div>`;
+    };
+    let lines="";
+    if(positioned){
+      const rowsUsed=new Set();
+      let maxRow=0;
+      sp.cols.forEach(c=>{
+        const r=Number.isFinite(c.row)?c.row:0;
+        rowsUsed.add(r);
+        if(r>maxRow) maxRow=r;
+      });
+      sp.cols.forEach((col,ci)=>{
+        const r=Number.isFinite(col.row)?col.row:0;
+        const off=Number.isFinite(col.off)?col.off:0;
+        // flip のエリアは右起点。off を右からのオフセットとして読み替える
+        const start = (pos && pos.flip) ? (width-off-col.h) : off;
+        lines+=colHtml(col, ci, false,
+          `grid-row:${r+1};grid-column:${start+1} / span ${col.h}`);
+      });
+      // 列が 1 つも無い row を 1 マス分の高さで埋める。これが通路の隙間になる
+      for(let r=0;r<=maxRow;r++){
+        if(rowsUsed.has(r)) continue;
+        lines+=`<div class="hgap" style="grid-row:${r+1};grid-column:1 / span ${width}"></div>`;
+      }
+    }else{
+      sp.cols.forEach((col,ci)=>{
+        const blockStart = grouping && !col.aisle && nonAisleSeen>0 && (nonAisleSeen % sp.block===0);
+        if(!col.aisle) nonAisleSeen++;
+        lines+=colHtml(col, ci, blockStart, "");
+      });
+    }
+    const gridCls = horizontal ? ("grid-h"+(positioned?" pos":"")) : "grid";
+    // トラックは 1 マス幅（マス幅＋マス間の 2px）。列は span h で載る
+    const gridStyle = positioned
+      ? ` style="grid-template-columns:repeat(${width}, calc(var(--cell) + 2px))"`
+      : "";
+    wrap.innerHTML=`<div class="name">${sp.name}</div>`
+      +`<div class="${gridCls}${topAlign?' top':''}"${gridStyle}>${lines}</div>`;
     el.appendChild(wrap);
   });
 }
