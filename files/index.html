@@ -148,6 +148,15 @@
            cursor:pointer;min-height:40px;color:#374151}
   .sizebtn.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
 
+  /* 設定タブの中のサブタブ。メインタブ（.tab）と見た目を変えて階層を示す */
+  .subtabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .subtab{position:relative;border:1px solid var(--line);background:#fff;color:#374151;
+          border-radius:999px;padding:8px 16px;font-size:13px;cursor:pointer;min-height:40px}
+  .subtab.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  /* 「見てほしい知らせがある」の印。件数を出す .dot とは別物 */
+  .subtab.alert::after{content:"";position:absolute;top:-2px;right:-2px;
+                       width:9px;height:9px;border-radius:50%;background:#f59e0b}
+
   .msg{padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:10px}
   .msg.ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
   .msg.warn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
@@ -475,31 +484,48 @@
 
   <!-- ===== 設定タブ ===== -->
   <div id="tab-settings" class="tabpanel" style="display:none">
-    <div class="card">
-      <h2>品目マスタ <span class="badge">品名 → SNP</span></h2>
-      <table id="masterTable">
-        <thead>
-          <tr><th>品名</th><th style="width:110px">SNP</th><th style="width:56px"></th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-      <div class="row-actions">
-        <button class="btn btn-ghost" onclick="addMasterRow();onMasterChange()">＋ 品目を追加</button>
-        <button class="btn btn-ghost" onclick="loadMaster()">サンプル品目を読込</button>
-      </div>
-      <div class="hint" style="margin-top:8px">品名を入力するとSNPが自動で入ります。<b>同じ品名でSNPが違うものは、複数行に分けて登録</b>できます（入力時に候補から選べます）。伝票のSNPが登録と違う場合は、入力欄で直接書き換えれば、その値で計算されます。</div>
+    <div class="subtabs" id="cfgTabs">
+      <button class="subtab on" id="subtab-master"  onclick="switchCfgTab('master')">品目マスタ</button>
+      <button class="subtab"    id="subtab-spaces"  onclick="switchCfgTab('spaces')">配置マス</button>
+      <button class="subtab"    id="subtab-display" onclick="switchCfgTab('display')">表示設定</button>
     </div>
 
-    <div class="card cfg">
-      <h2>スペース設定 <span class="badge" id="cfgBadge">この端末に保存</span></h2>
-      <div class="hint" id="cfgNote" style="margin-bottom:8px;color:#b45309" hidden></div>
-      <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路) | 掲載先(top/bottom/over)</b><br>掲載先は配置図の表のどこに欄を書くかです。top＝上段、bottom＝下段、over＝あふれブロック。省略すると今の設定を引き継ぎます。<b>あふれブロックは未実装</b>なので、over にしたエリアには新しく荷物を置きません。すでにそのエリアにある荷物は残り、配置図の表には出ません。<br><b>行の順番には意味があります。</b>上の行から順に自動配置で試します。また上段・下段それぞれの先頭の行が配置図の表の基準になり、その欄には注釈が付きません。大きなグリッドは下段の基準エリアを描きます。並べ替えると配置のしかたが変わり、手動で調整した配置は破棄されます。</div>
-      <textarea id="cfgText"></textarea>
-      <div class="row-actions">
-        <button class="btn btn-ghost" onclick="applyConfig()">設定を反映</button>
-        <button class="btn btn-ghost" onclick="resetConfig()">初期値に戻す</button>
+    <div id="cfgpane-master">
+      <div class="card">
+        <h2>品目マスタ <span class="badge">品名 → SNP</span></h2>
+        <table id="masterTable">
+          <thead>
+            <tr><th>品名</th><th style="width:110px">SNP</th><th style="width:56px"></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="row-actions">
+          <button class="btn btn-ghost" onclick="addMasterRow();onMasterChange()">＋ 品目を追加</button>
+          <button class="btn btn-ghost" onclick="loadMaster()">サンプル品目を読込</button>
+        </div>
+        <div class="hint" style="margin-top:8px">品名を入力するとSNPが自動で入ります。<b>同じ品名でSNPが違うものは、複数行に分けて登録</b>できます（入力時に候補から選べます）。伝票のSNPが登録と違う場合は、入力欄で直接書き換えれば、その値で計算されます。</div>
       </div>
-      <div class="summary" id="capacity"></div>
+    </div>
+
+    <div id="cfgpane-spaces" style="display:none">
+      <div class="card cfg">
+        <h2>スペース設定 <span class="badge" id="cfgBadge">この端末に保存</span></h2>
+        <div class="hint" id="cfgNote" style="margin-bottom:8px;color:#b45309" hidden></div>
+        <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路) | 掲載先(top/bottom/over)</b><br>掲載先は配置図の表のどこに欄を書くかです。top＝上段、bottom＝下段、over＝あふれブロック。省略すると今の設定を引き継ぎます。<b>あふれブロックは未実装</b>なので、over にしたエリアには新しく荷物を置きません。すでにそのエリアにある荷物は残り、配置図の表には出ません。<br><b>行の順番には意味があります。</b>上の行から順に自動配置で試します。また上段・下段それぞれの先頭の行が配置図の表の基準になり、その欄には注釈が付きません。大きなグリッドは下段の基準エリアを描きます。並べ替えると配置のしかたが変わり、手動で調整した配置は破棄されます。</div>
+        <textarea id="cfgText"></textarea>
+        <div class="row-actions">
+          <button class="btn btn-ghost" onclick="applyConfig()">設定を反映</button>
+          <button class="btn btn-ghost" onclick="resetConfig()">初期値に戻す</button>
+        </div>
+        <div class="summary" id="capacity"></div>
+      </div>
+    </div>
+
+    <div id="cfgpane-display" style="display:none">
+      <div class="card">
+        <h2>表示設定 <span class="badge">この端末に保存</span></h2>
+        <div class="hint">配置図の表の文字の設定はここに入ります。</div>
+      </div>
     </div>
   </div>
 
@@ -1735,6 +1761,20 @@ function switchTab(name){
     if(hasResult) renderSheet(); else applySheetZoom();
   }
 }
+/* 設定タブの中のサブタブ。開いたペインの「知らせがある」印は落とす。
+   案内文（#cfgNote / #dspNote）はペインの中にあるので、閉じているペインに
+   出しても利用者の目に入らない。印だけを外に出す仕掛け。 */
+function switchCfgTab(name){
+  ["master","spaces","display"].forEach(t=>{
+    const pane=document.getElementById("cfgpane-"+t);
+    const btn=document.getElementById("subtab-"+t);
+    if(pane) pane.style.display = (t===name)?"":"none";
+    if(btn){
+      btn.classList.toggle("on", t===name);
+      if(t===name) btn.classList.remove("alert");
+    }
+  });
+}
 function showMapState(){
   // 配置編集タブと配置表タブは独立しているので、それぞれの空表示を出し分ける
   document.getElementById("editEmpty").style.display  = hasResult?"none":"block";
@@ -2262,10 +2302,15 @@ function bootDraw(fn){
 function clearCfgNote(){
   const note=document.getElementById("cfgNote");
   if(note){ note.textContent=""; note.hidden=true; }
+  const btn=document.getElementById("subtab-spaces");
+  if(btn) btn.classList.remove("alert");
 }
 function showCfgNote(msg){
   const note=document.getElementById("cfgNote");
   if(note){ note.textContent=msg; note.hidden=false; }
+  // 配置マスのペインは閉じていることがあるので、サブタブに印を出して気づかせる
+  const btn=document.getElementById("subtab-spaces");
+  if(btn) btn.classList.add("alert");
 }
 /* 保存された SPACES の検証。
    loadData() は JSON.parse の失敗しか握らないので、JSON として正しく構造が壊れている
