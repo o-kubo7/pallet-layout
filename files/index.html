@@ -255,18 +255,25 @@
                padding:0 3px;white-space:nowrap;
                border:2px solid #000;border-radius:999px;font-size:11px;font-weight:700}
   .sheet td.slot{font-size:10px;line-height:1.2;height:26px;word-break:break-all}
-  .sheet tr.gap td{height:11px;border:0;background:transparent}
+  .sheet tr.gap td{height:8px;border:0;background:transparent}
   .sheet tr.gap td.sep{border-bottom:2px solid #000}
   /* 注記行（グローバルの .note と衝突させないため別名） */
-  /* 注記行は引き出し線と同じ帯を通るので、線が通る欄の中心を避けて左に寄せる */
-  .sheet td.snote{display:table-cell;text-align:left;font-size:10px;color:#333;height:24px;
+  /* 注記行は引き出し線と同じ帯を通る。中央寄せは線と重なるが、
+     用紙の見た目を優先する指定（上寄せにして重なりを浅くする） */
+  /* 注記行と下の余白(tr.gap 8px)を合わせた高さが、上下段の各行（最小26px）より
+     低く見えるようにする。16+8＝24px。文字は 10px×line-height1.2＝12px なので収まる */
+  .sheet td.snote{display:table-cell;text-align:center;vertical-align:top;
+                  font-size:10px;color:#333;height:16px;line-height:1.2;
                   border:0;background:transparent}
-  .sheet td.g{height:30px;position:relative;padding:0}
+  /* 上段の注記行は左5列が空セル。td の既定の 26px が行を押し上げるので合わせる */
+  .sheet tr.note-row td.none{height:16px}
+  .sheet td.g{height:30px;position:relative;padding:0;line-height:0}
   /* 通路列の灰色。ブラウザは既定で背景色を印刷しないので、このセルだけは
      印刷ダイアログの「背景のグラフィック」を待たずに出すよう指示する */
   .sheet td.g.aisle{background:#d9d9d9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   /* ○は引き出し線より奥に見えるよう灰色にする */
   .sheet td.g .mk{display:inline-flex;align-items:center;justify-content:center;
+                  vertical-align:middle;line-height:1;
                   width:22px;height:22px;border:2px solid #999;border-radius:50%;
                   font-size:11px;font-weight:700}
   .sheet td.lab{border:0;font-size:11px;color:#333;position:relative}
@@ -300,9 +307,9 @@
     .wrap{padding:0;max-width:none}
     .card{border:0;padding:0;margin:0}
     .card h2{display:none}
-    /* 表は 675×503px 固定（上段の注釈行を足したぶん高くなった。注釈が2行に
-       折り返した場合の高さ）。A4横・余白8mm の印刷領域は 281×194mm＝約1062×733px。
-       1.4倍で 945×704px＝250×186mm。用紙の高さを 96% 使い、
+    /* 表は 675×491px 固定（注釈が2行に折り返した場合の高さ）。
+       A4横・余白8mm の印刷領域は 281×194mm＝約1062×733px。
+       1.4倍で 945×687px＝250×182mm。用紙の高さを 94% 使い、
        ブラウザごとの余白差で2ページに割れない範囲に収める。
        1.5倍のままだと注釈行のぶんで 103% になり、page-break-inside:avoid で
        表ごと2ページ目に落ちる */
@@ -2380,9 +2387,9 @@ function applyLotCorner(){
 
 /* ---------- 配置図の表の表示倍率 ---------- */
 // 表の実寸（.sheet の padding 10px×2 を含む）。
-// SHEET_H の 503 は注釈行が2行に折り返した場合の最悪ケースの高さ。
+// SHEET_H の 491 は注釈行が2行に折り返した場合の最悪ケースの高さ。
 // 印刷CSSのコメント（.sheet の zoom 指定の近く）と必ず一致させること。
-const SHEET_W=675+20, SHEET_H=503+20;
+const SHEET_W=675+20, SHEET_H=491+20;
 let sheetZoom="auto";   // "auto" または倍率の文字列
 
 function setSheetZoom(z){
