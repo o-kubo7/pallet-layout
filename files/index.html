@@ -156,6 +156,10 @@
   /* 「見てほしい知らせがある」の印。件数を出す .dot とは別物 */
   .subtab.alert::after{content:"";position:absolute;top:-2px;right:-2px;
                        width:9px;height:9px;border-radius:50%;background:#f59e0b}
+  /* 表示設定の入力欄。項目が多いので2列に畳む */
+  .dspgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 14px;margin-bottom:10px}
+  .dspgrid label{font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px}
+  .dspgrid input[type=number]{width:72px}
 
   .msg{padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:10px}
   .msg.ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
@@ -225,7 +229,11 @@
   /* ---- 配置図の表（手書き用紙と同じレイアウト） ---- */
   /* 倍率は CSS 変数で当てる。印刷用の zoom を上書きしないよう style 属性には書かない */
   /* ロットの太枠の角の丸み。0 にすると角のままになる */
-  :root{--lot-corner:15px}
+  /* 文字サイズ・太字は表示設定（設定タブ）が JS で上書きする。ここが既定値 */
+  :root{--lot-corner:15px;
+        --fs-name:16px; --fs-lot:13px; --fs-pal:16px; --fs-note:13px;
+        --fs-date:20px; --fs-total:30px;
+        --fw-name:700;  --fw-lot:400;  --fw-pal:700;  --fw-note:400}
   .sheet{background:#fff;color:#000;padding:10px;overflow-x:auto;width:max-content;max-width:100%;
          zoom:var(--sheet-zoom,1)}
   /* 引き出し線の基準。.sheet の padding は印刷時に 0 になるので、
@@ -249,8 +257,8 @@
      td の border をいじると table-layout:fixed の colspan 幅計算が崩れるので、
      1セルにまとめて中身を grid で列に割り付ける */
   .sheet .fldrow{display:grid;align-items:center;line-height:1}
-  .sheet .fldrow.c5{grid-template-columns:repeat(5,1fr);font-size:20px}
-  .sheet .fldrow.c3{grid-template-columns:repeat(3,1fr);font-size:30px}
+  .sheet .fldrow.c5{grid-template-columns:repeat(5,1fr);font-size:var(--fs-date)}
+  .sheet .fldrow.c3{grid-template-columns:repeat(3,1fr);font-size:var(--fs-total)}
   .sheet .fldrow span:first-child{grid-column:1/3}
   /* 月の数字は曜日「火」の真上（2列目）に置く */
   .sheet .fldrow.c5 span:first-child{grid-column:2}
@@ -264,6 +272,10 @@
                padding:0 3px;white-space:nowrap;
                border:2px solid #000;border-radius:999px;font-size:11px;font-weight:700}
   .sheet td.slot{font-size:10px;line-height:1.2;height:26px;word-break:break-all}
+  /* 種類ごとの文字サイズ・太字。td.slot の 10px を上書きする（詳細度が高い） */
+  .sheet td.slot.c-name{font-size:var(--fs-name);font-weight:var(--fw-name)}
+  .sheet td.slot.c-lot {font-size:var(--fs-lot); font-weight:var(--fw-lot)}
+  .sheet td.slot.c-pal {font-size:var(--fs-pal); font-weight:var(--fw-pal)}
   /* 欄に入りきらない文字を横に縮めて1行に収める入れ物。
      transform-origin:left center の scaleX だけでよい。translateX で中央へ
      戻す補正を入れてはいけない（自然幅が欄を超えた時点でブラウザが左端基準に
@@ -277,7 +289,7 @@
   /* 注記行と下の余白(tr.gap 8px)を合わせた高さが、上下段の各行（最小26px）より
      低く見えるようにする。16+8＝24px。文字は 10px×line-height1.2＝12px なので収まる */
   .sheet td.snote{display:table-cell;text-align:center;vertical-align:top;
-                  font-size:10px;color:#333;height:16px;line-height:1.2;
+                  font-size:var(--fs-note);font-weight:var(--fw-note);color:#333;height:16px;line-height:1.2;
                   border:0;background:transparent}
   /* 上段の注記行は左5列が空セル。td の既定の 26px が行を押し上げるので合わせる */
   .sheet tr.note-row td.none{height:16px}
@@ -530,7 +542,25 @@
     <div id="cfgpane-display" style="display:none">
       <div class="card">
         <h2>表示設定 <span class="badge">この端末に保存</span></h2>
-        <div class="hint">配置図の表の文字の設定はここに入ります。</div>
+        <div class="hint" id="dspNote" style="margin-bottom:8px;color:#b45309" hidden></div>
+        <div class="hint" style="margin-bottom:10px">配置図の表の文字の大きさと太さです（品名・ロット・パレット数・注釈は8〜24px、月日・総パレット数は8〜32px）。欄に入りきらない文字は自動で横に縮みます（下限40%）。<b>ロットを太字にすると数字の幅が約8%広がる</b>ので、縮む欄が増えます。</div>
+        <div class="dspgrid">
+          <label>品名 <input type="number" id="fsName"  min="8" max="24" onchange="displayChanged()"></label>
+          <label>ロット <input type="number" id="fsLot"  min="8" max="24" onchange="displayChanged()"></label>
+          <label>パレット数 <input type="number" id="fsPal" min="8" max="24" onchange="displayChanged()"></label>
+          <label>注釈 <input type="number" id="fsNote"  min="8" max="24" onchange="displayChanged()"></label>
+          <label>月日 <input type="number" id="fsDate"  min="8" max="32" onchange="displayChanged()"></label>
+          <label>総パレット数 <input type="number" id="fsTotal" min="8" max="32" onchange="displayChanged()"></label>
+        </div>
+        <div class="dspgrid">
+          <label class="chk"><input type="checkbox" id="fwName" onchange="displayChanged()"> 品名を太字</label>
+          <label class="chk"><input type="checkbox" id="fwLot"  onchange="displayChanged()"> ロットを太字</label>
+          <label class="chk"><input type="checkbox" id="fwPal"  onchange="displayChanged()"> パレット数を太字</label>
+          <label class="chk"><input type="checkbox" id="fwNote" onchange="displayChanged()"> 注釈を太字</label>
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-ghost" onclick="resetDisplay()">初期値に戻す</button>
+        </div>
       </div>
     </div>
   </div>
@@ -654,7 +684,7 @@ let hasResult=false;
 let fracMode=false;   // true なら「満載数P 半」表記
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", display:"palletApp.display"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
 const SPACES_SAVE_VERSION = 2;
@@ -669,6 +699,26 @@ const SPACES_MAX_AREAS = 20;
 // 桁違いの値は例外にならずタブごと固まる。col.h と同じ理由で歯止めが要る。
 const SPACES_MAX_ROW = 99;
 const SPACES_MAX_OFF = 99;
+/* 配置図の表の文字の設定。DEFAULT_DISPLAY を変えたらこの番号を上げる。
+   古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
+   配置結果は変わらないので、手動配置の指紋 inputFingerprint() には入れない。 */
+const DISPLAY_SAVE_VERSION = 1;
+const DISPLAY_FS_MIN = 8, DISPLAY_FS_MAX = 24;        // 品名・ロット・P数・注釈の上限。32pxは表本体が印刷で用紙の147%になる（設計書 3-8）
+// 月日・総P数は表の中身ではなく見出し行なので別枠。既定値20/30pxを含んだ実測が用紙90.6%（設計書 3-8）で、
+// 24pxまで下げると現行の紙の見た目が縮んでしまうため、この2項目だけ上限を32pxまで許す（計画からの逸脱・ユーザー承認済み）。
+const DISPLAY_FS_MAX_HEAD = 32;
+const DISPLAY_FS_HEAD_KEYS = ["fsDate","fsTotal"];
+function fsMaxOf(key){ return DISPLAY_FS_HEAD_KEYS.includes(key) ? DISPLAY_FS_MAX_HEAD : DISPLAY_FS_MAX; }
+const DEFAULT_DISPLAY = {
+  fsName:16, fsLot:13, fsPal:16, fsNote:13, fsDate:20, fsTotal:30,
+  fwName:true, fwLot:false, fwPal:true, fwNote:false,
+};
+const DISPLAY_VARS = {
+  fsName:"--fs-name", fsLot:"--fs-lot", fsPal:"--fs-pal", fsNote:"--fs-note",
+  fsDate:"--fs-date", fsTotal:"--fs-total",
+  fwName:"--fw-name", fwLot:"--fw-lot", fwPal:"--fw-pal", fwNote:"--fw-note",
+};
+let DISPLAY = Object.assign({}, DEFAULT_DISPLAY);
 let storageOK=true;
 const memStore={};
 (function(){
@@ -2437,6 +2487,70 @@ function applyLotCorner(){
   else          document.documentElement.style.setProperty("--lot-corner","0");
 }
 
+/* ---------- 配置図の表の文字の設定 ---------- */
+// 保存の検証。1つでも外れたら設定全体を捨てる（スペース設定と同じ判断）
+function validDisplay(d){
+  if(!d || typeof d!=="object" || Array.isArray(d)) return false;
+  return Object.keys(DEFAULT_DISPLAY).every(k=>{
+    const v=d[k];
+    return k.startsWith("fs")
+      ? (Number.isFinite(v) && v>=DISPLAY_FS_MIN && v<=fsMaxOf(k))
+      : (typeof v==="boolean");
+  });
+}
+// CSS 変数に流し込む。表を描き直す必要はないが、文字の幅が変わるので
+// 圧縮だけは計算し直す
+function applyDisplay(){
+  const st=document.documentElement.style;
+  Object.keys(DEFAULT_DISPLAY).forEach(k=>{
+    st.setProperty(DISPLAY_VARS[k], k.startsWith("fs") ? DISPLAY[k]+"px" : (DISPLAY[k]?"700":"400"));
+  });
+  fitSheetText();
+}
+// 現在値を入力欄へ
+function displayToForm(){
+  Object.keys(DEFAULT_DISPLAY).forEach(k=>{
+    const el=document.getElementById(k); if(!el) return;
+    if(k.startsWith("fs")) el.value=DISPLAY[k]; else el.checked=DISPLAY[k];
+  });
+}
+// 入力欄から現在値へ。範囲外・数値でないものはその項目だけ既定値に戻す
+function displayChanged(){
+  Object.keys(DEFAULT_DISPLAY).forEach(k=>{
+    const el=document.getElementById(k); if(!el) return;
+    if(k.startsWith("fs")){
+      const n=parseInt(el.value,10);
+      DISPLAY[k]=(Number.isFinite(n) && n>=DISPLAY_FS_MIN && n<=fsMaxOf(k)) ? n : DEFAULT_DISPLAY[k];
+    }else{
+      DISPLAY[k]=!!el.checked;
+    }
+  });
+  displayToForm();                 // 弾いた値を入力欄にも反映する
+  saveData(STORE_KEY.display, {v:DISPLAY_SAVE_VERSION, display:DISPLAY});
+  clearDisplayNote();
+  applyDisplay();
+}
+function resetDisplay(){
+  DISPLAY=Object.assign({}, DEFAULT_DISPLAY);
+  saveData(STORE_KEY.display, null);
+  displayToForm();
+  clearDisplayNote();
+  applyDisplay();
+}
+// 案内文。表示設定のペインは閉じていることがあるのでサブタブに印を出す
+function showDisplayNote(msg){
+  const note=document.getElementById("dspNote");
+  if(note){ note.textContent=msg; note.hidden=false; }
+  const btn=document.getElementById("subtab-display");
+  if(btn) btn.classList.add("alert");
+}
+function clearDisplayNote(){
+  const note=document.getElementById("dspNote");
+  if(note){ note.textContent=""; note.hidden=true; }
+  const btn=document.getElementById("subtab-display");
+  if(btn) btn.classList.remove("alert");
+}
+
 /* ---------- 配置図の表の表示倍率 ---------- */
 // 表の実寸（.sheet の padding 10px×2 を含む）。
 // SHEET_H の 491 は注釈行が2行に折り返した場合の最悪ケースの高さ。
@@ -2965,6 +3079,38 @@ updateSaveStatus();
 (function initFrac(){
   const f=loadData(STORE_KEY.frac);
   if(f){ fracMode=true; document.getElementById("fracChk").checked=true; recalcAllRows(); }
+})();
+
+/* 表示設定：保存があれば復元。
+   スペース設定と違い、バージョンが変わっても丸ごと捨てない。ここに入っているのは
+   利用者が紙合わせで決めた値で、こちらの既定値より現場の目のほうが正しいため。
+   足りないキーを既定値で補い、範囲外になった値だけ既定値に直す（設計書 6章）。
+   保存の形自体が壊れているとき（display がオブジェクトでない）だけ初期値に戻す。 */
+(function initDisplay(){
+  const d=loadData(STORE_KEY.display);
+  if(d){
+    const raw=(d.display && typeof d.display==="object" && !Array.isArray(d.display)) ? d.display : null;
+    if(!raw){
+      saveData(STORE_KEY.display, null);
+      showDisplayNote("保存されていた表示設定を読み込めなかったので、初期値に戻しました。");
+    }else{
+      const merged=Object.assign({}, DEFAULT_DISPLAY, raw);
+      Object.keys(DEFAULT_DISPLAY).forEach(k=>{
+        const v=merged[k];
+        const okv = k.startsWith("fs")
+          ? (Number.isFinite(v) && v>=DISPLAY_FS_MIN && v<=fsMaxOf(k))
+          : (typeof v==="boolean");
+        if(!okv) merged[k]=DEFAULT_DISPLAY[k];
+      });
+      DISPLAY=merged;
+      if(d.v!==DISPLAY_SAVE_VERSION){
+        saveData(STORE_KEY.display, {v:DISPLAY_SAVE_VERSION, display:DISPLAY});
+        showDisplayNote("表示設定の項目が変わったので、足りない分を初期値で補いました。");
+      }
+    }
+  }
+  displayToForm();
+  applyDisplay();
 })();
 
 showMapState();
