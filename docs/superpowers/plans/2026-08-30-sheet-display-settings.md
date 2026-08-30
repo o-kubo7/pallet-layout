@@ -25,6 +25,15 @@
 - **`translateX` の補正を入れてはいけない。** `transform-origin:left center` の
   `scaleX(k)` だけで中央に収まる（設計書 3-1、実測済み）。
 - 圧縮の下限は `FIT_MIN_SCALE = 0.4`。全セル共通。設定項目にはしない。
+- **下限に落ちた欄は `white-space:normal` に戻す前に `width` を `avail / 0.4` へ広げる。**
+  広げないと欄幅で折り返してから 40% に潰れ、6行・118px・インク幅37px の
+  読めない塊になる（設計書 3-7、実測）。ループの先頭で `width=""` に戻すこと。
+- **幅のガード（`avail<=0` なら何もしない）は、前回の圧縮結果を消すより前に置く。**
+  消してから抜けると、非表示タブで呼ばれたときに圧縮が外れたまま残る。
+- 文字サイズの上限は **24px**（`DISPLAY_FS_MAX`）。32px は印刷が用紙の147%になる
+  （設計書 3-8、実測）。
+- **`autoSheetZoom()` は `Math.max(1, ...)` で 1 倍を下回らない。** 文字を大きくして
+  表が伸びても自動では救われないので、用紙の98%を超えたら `#sheetMsg` に警告を出す。
 - 圧縮の警告は `#messages` に出さない。あれは配置編集タブの中にあり
   `renderResult()` が `innerHTML=` で全置換する。配置表タブに `#sheetMsg` を新設する。
 - 既存の関数名・引数の並びは変えない。
@@ -43,8 +52,17 @@ URL は `http://localhost:8765/`（`.claude/launch.json` の `pallet-layout`）�
 
 **必ず守ること:**
 
-- `applyConfig()` は `alert()` を呼ぶ。`alert()` は `javascript_tool` の実行をブロックするので、
-  検証スクリプトの先頭で必ず `window.alert` を差し替える。各タスクの検証スクリプトに含めてある。
+- `applyConfig()` は `alert()` を呼び、`runFromButton()` は `confirm()` を2回呼ぶ
+  （`files/index.html:2038` 手動調整の破棄 / `:2046` 未登録品目の登録）。
+  どちらも `javascript_tool` の実行をブロックするので、検証スクリプトの先頭で
+  **`window.alert` と `window.confirm` の両方を差し替える**。
+  各タスクの検証スクリプトに含めてある。
+- **検証は localStorage を書き換える。** `setSheetZoom('1')` は
+  `saveData(STORE_KEY.zoom,'1')` を実行する。`runFromButton()` は `clearManual()` を呼ぶ。
+  この端末の実データ（`palletApp.lots` / `palletApp.master`）には触らないが、
+  「DOM だけの変更」ではない。
+- **計画に書いた行番号は目安**（実ファイルと5〜7行ずれることがある）。
+  位置は行番号ではなく前後のコードで決めること。
 - **幾何を測る前に必ずタブを表示する。** 初期表示は `#tab-input` で他のタブは
   `display:none`。非表示要素の `getBoundingClientRect()` / `clientWidth` は 0 を返す。
   配置表を測るなら `runFromButton(); switchTab('sheet');` を先に呼ぶ。
@@ -84,7 +102,7 @@ URL は `http://localhost:8765/`（`.claude/launch.json` の `pallet-layout`）�
 `javascript_tool` で実行する:
 
 ```js
-(()=>{ window.alert=()=>{};
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
   const r={};
   r.hasSwitch = typeof switchCfgTab==="function";
   r.panes = ["master","spaces","display"].map(t=>document.getElementById("cfgpane-"+t)?1:0);
@@ -199,7 +217,7 @@ function showCfgNote(msg){
 - [ ] **Step 6: 検証スクリプトを走らせて PASS を確認する**
 
 ```js
-(()=>{ window.alert=()=>{};
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
   const r={};
   switchTab('settings');
   r.hasSwitch = typeof switchCfgTab==="function";
@@ -257,7 +275,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - [ ] **Step 1: 検証スクリプトを先に走らせて FAIL を確認する**
 
 ```js
-(()=>{ window.alert=()=>{};
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
   runFromButton(); switchTab('sheet');
   const r={};
   r.hasFit = typeof fitSheetText==="function";
@@ -340,6 +358,9 @@ function slotCells(entries,count,kind,extra){
    ・非表示タブでは幅が 0 なので何もしない（drawLeaders() と同じ理由）。 */
 const FIT_MIN_SCALE = 0.4;
 const FIT_LABEL = {name:"品名", lot:"ロット", pal:"P数", note:"注釈"};
+const PRINT_ZOOM = 1.4;                 // 印刷CSSの .sheet{zoom} と必ず揃える
+const PRINT_H_PX = 733.2;               // A4横・余白8mm の印刷領域の高さ
+const PRINT_H_LIMIT = PRINT_H_PX*0.98;  // ブラウザごとの余白差を見込んで 98% を上限にする
 function fitSheetText(){
   const box=document.getElementById("sheetMsg");
   const sheet=document.querySelector("#sheetView .sheet");
@@ -348,26 +369,46 @@ function fitSheetText(){
   const over={};
   sheet.querySelectorAll(".fit").forEach(sp=>{
     const td=sp.parentElement; if(!td) return;
-    // 前回の結果を消してから測る。nowrap に戻さないと折り返した幅を拾う
+    // 幅の判定は前回の結果を消す前に。消してから抜けると、非表示タブで
+    // 呼ばれたときに圧縮が外れたまま残る
+    const avail=td.clientWidth-2;            // 左右の padding 1px ずつ
+    if(avail<=0) return;                     // 非表示タブでは測れない
     sp.style.transform="none";
     sp.style.whiteSpace="nowrap";
+    sp.style.width="";                       // 前回広げた幅を戻してから測る
     const natural=sp.getBoundingClientRect().width/z;
-    const avail=td.clientWidth-2;             // 左右の padding 1px ずつ
-    if(avail<=0 || natural<=0) return;        // 非表示タブでは測れない
+    if(natural<=0) return;
     let k=Math.min(1, avail/natural);
     if(k<FIT_MIN_SCALE){
       k=FIT_MIN_SCALE;
-      sp.style.whiteSpace="normal";           // 下限まで縮めても入らない。折り返す
+      // 折り返しの基準幅を先に広げる。広げずに normal へ戻すと、欄幅で
+      // 折り返してから 40% に潰れ、6行・インク幅37px の読めない塊になる
+      sp.style.width=(avail/FIT_MIN_SCALE)+"px";
+      sp.style.whiteSpace="normal";
       const kind=td.dataset.fit||"";
       over[kind]=(over[kind]||0)+1;
     }
     sp.style.transform = (k<1) ? `scaleX(${k.toFixed(4)})` : "none";
   });
   if(!box) return;
+  let html="";
   const parts=Object.keys(over).map(k=>`${FIT_LABEL[k]||k} ${over[k]}件`);
-  box.innerHTML = parts.length
-    ? `<div class="msg warn">⚠ 文字が入りきらない欄があります：${parts.join(" / ")}。設定タブの「表示設定」で文字を小さくするか、品名を短くしてください。</div>`
-    : "";
+  if(parts.length){
+    html+=`<div class="msg warn">⚠ 文字が入りきらない欄があります：${parts.join(" / ")}。`
+        + `設定タブの「表示設定」で文字を小さくするか、品名を短くしてください。</div>`;
+  }
+  // 縦のはみ出し。autoSheetZoom() は Math.max(1,...) で 1 倍を下回らないので、
+  // 文字を大きくして表が伸びても自動では救われない
+  const t=sheet.querySelector("table");
+  if(t){
+    const h=t.getBoundingClientRect().height/z;
+    if(h>0 && h*PRINT_ZOOM>PRINT_H_LIMIT){
+      const pct=Math.round(h*PRINT_ZOOM/PRINT_H_PX*100);
+      html+=`<div class="msg warn">⚠ 文字が大きくて印刷が1ページに収まりません`
+          + `（用紙の高さの${pct}%）。設定タブの「表示設定」で文字を小さくしてください。</div>`;
+    }
+  }
+  box.innerHTML=html;
 }
 ```
 
@@ -389,7 +430,7 @@ function fitSheetText(){
 - [ ] **Step 6: 検証スクリプトを走らせて PASS を確認する**
 
 ```js
-(()=>{ window.alert=()=>{};
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
   runFromButton(); switchTab('sheet'); setSheetZoom('1');
   const sheet=document.querySelector("#sheetView .sheet");
   const r={};
@@ -406,10 +447,10 @@ function fitSheetText(){
   const saved=sp.textContent;
   const z=()=>parseFloat(getComputedStyle(sheet).zoom)||1;
   const naturalOf=()=>{                      // 圧縮を外した素の幅（CSS px）
-    const tf=sp.style.transform, ws=sp.style.whiteSpace;
-    sp.style.transform="none"; sp.style.whiteSpace="nowrap";
+    const tf=sp.style.transform, ws=sp.style.whiteSpace, wd=sp.style.width;
+    sp.style.transform="none"; sp.style.whiteSpace="nowrap"; sp.style.width="";
     const n=sp.getBoundingClientRect().width/z();
-    sp.style.transform=tf; sp.style.whiteSpace=ws; return n;
+    sp.style.transform=tf; sp.style.whiteSpace=ws; sp.style.width=wd; return n;
   };
   const kOf=()=>+(/scaleX\(([\d.]+)\)/.exec(sp.style.transform)||[0,1])[1];
   const gaps=()=>{
@@ -436,6 +477,11 @@ function fitSheetText(){
   r.floorNatural=+naturalOf().toFixed(1);
   r.floorK=kOf();
   r.floorWrap=sp.style.whiteSpace;
+  // 折り返しの「実体」を見る。k と whiteSpace だけでは、6行118px に膨らむ
+  // 失敗（width を広げ忘れ）を見逃す
+  r.floorCellH=+td.getBoundingClientRect().height.toFixed(1);
+  r.floorInkW =+(sp.getBoundingClientRect().width/z()).toFixed(1);
+  r.floorWidth=sp.style.width;
   r.warnCount=document.querySelectorAll("#sheetMsg .msg.warn").length;
   r.warnText=(document.getElementById("sheetMsg").textContent||"").slice(0,24);
 
@@ -451,6 +497,7 @@ function fitSheetText(){
       && Math.abs(r.zoom14K-r.longK)<0.005
       && r.floorNatural>232.5
       && Math.abs(r.floorK-0.4)<0.001 && r.floorWrap==="normal"
+      && r.floorCellH<=42 && r.floorInkW>=90 && r.floorWidth!==""
       && r.warnCount===1 && r.warnAfter===0;
   return r;
 })()
@@ -462,6 +509,10 @@ Expected: `ok:true`。改修前に測った見込みでは、`natural`≒119、`
 `gaps.left` と `gaps.right` の差が 2px 以内、`zoom14K` は `longK` と一致、
 `floorK` は 0.4 で `whiteSpace` が `normal`、警告は1本出て元に戻すと消える。
 
+**`floorCellH` と `floorInkW` が要になる。** `width` を広げ忘れると
+`floorCellH≒118`・`floorInkW≒37`（6行の読めない塊）になる。正しく広げていれば
+`floorCellH≒41`・`floorInkW≒93`（2行・欄いっぱい）。
+
 **注意:** 検証で `sp.textContent` を書き換えているが、これは DOM だけの変更で
 localStorage には触らない。最後に `renderSheet()` で元に戻る。
 
@@ -471,7 +522,7 @@ localStorage には触らない。最後に `renderSheet()` で元に戻る。
 （非表示タブで `renderSheet()` が走る経路。設計書 3-3）:
 
 ```js
-(()=>{ window.alert=()=>{};
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
   switchTab('input');                 // 配置表タブを閉じる
   runFromButton();                    // ここで renderSheet() は非表示のまま走る
   switchTab('sheet');                 // switchTab が renderSheet() を呼び直す
@@ -512,7 +563,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - [ ] **Step 1: 検証スクリプトを先に走らせて FAIL を確認する**
 
 ```js
-(()=>{ window.alert=()=>{};
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
   return {hasApply: typeof applyDisplay==="function",
           hasReset: typeof resetDisplay==="function",
           fsName: getComputedStyle(document.documentElement).getPropertyValue("--fs-name").trim(),
@@ -577,14 +628,14 @@ Task 1 で作った `#cfgpane-display` の中身を次に置き換える:
       <div class="card">
         <h2>表示設定 <span class="badge">この端末に保存</span></h2>
         <div class="hint" id="dspNote" style="margin-bottom:8px;color:#b45309" hidden></div>
-        <div class="hint" style="margin-bottom:10px">配置図の表の文字の大きさと太さです（8〜32px）。欄に入りきらない文字は自動で横に縮みます（下限40%）。<b>ロットを太字にすると数字の幅が約8%広がる</b>ので、縮む欄が増えます。</div>
+        <div class="hint" style="margin-bottom:10px">配置図の表の文字の大きさと太さです（8〜24px）。欄に入りきらない文字は自動で横に縮みます（下限40%）。<b>ロットを太字にすると数字の幅が約8%広がる</b>ので、縮む欄が増えます。</div>
         <div class="dspgrid">
-          <label>品名 <input type="number" id="fsName"  min="8" max="32" onchange="displayChanged()"></label>
-          <label>ロット <input type="number" id="fsLot"  min="8" max="32" onchange="displayChanged()"></label>
-          <label>パレット数 <input type="number" id="fsPal" min="8" max="32" onchange="displayChanged()"></label>
-          <label>注釈 <input type="number" id="fsNote"  min="8" max="32" onchange="displayChanged()"></label>
-          <label>月日 <input type="number" id="fsDate"  min="8" max="32" onchange="displayChanged()"></label>
-          <label>総パレット数 <input type="number" id="fsTotal" min="8" max="32" onchange="displayChanged()"></label>
+          <label>品名 <input type="number" id="fsName"  min="8" max="24" onchange="displayChanged()"></label>
+          <label>ロット <input type="number" id="fsLot"  min="8" max="24" onchange="displayChanged()"></label>
+          <label>パレット数 <input type="number" id="fsPal" min="8" max="24" onchange="displayChanged()"></label>
+          <label>注釈 <input type="number" id="fsNote"  min="8" max="24" onchange="displayChanged()"></label>
+          <label>月日 <input type="number" id="fsDate"  min="8" max="24" onchange="displayChanged()"></label>
+          <label>総パレット数 <input type="number" id="fsTotal" min="8" max="24" onchange="displayChanged()"></label>
         </div>
         <div class="dspgrid">
           <label class="chk"><input type="checkbox" id="fwName" onchange="displayChanged()"> 品名を太字</label>
@@ -614,7 +665,7 @@ const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletA
    古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
    配置結果は変わらないので、手動配置の指紋 inputFingerprint() には入れない。 */
 const DISPLAY_SAVE_VERSION = 1;
-const DISPLAY_FS_MIN = 8, DISPLAY_FS_MAX = 32;
+const DISPLAY_FS_MIN = 8, DISPLAY_FS_MAX = 24;   // 32px は印刷が用紙の147%になる（設計書 3-8）
 const DEFAULT_DISPLAY = {
   fsName:16, fsLot:13, fsPal:16, fsNote:13, fsDate:20, fsTotal:30,
   fwName:true, fwLot:false, fwPal:true, fwNote:false,
@@ -702,18 +753,32 @@ function clearDisplayNote(){
 `initFrac()` の IIFE の直後（2848行付近、`showMapState();` の直前）に足す:
 
 ```js
-// 表示設定：保存があれば復元。壊れていたら捨てて初期値に戻し、その旨を設定タブに出す
+/* 表示設定：保存があれば復元。
+   スペース設定と違い、バージョンが変わっても丸ごと捨てない。ここに入っているのは
+   利用者が紙合わせで決めた値で、こちらの既定値より現場の目のほうが正しいため。
+   足りないキーを既定値で補い、範囲外になった値だけ既定値に直す（設計書 6章）。
+   保存の形自体が壊れているとき（display がオブジェクトでない）だけ初期値に戻す。 */
 (function initDisplay(){
   const d=loadData(STORE_KEY.display);
   if(d){
-    if(d.v!==DISPLAY_SAVE_VERSION){
-      saveData(STORE_KEY.display, null);
-      showDisplayNote("表示設定の初期値を更新したので、この端末の設定を初期値に戻しました。");
-    }else if(!validDisplay(d.display)){
+    const raw=(d.display && typeof d.display==="object" && !Array.isArray(d.display)) ? d.display : null;
+    if(!raw){
       saveData(STORE_KEY.display, null);
       showDisplayNote("保存されていた表示設定を読み込めなかったので、初期値に戻しました。");
     }else{
-      DISPLAY=Object.assign({}, DEFAULT_DISPLAY, d.display);
+      const merged=Object.assign({}, DEFAULT_DISPLAY, raw);
+      Object.keys(DEFAULT_DISPLAY).forEach(k=>{
+        const v=merged[k];
+        const okv = k.startsWith("fs")
+          ? (Number.isFinite(v) && v>=DISPLAY_FS_MIN && v<=DISPLAY_FS_MAX)
+          : (typeof v==="boolean");
+        if(!okv) merged[k]=DEFAULT_DISPLAY[k];
+      });
+      DISPLAY=merged;
+      if(d.v!==DISPLAY_SAVE_VERSION){
+        saveData(STORE_KEY.display, {v:DISPLAY_SAVE_VERSION, display:DISPLAY});
+        showDisplayNote("表示設定の項目が変わったので、足りない分を初期値で補いました。");
+      }
     }
   }
   displayToForm();
@@ -724,7 +789,7 @@ function clearDisplayNote(){
 - [ ] **Step 7: 検証スクリプトを走らせて PASS を確認する**
 
 ```js
-(()=>{ window.alert=()=>{};
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
   runFromButton(); switchTab('sheet'); setSheetZoom('1');
   const cs=()=>getComputedStyle(document.documentElement);
   const sheet=document.querySelector("#sheetView .sheet");
@@ -772,7 +837,7 @@ Expected: `ok:true`
 
 ```js
 // 1本目：値を変えて保存されることを見る
-(()=>{ window.alert=()=>{};
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
   switchTab('settings'); switchCfgTab('display');
   document.getElementById("fsLot").value="15";
   document.getElementById("fwLot").checked=true;
@@ -786,38 +851,90 @@ Expected: `ok:true`
 リロードしてから 2本目:
 
 ```js
-// 2本目：リロード後に復元されているか。そのあと壊れた保存とバージョン不一致を見る
-(()=>{ window.alert=()=>{};
+// 2本目：リロード後に復元されているか。そのあとバージョン不一致の保存を仕込む
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
   const r={restored:[DISPLAY.fsLot, DISPLAY.fwLot]};
-  // 壊れた保存
-  localStorage.setItem("palletApp.display", JSON.stringify({v:1, display:{fsName:"だめ"}}));
-  r.brokenValid = validDisplay({fsName:"だめ"});
-  // バージョン不一致
-  localStorage.setItem("palletApp.display", JSON.stringify({v:99, display:DEFAULT_DISPLAY}));
-  r.ok = r.restored[0]===15 && r.restored[1]===true && r.brokenValid===false;
+  // バージョン不一致＋キー欠け。マージされて fsLot:22 が残るはず
+  localStorage.setItem("palletApp.display",
+    JSON.stringify({v:99, display:{fsLot:22, fwLot:true}}));
+  r.ok = r.restored[0]===15 && r.restored[1]===true;
   return r;
 })()
 ```
 
-さらにリロードして 3本目（バージョン不一致の案内が出ているか）:
+リロードして 3本目（マージされ、利用者の値が残っているか）:
 
 ```js
 (()=>{
   const note=document.getElementById("dspNote");
   const btn=document.getElementById("subtab-display");
-  const r={noteHidden:note.hidden, noteText:note.textContent.slice(0,10),
+  const saved=JSON.parse(localStorage.getItem("palletApp.display"));
+  const r={merged:[DISPLAY.fsLot, DISPLAY.fwLot, DISPLAY.fsName],
+           noteHidden:note.hidden, noteText:note.textContent.slice(0,10),
            alert:btn.classList.contains("alert"),
-           saved:localStorage.getItem("palletApp.display"),
-           fsName:DISPLAY.fsName};
-  r.ok = !r.noteHidden && r.noteText.startsWith("表示設定の初期値") && r.alert
-      && r.saved==="null" && r.fsName===16;
+           savedV:saved && saved.v, savedFsLot:saved && saved.display.fsLot};
+  // 利用者の値（22 / true）は残り、欠けていたキーは既定値で埋まる
+  r.ok = r.merged[0]===22 && r.merged[1]===true && r.merged[2]===16
+      && !r.noteHidden && r.noteText.startsWith("表示設定の項目") && r.alert
+      && r.savedV===1 && r.savedFsLot===22;
+  // 次のテストのために壊れた保存を仕込む
+  localStorage.setItem("palletApp.display", JSON.stringify({v:1, display:"こわれた"}));
+  return r;
+})()
+```
+
+リロードして 4本目（壊れた保存は初期値に戻る）:
+
+```js
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
+  const note=document.getElementById("dspNote");
+  const r={fsLot:DISPLAY.fsLot, noteText:note.textContent.slice(0,10),
+           saved:localStorage.getItem("palletApp.display")};
+  r.ok = r.fsLot===13 && r.noteText.startsWith("保存されていた") && r.saved==="null";
   // 後片付け
   switchTab('settings'); switchCfgTab('display'); resetDisplay();
   return r;
 })()
 ```
 
-Expected: 3本とも `ok:true`
+Expected: 4本とも `ok:true`
+
+- [ ] **Step 8-2: 文字を大きくすると印刷の警告が出ることを確認する**
+
+```js
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
+  runFromButton(); switchTab('sheet'); setSheetZoom('1');
+  const sheet=document.querySelector("#sheetView .sheet");
+  const t=sheet.querySelector("table");
+  const h=()=>+t.getBoundingClientRect().height.toFixed(1);
+  const warns=()=>[...document.querySelectorAll("#sheetMsg .msg.warn")].map(d=>d.textContent);
+  const r={base:{h:h(), warns:warns().length}};
+  // 上限いっぱいまで大きくする
+  switchTab('settings'); switchCfgTab('display');
+  ["fsName","fsLot","fsPal","fsNote","fsDate","fsTotal"].forEach(id=>{
+    document.getElementById(id).value="24";
+  });
+  displayChanged();
+  switchTab('sheet');                       // 反映は switchTab の renderSheet が担う
+  r.big={h:h(), warns:warns()};
+  r.bigRatio=+(r.big.h*1.4/733.2*100).toFixed(1);
+  r.hasHeightWarn=r.big.warns.some(w=>w.includes("1ページに収まりません"));
+  // 上限を超える値は弾かれる
+  document.getElementById("fsName").value="99"; displayChanged();
+  r.clampedTo=DISPLAY.fsName;
+  switchTab('settings'); switchCfgTab('display'); resetDisplay();
+  switchTab('sheet');
+  r.after={h:h(), warns:warns().length};
+  r.ok = r.base.warns===0
+      && (r.bigRatio<=98 ? !r.hasHeightWarn : r.hasHeightWarn)
+      && r.clampedTo===16
+      && r.after.warns===0;
+  return r;
+})()
+```
+
+Expected: `ok:true`。全項目24pxでの `bigRatio` が98%を超えていれば高さの警告が1本出る。
+98%以下なら警告は出ない（どちらでも `ok:true` になるが、`bigRatio` を記録しておくこと）。
 
 - [ ] **Step 9: コミット**
 
@@ -885,7 +1002,7 @@ Task 3 で作った表示設定カードの「初期値に戻す」ボタンの*
 - [ ] **Step 4: 検証スクリプトを走らせて PASS を確認する**
 
 ```js
-(()=>{ window.alert=()=>{};
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
   const r={};
   // 置き場所
   r.arrowInDisplay  = !!document.querySelector("#cfgpane-display .sizebtn[data-arrow]");
@@ -948,7 +1065,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - [ ] **Step 1: 実寸を測る**
 
 ```js
-(()=>{ window.alert=()=>{};
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
   runFromButton(); switchTab('sheet'); setSheetZoom('1');
   const sheet=document.querySelector("#sheetView .sheet");
   const t=sheet.querySelector("table");
@@ -1012,7 +1129,7 @@ Step 1 で測った `tableH` / `printed` / `ratio` に合わせて書き換え�
 - [ ] **Step 4: 倍率の自動計算が正しく効くか確認する**
 
 ```js
-(()=>{ window.alert=()=>{};
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
   runFromButton(); switchTab('sheet');
   const sheet=document.querySelector("#sheetView .sheet");
   const t=sheet.querySelector("table");
@@ -1040,7 +1157,19 @@ Step 1 で測った `tableH` / `printed` / `ratio` に合わせて書き換え�
 
 Expected: `ok:true`（`SHEET_H` と実寸の差が 1px 以内）
 
-- [ ] **Step 5: コミット**
+- [ ] **Step 5: 新しい基準値を `.superpowers/sdd/progress.md` に記録する**
+
+Step 1 で測った値を書き残す。次の案件が回帰の基準に使う。
+
+- `sheetLen`（`.fit` を挟んだので前案件の 8778 は使えない）
+- 表の高さ / 行数 / `tr.note-row` の高さ / `tr.gap` の高さ
+- 引き出し線の本数 / 印刷比
+- 圧縮が掛かっている `.fit` の数（`fitScales`）
+
+**ついでに前案件の記録の誤りを直す。** `progress.md` に「SHEET_W=695 / SHEET_H=523」と
+あるが、実コードは `491+20=511` だった。今回の実測値に書き換える。
+
+- [ ] **Step 6: コミット**
 
 ```bash
 git add files/index.html
@@ -1094,6 +1223,81 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 2. 圧縮のかかった欄（`k≒0.5`）が紙で読めるか。下限40%が妥当か
 3. 設定タブのサブタブがスマホ幅（375px）で扱えるか。3つのボタンが折り返さずに並ぶか
 4. 表示設定の入力欄（`.dspgrid`）がスマホ幅で崩れないか
+
+---
+
+### Task 7: 実機で確定した初期値を反映して実寸を測り直す
+
+**Files:**
+- Modify: `files/index.html`（JS 2箇所・CSS のコメント1箇所）、`files/sw.js`
+
+**Interfaces:**
+- Consumes: Task 6 Step 4 の実機確認の結果
+- Produces: なし
+
+**Task 6 Step 4 で初期値が変わらなければ、このタスクは丸ごとスキップする。**
+「16 / 13 / 16 / 13 のままでよい」と確認できたら、その旨を記録して終わり。
+
+- [ ] **Step 1: 確定した初期値を `DEFAULT_DISPLAY` に入れる**
+
+ユーザーが紙で決めた値に書き換える:
+
+```js
+const DEFAULT_DISPLAY = {
+  fsName:16, fsLot:13, fsPal:16, fsNote:13, fsDate:20, fsTotal:30,
+  fwName:true, fwLot:false, fwPal:true, fwNote:false,
+};
+```
+
+- [ ] **Step 2: 開発端末の保存を消してから測る**
+
+保存はマージ方式なので、**保存が残っていると新しい既定値が効かない**。
+検証の前に必ず消す:
+
+```js
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
+  localStorage.removeItem("palletApp.display");
+  location.reload();
+  return "reloaded";
+})()
+```
+
+リロード後に確認する:
+
+```js
+(()=>{ window.alert=()=>{}; window.confirm=()=>false;
+  runFromButton(); switchTab('sheet'); setSheetZoom('1');
+  const sheet=document.querySelector("#sheetView .sheet");
+  const t=sheet.querySelector("table");
+  const r={display:Object.assign({}, DISPLAY),
+           tableH:+t.getBoundingClientRect().height.toFixed(2),
+           warns:document.querySelectorAll("#sheetMsg .msg.warn").length};
+  r.printed=+(r.tableH*1.4).toFixed(1);
+  r.ratio=+(r.tableH*1.4/733.2*100).toFixed(1);
+  r.ok = r.ratio<98 && r.warns===0;
+  return r;
+})()
+```
+
+Expected: `ok:true`。`display` が新しい既定値と一致していること。
+
+- [ ] **Step 3: `SHEET_H` と印刷CSSのコメントを新しい実測値に合わせる**
+
+Task 5 Step 2 / Step 3 と同じ手順で、Step 2 で測った `tableH` / `printed` / `ratio` に
+置き換える。
+
+- [ ] **Step 4: `CACHE_VERSION` を上げる**
+
+`files/sw.js` を `"v23"` にする。
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add files/index.html files/sw.js
+git commit -m "chore: 実機の紙で確定した初期値に合わせて既定値と実寸を直す
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
 
 ---
 
