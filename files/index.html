@@ -300,10 +300,13 @@
     .wrap{padding:0;max-width:none}
     .card{border:0;padding:0;margin:0}
     .card h2{display:none}
-    /* 表は 675×469px 固定。A4横・余白8mm の印刷領域は 281×194mm＝約1062×733px。
-       1.5倍で 1012×703px＝268×186mm。用紙の高さを 96% 使い、
-       ブラウザごとの余白差で2ページに割れない範囲に収める */
-    .sheet{padding:0;overflow:visible;max-width:none;zoom:1.5;page-break-inside:avoid}
+    /* 表は 675×503px 固定（上段の注釈行を足したぶん高くなった。注釈が2行に
+       折り返した場合の高さ）。A4横・余白8mm の印刷領域は 281×194mm＝約1062×733px。
+       1.4倍で 945×704px＝250×186mm。用紙の高さを 96% 使い、
+       ブラウザごとの余白差で2ページに割れない範囲に収める。
+       1.5倍のままだと注釈行のぶんで 103% になり、page-break-inside:avoid で
+       表ごと2ページ目に落ちる */
+    .sheet{padding:0;overflow:visible;max-width:none;zoom:1.4;page-break-inside:avoid}
     body{background:#fff}
   }
   #updateBar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:#111827;color:#fff;
@@ -1521,7 +1524,7 @@ function renderResult(lots, unknown, typeMix){
   const usedMix=sp.some(s=>s.cols.some(c=>c.fills.length>1));
   // 配置図の表は上段SHEET_TOP_SLOTS欄・下段SHEET_BOTTOM_SLOTS欄しかない。載りきらないロットは黙って消えるので知らせる。
   const topAreas=sheetAreas("top"), bottomAreas=sheetAreas("bottom");
-  const overTop=sheetEntries(topAreas,null).length-SHEET_TOP_SLOTS;
+  const overTop=sheetEntries(topAreas, topAreas[0]||null).length-SHEET_TOP_SLOTS;
   const overBottom=sheetEntries(bottomAreas, bottomAreas[0]||null).length-SHEET_BOTTOM_SLOTS;
   if(overTop>0 || overBottom>0){
     const parts=[];
@@ -2448,7 +2451,11 @@ function renderSheet(){
 
   // 上段・下段に出すエリアは掲載先の属性から引く。下段の先頭エリアは注釈を付けない基準にする。
   const topAreas=sheetAreas("top"), bottomAreas=sheetAreas("bottom");
-  const top=sheetEntries(topAreas, null);
+  // 上段も下段と同じ流儀にする。先頭のエリアが基準で、そこに置かれたロットには
+  // 注釈を付けない。上段が軒下だけだったころは見出し「軒下」で足りていたが、
+  // 掲載先が可変になり、上段に移したエリアのロットが紙のどこにあるか
+  // 分からなくなっていた
+  const top=sheetEntries(topAreas, topAreas[0]||null);
   const bottom=sheetEntries(bottomAreas, bottomAreas[0]||null);
   const d=headDate?new Date(headDate+"T00:00:00"):null;
   const mm=d?d.getMonth()+1:"", dd=d?d.getDate():"", dw=d?DOW[d.getDay()]:"";
@@ -2478,6 +2485,11 @@ function renderSheet(){
 
   // 行4：上段のパレット数（左5列は上の行の rowspan で埋まっている）
   rows+=`<tr class="r3">${E}${slotCells(top,SHEET_TOP_SLOTS,"pallet")}</tr>`;
+
+  // 行5：上段の注釈。行3 の rowspan は行4 までしか届かないので、
+  //      左5列はこの行で自分で埋める（5 + 1 + 4×2 = 14 列）
+  rows+=`<tr class="note-row"><td class="none" colspan="5"></td>${E}`
+      + `${slotCells(top,SHEET_TOP_SLOTS,"note")}</tr>`;
 
   // 上下段の区切り（用紙では太罫1本）
   rows+=`<tr class="gap"><td class="none sep" colspan="14"></td></tr>`;
