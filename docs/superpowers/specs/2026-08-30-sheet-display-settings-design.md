@@ -132,6 +132,20 @@ lessons.md 2026-08-23（`border-radius`）の指摘と同型。
 既存カードは中身を変えない。**サブタブの器に入れるだけ**にして、
 品目マスタ・配置マスの動作に影響を出さない。
 
+### 4-1 案内文が埋もれる問題
+
+`#cfgNote`（`files/index.html:474` 付近）はスペース設定カードの中にある。
+サブタブ化すると、起動時に `showCfgNote()` が呼ばれても、開いているサブタブが
+「品目マスタ」なら利用者の目に入らない。表示設定の案内文（6章）も同じ問題を持つ。
+
+**サブタブのボタンに印を付ける。** `showCfgNote()` は配置マスのボタンに、
+表示設定用の `showDisplayNote()` は表示設定のボタンに `.alert` クラスを足す。
+そのサブタブを開いたら外す（`switchCfgTab()` の中で、開いたペインの印を落とす）。
+
+`.alert` は既存の `.dot`（設定タブのバッジ `#regDot`）とは別物にする。
+`.dot` は件数を出すバッジで、こちらは「見てほしい知らせがある」の印。
+ボタンの右上に小さな橙色の丸を出す（`::after` で描く）。
+
 ---
 
 ## 5. 表示設定の項目
@@ -254,8 +268,16 @@ const DEFAULT_DISPLAY = {
 
 > ⚠ 文字が入りきらない欄があります：品名2件
 
-既存の欄数超過の警告（`renderResult()`、`files/index.html:1529` 付近）と同じ場所・
-同じ見た目にする。紙には出さない（`@media print` で `#messages` は非表示）。
+**器は新設する。** 既存の `#messages`（`files/index.html:423`）は**配置編集タブの中**にあり、
+`renderResult()` が `m.innerHTML=warnHtml+...` で毎回全置換する。圧縮は `renderSheet()` の
+たびに走るので、同じ器を使うと互いの警告を消し合う。
+
+配置表タブの `#sheetView` の直前に `<div id="sheetMsg"></div>` を置き、
+`fitSheetText()` がここだけを書き換える（毎回 `innerHTML` を作り直す。
+下限に達した欄が無ければ空文字）。見た目は既存の `.msg.warn` をそのまま使う。
+
+紙には出さない。印刷CSSの非表示リスト（`files/index.html:299` 付近の
+`header,.tabs,.actionbar,#updateBar,.sizectl,#messages,...`）に `#sheetMsg` を足す。
 
 ### 7-4 再計算の契機
 
