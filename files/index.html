@@ -2346,6 +2346,13 @@ function applyConfig(){
     if(spacesToText(false)===geomBefore) redraw();
     else run(false);
   }
+  // 配置表タブは開いていないことが多く、renderSheet() は開いているときしか走らない
+  // （files/index.html:1850）。紙が壊れる設定をした瞬間に気づけるよう、ここでも見る。
+  // clearCfgNote() より後、再配置より後でないと、消されるか古い lastSp を見てしまう
+  if(hasResult && lastSp){
+    const w=gridWarn(lastSp.find(s=>s.name===sheetAreas("bottom")[0]));
+    if(w) showCfgNote(gridNoticeText(w));
+  }
   alert("設定を反映しました。");
 }
 function resetConfig(){
