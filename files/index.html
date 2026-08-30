@@ -294,6 +294,12 @@
                   border:0;background:transparent}
   /* 上段の注記行は左5列が空セル。td の既定の 26px が行を押し上げるので合わせる */
   .sheet tr.note-row td.none{height:16px}
+  /* 大きな配置図が出せない／欠けているときの案内。表の中に置くので紙にも出る。
+     印刷CSSが .note と .hint を消すので、その2つとは別名にすること。
+     背景色は既定で印刷されないので、色ではなく文字だけで伝える。 */
+  .sheet tr.gnote td{border:0;background:transparent;text-align:left;
+                     white-space:normal;font-size:10px;line-height:1.3;
+                     color:#000;padding:4px 2px;word-break:break-all}
   .sheet td.g{height:30px;position:relative;padding:0;line-height:0}
   /* 通路列の灰色。ブラウザは既定で背景色を印刷しないので、このセルだけは
      印刷ダイアログの「背景のグラフィック」を待たずに出すよう指示する */
@@ -2340,6 +2346,13 @@ function applyConfig(){
     if(spacesToText(false)===geomBefore) redraw();
     else run(false);
   }
+  // 配置表タブは開いていないことが多く、renderSheet() は開いているときしか走らない
+  // （showMapState()、files/index.html:1855）。紙が壊れる設定をした瞬間に気づけるよう、ここでも見る。
+  // clearCfgNote() より後、再配置より後でないと、消されるか古い lastSp を見てしまう
+  if(hasResult && lastSp){
+    const w=gridWarn(lastSp.find(s=>s.name===sheetAreas("bottom")[0]));
+    if(w) showCfgNote(gridNoticeText(w));
+  }
   alert("設定を反映しました。");
 }
 function resetConfig(){
@@ -2758,7 +2771,12 @@ function renderSheet(){
 
   // グリッド（メイン）
   const grid=gridRows();
+  // グリッドが描けないときは、グリッドがあった位置に案内を出す。
+  // 紙を見た人が「ここに図があるはずだ」と分かる位置に置く。
+  if(grid.warn && grid.warn.kind!=="extra") rows+=gridNoticeRow(grid.warn);
   rows+=grid.html;
+  // 12列以上のときはグリッド自体は描けているので、案内はその下に置く
+  if(grid.warn && grid.warn.kind==="extra")  rows+=gridNoticeRow(grid.warn);
 
   host.innerHTML=`<div class="sheet"><div class="sheetbox"><table>
     <colgroup>${Array(14).fill('<col style="width:48px">').join("")}</colgroup>
@@ -2803,6 +2821,29 @@ function slotCells(entries,count,kind,extra){
   return out;
 }
 
+// 紙の様式である 14 列の並び：通路 | 1-3 | 段番号 | 4-6 | 段番号 | 7-9 | 通路 | 段番号
+// 段番号の l/r は左右に隣り合うレーン。最後の段番号は右隣がないので跨がない。
+// gridRows() の外に出してあるのは、gridWarn() が列数を数えるため。
+const SHEET_GRID_ORDER=[{c:0,aisle:true},{c:1},{c:2},{c:3},{lab:true,l:3,r:4},{c:4},{c:5},{c:6},{lab:true,l:6,r:7},
+                        {c:7},{c:8},{c:9},{c:10,aisle:true},{lab:true}];
+// 様式が要求する通常列の本数（=11）。並びを変えれば判定も案内の文言も追随する
+const SHEET_GRID_COLS=SHEET_GRID_ORDER.filter(o=>!o.lab).length;
+
+/* 下段の先頭エリアが紙の様式と合っているかを見る。合っていれば null。
+   renderSheet() は配置表タブが開いているときしか走らない（showMapState()、files/index.html:1855）ので、
+   設定タブからも呼べるよう gridRows() から切り離してある。 */
+function gridWarn(sp){
+  if(!sp) return {kind:"none"};
+  // buildWork() の cols は密配列なので、本数不足と「必要な添字が undefined」は同じ条件
+  if(sp.cols.length<SHEET_GRID_COLS)
+    return {kind:"short", area:sp.name, cols:sp.cols.length, need:SHEET_GRID_COLS};
+  // 列があるだけでは紙は狂わない。様式が参照しない列に荷物がある日だけ知らせる。
+  // 無条件にすると、現場のレイアウトが育った日から毎日の紙に但し書きが載り続ける
+  if(sp.cols.slice(SHEET_GRID_COLS).some(c=>c.fills && c.fills.length))
+    return {kind:"extra", area:sp.name, cols:sp.cols.length, need:SHEET_GRID_COLS};
+  return null;
+}
+
 // 下段の先頭エリアのグリッド行（○／半／太枠）。
 // drawLeaders() は下段の欄からこのグリッドへ線を引くので、
 // 欄の基準エリア（sheetEntries の baseArea）と必ず同じエリアにする。
@@ -2810,15 +2851,13 @@ function slotCells(entries,count,kind,extra){
 // 欄とグリッドが別のエリアを指し、引き出し線が的外れになる。
 function gridRows(){
   const sp=lastSp.find(s=>s.name===sheetAreas("bottom")[0]);
-  // 下段が空、または設定でエリア名を変えて見つからないことがある
-  if(!sp) return {html:"", anchors:[]};
-  // 14列の並び：通路 | 1-3 | 段番号 | 4-6 | 段番号 | 7-9 | 通路 | 段番号
-  // 段番号の l/r は左右に隣り合うレーン。最後の段番号は右隣がないので跨がない
-  const order=[{c:0,aisle:true},{c:1},{c:2},{c:3},{lab:true,l:3,r:4},{c:4},{c:5},{c:6},{lab:true,l:6,r:7},
-               {c:7},{c:8},{c:9},{c:10,aisle:true},{lab:true}];
-  // 紙の様式に合わせた固定の列並びなので、下段の先頭エリアの列構成がこれと合わないと
-  // sp.cols[o.c] が undefined になって描画全体が落ちる。合わないときは大きなグリッドを描かない。
-  if(order.some(o=>!o.lab && !sp.cols[o.c])) return {html:"", anchors:[]};
+  const warn=gridWarn(sp);
+  // 下段が空、または設定でエリア名を変えて見つからないことがある。
+  // 列が足りないときは sp.cols[o.c] が undefined になって描画全体が落ちるので、
+  // どちらの場合も大きなグリッドは描かない。理由は warn で呼び出し側に渡す。
+  if(warn && warn.kind!=="extra") return {html:"", anchors:[], warn};
+  // 以降は order という名前で参照する（本体を書き換えないため）
+  const order=SHEET_GRID_ORDER;
   // 各列の中身（上詰め）
   const colCells=sp.cols.map(col=>{
     const arr=Array(col.h).fill(null); let r=0;
@@ -2916,7 +2955,33 @@ function gridRows(){
     if(a) anchors.push(a);
   });
 
-  return {html: rows+`<tr>${nums}</tr>`, anchors};
+  return {html: rows+`<tr>${nums}</tr>`, anchors, warn};
+}
+
+/* 大きな配置図が出せない／欠けていることを伝える文。素のテキストを返す。
+   設定タブの showCfgNote() は textContent に入れるので、ここで esc() を掛けてはいけない。
+   HTML に入れる側（gridNoticeRow）でだけ掛ける。 */
+function gridNoticeText(w){
+  if(w.kind==="none"){
+    return `※ メインエリアの配置図はこの表に出ていません。掲載先が「下段」のエリアがありません。`
+         + `設定タブの「配置マス」で、いずれかのエリアの掲載先を bottom にしてください。`;
+  }
+  if(w.kind==="short"){
+    // 「11 列以上」と書いてはいけない。12 列にすると今度は extra に着地する
+    return `※ メインエリアの配置図はこの表に出ていません。`
+         + `下段の先頭「${w.area}」は ${w.cols} 列で、表の様式（${w.need} 列）に足りません。`
+         + `設定タブの「配置マス」で、ちょうど ${w.need} 列のエリアを下段の先頭行にしてください。`;
+  }
+  // extra。通路の塗り分けも様式どおりなので、実際の通路が右にずれていると位置が食い違う。
+  // パレットが消えることだけを伝えると「灰色は正しい」と誤って安心させる
+  return `※「${w.area}」の ${w.need+1} 列目以降はこの表に出ていません。`
+       + `表の様式は ${w.need} 列で、通路の位置も様式どおりに塗ります。`;
+}
+
+/* 上の文を表の中の1行にする。#sheetMsg は印刷CSSで display:none になるので、
+   紙に残すには表の中に置く必要がある。 */
+function gridNoticeRow(w){
+  return `<tr class="gnote"><td colspan="14">${esc(gridNoticeText(w))}</td></tr>`;
 }
 
 /* 下段の欄からメインのスペースへ引き出し線を引く。
