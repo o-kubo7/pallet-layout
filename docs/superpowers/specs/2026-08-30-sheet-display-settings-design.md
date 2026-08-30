@@ -70,7 +70,9 @@
 実測で `zoom:1` と `zoom:1.4` の k が完全に一致した（どちらも 0.496）。
 
 - `clientWidth` は zoom の影響を受けない CSS px を返す → 使える幅の計算に使う
-- `getBoundingClientRect().width` は zoom 込みだが、比で割るので相殺される
+- `getBoundingClientRect().width` は **zoom 込みの値**を返す。
+  `getComputedStyle(sheet).zoom` で割って CSS px に直してから比を取る。
+  割らずに `clientWidth` と混ぜると、zoom が 1 でない画面で圧縮率が狂う
 
 したがって **`beforeprint` での再計算は不要**。画面で決めた圧縮率がそのまま紙にも効く。
 
