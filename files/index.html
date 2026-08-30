@@ -159,6 +159,7 @@
   /* 表示設定の入力欄。項目が多いので2列に畳む */
   .dspgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 14px;margin-bottom:10px}
   .dspgrid label{font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px}
+  .dspgrid label.chk{justify-content:flex-start}
   .dspgrid input[type=number]{width:72px}
 
   .msg{padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:10px}
@@ -337,7 +338,9 @@
        A4横・余白8mm の印刷領域は 281×194mm＝約1062×733px。
        1.4倍で 945×665px。用紙の高さを 90.7% 使い、
        ブラウザごとの余白差で2ページに割れない範囲に収める。
-       欄に入りきらない文字は圧縮で1行に収まるので、日によって高さが変わらない */
+       1.5倍だと注釈行を含めて用紙の103%になり2ページ目に落ちるため、1.4倍を選んだ。
+       表示設定の文字サイズを上げると表の高さが変わる
+       （用紙の98%を超えたら #sheetMsg に警告が出る） */
     .sheet{padding:0;overflow:visible;max-width:none;zoom:1.4;page-break-inside:avoid}
     body{background:#fff}
   }
@@ -561,7 +564,7 @@
         </div>
         <label class="chk"><input type="checkbox" id="fracChk" onchange="toggleFrac()"> 端数を「半」で表示</label>
         <div class="row-actions">
-          <button class="btn btn-ghost" onclick="resetDisplay()">初期値に戻す</button>
+          <button class="btn btn-ghost" onclick="resetDisplay()">文字を初期値に戻す</button>
         </div>
       </div>
     </div>
