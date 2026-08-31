@@ -2676,9 +2676,12 @@ function fitSheetText(){
   const sheet=document.querySelector("#sheetView .sheet");
   if(!sheet){ if(box) box.innerHTML=""; return; }
   const z=parseFloat(getComputedStyle(sheet).zoom)||1;
+  // 欄ごとに数える。縦積みの欄は .fit が複数あるので、span 単位で数えると
+  // 1 欄あふれただけで「ロット 6件」と出てしまう
   const over={};
   sheet.querySelectorAll(".fit").forEach(sp=>{
-    const td=sp.parentElement; if(!td) return;
+    // 縦積み（.fitcol）では親が td ではないので closest で引く
+    const td=sp.closest("td"); if(!td) return;
     // 幅の判定は前回の結果を消す前に。消してから抜けると、非表示タブで
     // 呼ばれたときに圧縮が外れたまま残る
     const avail=td.clientWidth-2;            // 左右の padding 1px ずつ
@@ -2696,13 +2699,13 @@ function fitSheetText(){
       sp.style.width=(avail/FIT_MIN_SCALE)+"px";
       sp.style.whiteSpace="normal";
       const kind=td.dataset.fit||"";
-      over[kind]=(over[kind]||0)+1;
+      (over[kind]=over[kind]||new Set()).add(td);
     }
     sp.style.transform = (k<1) ? `scaleX(${k.toFixed(4)})` : "none";
   });
   if(!box) return;
   let html="";
-  const parts=Object.keys(over).map(k=>`${FIT_LABEL[k]||k} ${over[k]}件`);
+  const parts=Object.keys(over).map(k=>`${FIT_LABEL[k]||k} ${over[k].size}件`);
   if(parts.length){
     html+=`<div class="msg warn">⚠ 文字が入りきらない欄があります：${parts.join(" / ")}。`
         + `設定タブの「表示設定」で文字を小さくするか、品名を短くしてください。</div>`;
