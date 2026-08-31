@@ -1623,9 +1623,8 @@ function renderResult(lots, unknown, typeMix){
   const usedAisle=sp.some(s=>s.cols.some(c=>c.aisle&&c.fills.length));
   const usedMix=sp.some(s=>s.cols.some(c=>c.fills.length>1));
   // 配置図の表は上段SHEET_TOP_SLOTS欄・下段SHEET_BOTTOM_SLOTS欄しかない。載りきらないロットは黙って消えるので知らせる。
-  const topAreas=sheetAreas("top"), bottomAreas=sheetAreas("bottom");
-  const overTop=sheetEntries(topAreas, topAreas[0]||null).length-SHEET_TOP_SLOTS;
-  const overBottom=sheetEntries(bottomAreas, bottomAreas[0]||null).length-SHEET_BOTTOM_SLOTS;
+  const overTop=sheetSlots("top").length-SHEET_TOP_SLOTS;
+  const overBottom=sheetSlots("bottom").length-SHEET_BOTTOM_SLOTS;
   if(overTop>0 || overBottom>0){
     const parts=[];
     if(overTop>0) parts.push(`上段 ${overTop}件`);
@@ -2648,8 +2647,17 @@ function sheetEntries(names, baseArea){
     // 「半」はロットの末尾のマスに付くので、その欄にだけ持たせる（上下段で二重に出さない）
     const tail = tailAreaOf(e.lot.id);
     const half = e.areas.includes(tail) ? Math.min(e.lot.half||0, e.pallets) : 0;
-    return {lot:e.lot, pallets:e.pallets, half, note: extra.length ? ("※"+extra.join("・")) : ""};
+    // areas は mergeEntries() のまとめキーに使う。置き場所が違うロットは
+    // 注釈が唯一の場所情報なので、まとめずに別の欄へ分ける
+    return {lot:e.lot, pallets:e.pallets, half, areas:e.areas,
+            note: extra.length ? ("※"+extra.join("・")) : ""};
   });
+}
+/* 配置図の表の、段ごとの欄。renderSheet()（紙）と欄数超過の警告の両方がここを通る。
+   片方だけを通すと、警告の件数が実際に紙へ出る欄数とずれる。 */
+function sheetSlots(tier){
+  const names=sheetAreas(tier);
+  return sheetEntries(names, names[0]||null);
 }
 /* 欄に入りきらない文字を水平に縮めて1行に収める。
    ・自然幅は .sheet の zoom で割って CSS px に直してから比を取る。
@@ -2717,13 +2725,11 @@ function renderSheet(){
   if(!hasResult || !lastSp){ host.innerHTML=""; return; }
 
   // 上段・下段に出すエリアは掲載先の属性から引く。下段の先頭エリアは注釈を付けない基準にする。
-  const topAreas=sheetAreas("top"), bottomAreas=sheetAreas("bottom");
-  // 上段も下段と同じ流儀にする。先頭のエリアが基準で、そこに置かれたロットには
-  // 注釈を付けない。上段が軒下だけだったころは見出し「軒下」で足りていたが、
-  // 掲載先が可変になり、上段に移したエリアのロットが紙のどこにあるか
-  // 分からなくなっていた
-  const top=sheetEntries(topAreas, topAreas[0]||null);
-  const bottom=sheetEntries(bottomAreas, bottomAreas[0]||null);
+  // 上段も下段と同じ流儀で、先頭のエリアが基準になる。上段が軒下だけだったころは
+  // 見出し「軒下」で足りていたが、掲載先が可変になり、上段に移したエリアのロットが
+  // 紙のどこにあるか分からなくなっていた
+  const top=sheetSlots("top");
+  const bottom=sheetSlots("bottom");
   const d=headDate?new Date(headDate+"T00:00:00"):null;
   const mm=d?d.getMonth()+1:"", dd=d?d.getDate():"", dw=d?DOW[d.getDay()]:"";
   const totalP=lastLots.reduce((a,l)=>a+l.pallets,0);
