@@ -2661,14 +2661,14 @@ function sheetEntries(names, baseArea){
    判定はエリア集合で行う。アンカーの有無で判定すると、グリッドが描けない日だけ
    表の形が変わってしまう。
    品名が空のロットもまとめない。品名欄が空のままロット番号だけが縦に並ぶ欄になる。
-   キーは半角スペースで区切る。区切らずに連結すると、品名が数字で終わるとき SNP と
+   キーは U+0000 で区切る。区切らずに連結すると、品名が数字で終わるとき SNP と
    融合して別の荷物が同じキーになる（「部品A1」+SNP 2 と「部品A」+SNP 12）。 */
 function mergeEntries(entries, baseArea){
   const out=[], byKey={};
   entries.forEach(e=>{
     const solo = !e.lot.name || (baseArea && e.areas.includes(baseArea));
     const key = solo ? null
-      : [e.lot.name, e.lot.snp, e.lot.type, e.areas.join(" ")].join(" ");
+      : [e.lot.name, e.lot.snp, e.lot.type, e.areas.join(" ")].join("\u0000");
     let g = (key!=null) ? byKey[key] : null;
     if(!g){
       g={lot:e.lot, members:[], areas:e.areas, note:e.note};
