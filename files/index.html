@@ -2772,8 +2772,11 @@ function fitSheetText(){
     const h=t.getBoundingClientRect().height/z;
     if(h>0 && h*PRINT_ZOOM>PRINT_H_LIMIT){
       const pct=Math.round(h*PRINT_ZOOM/PRINT_H_PX*100);
-      html+=`<div class="msg warn">⚠ 文字が大きくて印刷が1ページに収まりません`
-          + `（用紙の高さの${pct}%）。設定タブの「表示設定」で文字を小さくしてください。</div>`;
+      // 原因を断定しない。文字サイズのほかに、まとめた欄のロット番号が縦に積まれて
+      // 伸びる場合がある。ロット 6 件を積むと欄の高さが 26px から 97px になる
+      html+=`<div class="msg warn">⚠ 表が縦に伸びて印刷が1ページに収まりません`
+          + `（用紙の高さの${pct}%）。設定タブの「表示設定」で文字を小さくするか、`
+          + `同じ品名にまとめたロットの数を確認してください。</div>`;
     }
   }
   box.innerHTML=html;
