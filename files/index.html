@@ -2653,6 +2653,32 @@ function sheetEntries(names, baseArea){
             note: extra.length ? ("※"+extra.join("・")) : ""};
   });
 }
+/* 同じ品名・SNP・種別・置き場所のロットを1つの欄にまとめる。
+   baseArea（下段の基準エリア。既定はメイン）に乗っているロットはまとめない。
+   下段の欄からグリッドへ引く引き出し線が、欄とロットの 1:1 対応を前提にしているため
+   （drawLeaders 参照）。メインに乗っていないロットにはそもそも線が引かれないので、
+   PC横・EV横だけの荷物はまとめてよい。
+   判定はエリア集合で行う。アンカーの有無で判定すると、グリッドが描けない日だけ
+   表の形が変わってしまう。
+   品名が空のロットもまとめない。品名欄が空のままロット番号だけが縦に並ぶ欄になる。
+   キーは半角スペースで区切る。区切らずに連結すると、品名が数字で終わるとき SNP と
+   融合して別の荷物が同じキーになる（「部品A1」+SNP 2 と「部品A」+SNP 12）。 */
+function mergeEntries(entries, baseArea){
+  const out=[], byKey={};
+  entries.forEach(e=>{
+    const solo = !e.lot.name || (baseArea && e.areas.includes(baseArea));
+    const key = solo ? null
+      : [e.lot.name, e.lot.snp, e.lot.type, e.areas.join(" ")].join(" ");
+    let g = (key!=null) ? byKey[key] : null;
+    if(!g){
+      g={lot:e.lot, members:[], areas:e.areas, note:e.note};
+      if(key!=null) byKey[key]=g;
+      out.push(g);
+    }
+    g.members.push({lot:e.lot, pallets:e.pallets, half:e.half});
+  });
+  return out;
+}
 /* 配置図の表の、段ごとの欄。renderSheet()（紙）と欄数超過の警告の両方がここを通る。
    片方だけを通すと、警告の件数が実際に紙へ出る欄数とずれる。 */
 function sheetSlots(tier){
