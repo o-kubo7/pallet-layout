@@ -578,8 +578,8 @@
             <button class="sizebtn on" data-corner="1" onclick="setLotCorner(true)">あり</button>
             <button class="sizebtn" data-corner="0" onclick="setLotCorner(false)">なし</button></span>
         </div>
-        <label class="chk"><input type="checkbox" id="fracChk" onchange="toggleFrac()"> 端数を「半」で表示</label>
-        <label class="chk"><input type="checkbox" id="mergeChk" checked onchange="toggleMerge()"> 同じ品名のロットを1つの欄にまとめる</label>
+        <div><label class="chk"><input type="checkbox" id="fracChk" onchange="toggleFrac()"> 端数を「半」で表示</label></div>
+        <div><label class="chk"><input type="checkbox" id="mergeChk" checked onchange="toggleMerge()"> 同じ品名のロットを1つの欄にまとめる</label></div>
         <div class="hint">品名・入数・種別・置き場所がすべて同じロットだけをまとめます。メインに置いた荷物は、引き出し線が1本ずつ要るのでまとめません。</div>
         <div class="row-actions">
           <button class="btn btn-ghost" onclick="resetDisplay()">文字を初期値に戻す</button>
@@ -1648,12 +1648,16 @@ function renderResult(lots, unknown, typeMix){
   const usedAisle=sp.some(s=>s.cols.some(c=>c.aisle&&c.fills.length));
   const usedMix=sp.some(s=>s.cols.some(c=>c.fills.length>1));
   // 配置図の表は上段SHEET_TOP_SLOTS欄・下段SHEET_BOTTOM_SLOTS欄しかない。載りきらないロットは黙って消えるので知らせる。
-  const overTop=sheetSlots("top").length-SHEET_TOP_SLOTS;
-  const overBottom=sheetSlots("bottom").length-SHEET_BOTTOM_SLOTS;
+  const topSlots=sheetSlots("top"), bottomSlots=sheetSlots("bottom");
+  const overTop=topSlots.length-SHEET_TOP_SLOTS;
+  const overBottom=bottomSlots.length-SHEET_BOTTOM_SLOTS;
+  // まとめた欄は複数のロットを含む。欄の数で知らせると、実際に紙から落ちるロットの数を
+  // 過少に申告してしまう（1欄に6ロット入っていても「1件」になる）
+  const lotsIn=slots=>slots.reduce((a,g)=>a+(g.members?g.members.length:1),0);
   if(overTop>0 || overBottom>0){
     const parts=[];
-    if(overTop>0) parts.push(`上段 ${overTop}件`);
-    if(overBottom>0) parts.push(`下段 ${overBottom}件`);
+    if(overTop>0) parts.push(`上段 ${lotsIn(topSlots.slice(SHEET_TOP_SLOTS))}件`);
+    if(overBottom>0) parts.push(`下段 ${lotsIn(bottomSlots.slice(SHEET_BOTTOM_SLOTS))}件`);
     warnHtml+=`<div class="msg warn">⚠ 配置図の表に載りきらないロットがあります：${parts.join(" / ")}。ブロック図で確認してください。</div>`;
   }
   // あふれブロックの描画が未実装なので、掲載先が over のエリアは配置の対象から外してある
@@ -2686,14 +2690,18 @@ function sheetEntries(names, baseArea){
    判定はエリア集合で行う。アンカーの有無で判定すると、グリッドが描けない日だけ
    表の形が変わってしまう。
    品名が空のロットもまとめない。品名欄が空のままロット番号だけが縦に並ぶ欄になる。
+   ロット番号が空のロットもまとめない。slotCells() はロット欄に空のロット番号を並べないので、
+   まとめるとロット欄には出ないのに P数欄には数えられ、荷物1件分のパレットが紙から消える。
    キーは U+0000 で区切る。区切らずに連結すると、品名が数字で終わるとき SNP と
    融合して別の荷物が同じキーになる（「部品A1」+SNP 2 と「部品A」+SNP 12）。 */
 function mergeEntries(entries, baseArea){
   const out=[], byKey={};
   entries.forEach(e=>{
-    const solo = !e.lot.name || (baseArea && e.areas.includes(baseArea));
+    const solo = !e.lot.name || !e.lot.lot || (baseArea && e.areas.includes(baseArea));
     const key = solo ? null
-      : [e.lot.name, e.lot.snp, e.lot.type, e.areas.join(" ")].join("\u0000");
+      // areas の連結も外側と同じ区切りにする。空白区切りだと、エリア名に空白を
+      // 含む設定のとき ["X Y"] と ["X","Y"] が同じキーになってしまう
+      : [e.lot.name, e.lot.snp, e.lot.type, e.areas.join("\u0000")].join("\u0000");
     let g = (key!=null) ? byKey[key] : null;
     if(!g){
       g={lot:e.lot, members:[], areas:e.areas, note:e.note};
