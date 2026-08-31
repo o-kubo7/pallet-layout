@@ -282,6 +282,16 @@
      戻す補正を入れてはいけない（自然幅が欄を超えた時点でブラウザが左端基準に
      置くので、補正を足すと右へはみ出す）。 */
   .sheet .fit{display:inline-block;white-space:nowrap;transform-origin:left center}
+  /* まとめた欄のロット番号を縦に積む入れ物。
+     flex にしてはいけない。.fit が block 化されて欄幅いっぱいに伸び、
+     fitSheetText() が自然幅ではなく欄幅を測ってしまう。圧縮が掛からないまま
+     td{overflow:hidden} で無警告に切れる。
+     width:max-content はここ（CSSルール）に書く。fitSheetText() が測定前に
+     sp.style.width="" を掛けるので、インラインで与えると測定の直前に消える。
+     transform-origin は .fit の left center をそのまま継がせる。center にすると
+     はみ出したときに箱の中心が保存されて右へずれる。 */
+  .sheet .fitcol{display:block}
+  .sheet .fitcol .fit{display:block;width:max-content;margin:0 auto}
   .sheet tr.gap td{height:8px;border:0;background:transparent}
   .sheet tr.gap td.sep{border-bottom:2px solid #000}
   /* 注記行（グローバルの .note と衝突させないため別名） */
@@ -2683,7 +2693,10 @@ function mergeEntries(entries, baseArea){
    片方だけを通すと、警告の件数が実際に紙へ出る欄数とずれる。 */
 function sheetSlots(tier){
   const names=sheetAreas(tier);
-  return sheetEntries(names, names[0]||null);
+  const entries=sheetEntries(names, names[0]||null);
+  // 基準エリア名は直書きしない。gridRows() も同じ式で引くので、設定でメインの
+  // 掲載先を変えても、まとめの除外対象と引き出し線の対象が常に一致する
+  return mergeEntries(entries, sheetAreas("bottom")[0]||null);
 }
 /* 欄に入りきらない文字を水平に縮めて1行に収める。
    ・自然幅は .sheet の zoom で割って CSS px に直してから比を取る。
@@ -2828,6 +2841,14 @@ function palletSlotText(e){
   if(n<=0) return e.pallets+"P";
   return (e.pallets-n)+"P 半"+(n>1?n:"");
 }
+// 欄のパレット数。まとめた欄は、全員が同じ表記なら「各2P 半」、違えば「/」で並べる。
+// 「半」は合算しない。合算すると「半3」が 3 ロットぶんの半端なのか
+// 1 ロットに半端が 3 件なのか、紙の上で区別できなくなる
+function palSlotTextOf(members){
+  const t=members.map(palletSlotText);
+  if(t.length<=1) return t[0]||"";
+  return t.every(x=>x===t[0]) ? "各"+t[0] : t.join("/");
+}
 // 区画セル（2列ぶんの幅）。kind: name / lot / pallet / pallet2 / note
 // extra: 全セルに足すクラス（品名行の太罫など）。品名行は左右の端も太罫にする
 function slotCells(entries,count,kind,extra){
@@ -2835,21 +2856,29 @@ function slotCells(entries,count,kind,extra){
   const FIT={name:"name", lot:"lot", pallet:"pal", note:"note"};
   const fk=FIT[kind]||"";
   let out="";
+  // 空欄は包まない。包むと高さ0の span が残って測定対象が無駄に増える
+  const span = v => v ? `<span class="fit">${esc(v)}</span>` : "";
   for(let i=0;i<count;i++){
     const e=entries[i], l=e&&e.lot;
-    let v="", cls="slot";
-    if(kind==="name")        v=l?l.name:"";
-    else if(kind==="lot")    v=l?l.lot:"";
-    else if(kind==="pallet") v=e?palletSlotText(e):"";
-    else if(kind==="note"){  v=e&&e.note?e.note:""; cls="none snote"; }
+    // まとめていない欄（下段や設定オフ）は members を持たないので、自分自身を1件として扱う
+    const ms = e ? (e.members || [e]) : [];
+    let inner="", cls="slot";
+    if(kind==="name")        inner=span(l?l.name:"");
+    else if(kind==="lot"){
+      // 空のロット番号は並べない。品名だけ入力した荷物が混ざりうる
+      const ts=ms.map(m=>m.lot.lot).filter(t=>t);
+      // 3件以上は1行に収まらない（9桁3件で圧縮 0.383。下限 0.4 を割る）ので縦に積む
+      inner = ts.length>=3 ? `<span class="fitcol">${ts.map(span).join("")}</span>`
+                           : span(ts.join("/"));
+    }
+    else if(kind==="pallet") inner=span(palSlotTextOf(ms));
+    else if(kind==="note"){  inner=span(e&&e.note?e.note:""); cls="none snote"; }
     if(kind!=="note") cls+=" c-"+fk;
     if(extra && kind!=="note"){
       cls+=" "+extra;
       if(i===0)       cls+=" bl2";
       if(i===count-1) cls+=" br2";
     }
-    // 空欄は包まない。包むと高さ0の span が残って測定対象が無駄に増える
-    const inner = v ? `<span class="fit">${esc(v)}</span>` : "";
     out+=`<td class="${cls}" data-fit="${fk}" colspan="2">${inner}</td>`;
   }
   // 4区画のときは左半分（6列）を空ける
