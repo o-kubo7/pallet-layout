@@ -173,7 +173,7 @@ SW を unregister → caches.delete() → キャッシュバスティング付�
 
 `fitSheetText()` / `drawLeaders()` / `applySheetZoom()` は実測に依存する。
 配置図タブが `display:none` のうちは測れない。
-**検証スクリプトには、幾何を測る前に `switchTab('map')` を必ず入れる。**
+**検証スクリプトには、幾何を測る前に `switchTab('sheet')` を必ず入れる。**
 
 本設計の切替判定そのものは件数の比較で、DOM 測定に依存しない。
 
@@ -205,23 +205,38 @@ document.styleSheets → CSSRule.MEDIA_RULE → conditionText.includes("print")
 **フィクスチャの弱さで検証が空振りする事例が 2026-08-25 / 08-30 / 08-31 と 3 回続いている**
 ため、以下は「その状態に実際に到達すること」を先に確かめてから合格判定に使う。
 
-### 8-1. 必要な 3 つの状態
+### 8-1. フィクスチャ（**改修前のコードで実測して到達を確認済み** 2026-09-01）
 
-| 状態 | 作り方 | 期待 |
-|---|---|---|
-| 通常モード | `SAMPLES.basic` | 14 列・上段 4 欄・下段 7 欄・欄幅 96px。**現状と 1px も変わらない** |
-| 拡張モード | 上段が 5 件、または下段が 8 件になる入力 | 16 列・上段 5 欄・下段 8 欄・欄幅 84px |
-| 拡張でも足りない | 上段 6 件以上、または下段 9 件以上 | 16 列のまま、従来どおり警告が出る |
+注入は `loadSample()` と同じ手順で行う。`loadSample()` 自体は `confirm()` を出すので使わない。
 
-拡張モードのフィクスチャは、過去に上段を埋めるのに使えた
-「詰め物F qty700 でメインを埋め、部品A を複数件あふれさせる」形を起点にする
-（`.superpowers/sdd/progress.md` の Task 5 の記録）。
-**件数はロットまとめを適用した後の欄数で数えることに注意。**
+```js
+function useFixture(rows){
+  document.querySelector("#lotTable tbody").innerHTML="";
+  rows.forEach(addRow); syncCards(); saveLots(); run(true); switchTab('sheet');
+}
+const T="仕掛品";
+const FILL=[{type:T,name:"詰め物F",lot:"L-900",snp:10,qty:700}];  // メインを埋める
+const mk=names=>FILL.concat(names.map((n,i)=>({type:T,name:n,lot:"L-"+(910+i),snp:10,qty:20})));
+const many=names=>names.map((n,i)=>({type:T,name:n,lot:"L-"+(920+i),snp:10,qty:20}));
+```
+
+| # | フィクスチャ | 改修前の実測 | 改修後の期待 |
+|---|---|---|---|
+| F1 | `SAMPLES.basic` | top 3 / bottom 6、14列48px、上段4×96・下段7×96、引出線10、警告なし | **すべて同一**（非退行） |
+| F2 | `mk(["部品A","部品B","部品C","部品D","部品E"])` | top 5 / bottom 1、警告「上段 1件」 | 16列42px、上段5×84・下段8×84、**警告が消える** |
+| F3 | `mk([... 上に加えて "製品X","製品Y"])` | top 7 / bottom 1、警告「上段 3件」 | 16列42px、警告が **「上段 2件」に減る**（7−5） |
+| F4 | `many(["部品A".."製品Z"] 8名)` | top 0 / bottom 8、警告「下段 1件」 | 16列42px、**警告が消える** |
+| F5 | `many(... 10名)` | top 0 / bottom 10、警告「下段 3件」 | 16列42px、警告が **「下段 2件」に減る**（10−8） |
+
+- F2 は **下段が 1 件しかないのに下段も 8 欄になる**。「上段だけ溢れても上下段そろって拡張」
+  （§3）の確認そのもの
+- 件数はロットまとめを適用した後の欄数。**F2〜F5 は全て別品名なのでまとめは効かない**
+- 警告は `#messages` の中の `.msg.warn`。`#msg` という要素は**存在しない**
 
 ### 8-2. 測る項目
 
 - `<colgroup>` の `<col>` の本数と `width`
-- 上段・下段の欄の実効幅（`getBoundingClientRect()`。`switchTab('map')` の後で測る）
+- 上段・下段の欄の実効幅（`getBoundingClientRect()`。`switchTab('sheet')` の後で測る）
 - 縦線の一致本数（上段↔下段、下段↔メイン）
 - `fitSheetText()` の結果（切れている欄が 0 件であること）
 - 引き出し線の本数が下段のロット数と一致すること
