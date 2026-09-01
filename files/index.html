@@ -2734,8 +2734,9 @@ function mergeEntries(entries, baseArea){
   });
   return out;
 }
-/* 配置図の表の、段ごとの欄。renderSheet()（紙）と欄数超過の警告の両方がここを通る。
-   片方だけを通すと、警告の件数が実際に紙へ出る欄数とずれる。 */
+/* 配置図の表の、段ごとの欄。renderSheet()（紙）と欄数超過の警告の両方が
+   sheetPlacement() 経由でここを通る。片方だけを通すと、警告の件数が実際に紙へ出る欄数とずれる。
+   上段のあふれを下段へ回す救済は様式（lay）が要るのでここには書けない。sheetPlacement() を見ること。 */
 function sheetSlots(tier){
   const names=sheetAreas(tier);
   const entries=sheetEntries(names, names[0]||null);
@@ -2751,7 +2752,9 @@ function lotsIn(slots){ return slots.reduce((a,g)=>a+(g.members?g.members.length
 /* 欄の注釈を、置き場所のエリア名だけから作る。
    sheetEntries() は段ごとの基準エリア（上段なら軒下①）を注釈から省くが、
    下段へ回した欄では注釈が唯一の場所情報になるので、基準を省かずに作り直す。
-   混載が1列に複数ロットを詰めるため、注釈が空の軒下①の欄が回ることは実際に起こる。 */
+   混載が1列に複数ロットを詰めるため、注釈が空の軒下①の欄が回ることは実際に起こる。
+   areas が空になることは sheetEntries() の作り上ありえない（欄は必ず1つ以上のエリアに置かれる）。
+   空文字を返す分岐は保険で、ここが空のまま回ると注釈のない欄が紙に出る。 */
 function slotAreaNote(areas){ return (areas && areas.length) ? "※"+areas.join("・") : ""; }
 /* 上段・下段の欄と様式を1回で決める。欄数超過の警告と renderSheet() の両方がここを通る。
    2か所で別々に数えると、警告の件数と実際に紙へ出る欄がずれる。
@@ -2962,7 +2965,8 @@ function slotCells(entries,count,kind,extra){
   const span = v => v ? `<span class="fit">${esc(v)}</span>` : "";
   for(let i=0;i<count;i++){
     const e=entries[i], l=e&&e.lot;
-    // まとめていない欄（下段や設定オフ）は members を持たないので、自分自身を1件として扱う
+    // まとめの対象外の欄（メインに乗るロットや、まとめ設定オフ）は members を持たないので、
+    // 自分自身を1件として扱う。下段にも members を持つ欄は出る（救済で回ってきた欄を含む）
     const ms = e ? (e.members || [e]) : [];
     let inner="", cls="slot";
     if(kind==="name")        inner=span(l?l.name:"");
@@ -3160,7 +3164,7 @@ function gridNoticeRow(w, cols){
    座標は必ず getBoundingClientRect() で table 基準にそろえる。
    offsetLeft は td.g だけ position:relative のせいで基準が違うので使わない。
    anchors : gridRows() が返す [{id, k, row}]
-   slotIds : 下段の欄順に並んだロット id */
+   slotIds : 下段の欄順に並んだロット id（救済で下段へ回した欄は null） */
 function drawLeaders(anchors, slotIds){
   const sheet=document.querySelector("#sheetView .sheet");
   const box=sheet && sheet.querySelector(".sheetbox");
