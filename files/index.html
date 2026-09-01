@@ -2786,10 +2786,12 @@ const FIT_LABEL = {name:"品名", lot:"ロット", pal:"P数", note:"注釈"};
 const PRINT_ZOOM = 1.4;                 // 印刷CSSの .sheet{zoom} と必ず揃える
 const PRINT_H_PX = 733.2;               // A4横・余白8mm の印刷領域の高さ
 const PRINT_H_LIMIT = PRINT_H_PX*0.98;  // ブラウザごとの余白差を見込んで 98% を上限にする
-/* lay: 配置表の様式。renderSheet() からは求め済みのものを渡す。
-   applyDisplay() など様式を持たない呼び出し元のために省略可にしてある。 */
-function fitSheetText(lay){
-  if(!lay) lay=sheetLayout(sheetSlots("top"), sheetSlots("bottom"));
+/* pl: sheetPlacement() の戻り値（様式と、下段へ回した欄）。
+   renderSheet() からは求め済みのものを渡す。
+   applyDisplay() など配置を持たない呼び出し元のために省略可にしてある。 */
+function fitSheetText(pl){
+  if(!pl) pl=sheetPlacement();
+  const lay=pl.lay;
   const box=document.getElementById("sheetMsg");
   const sheet=document.querySelector("#sheetView .sheet");
   if(!sheet){ if(box) box.innerHTML=""; return; }
@@ -2828,6 +2830,12 @@ function fitSheetText(lay){
   if(lay===SHEET_LAYOUTS.wide){
     html+=`<div class="msg ok">※ 荷物が多いため、今日は欄を増やしています`
         + `（上段 ${lay.top} 欄・下段 ${lay.bottom} 欄）。用紙の大きさは変わりません。</div>`;
+  }
+  // 上段に入りきらない荷物を下段の空き欄へ回した日も、画面にだけ知らせる。
+  // 件数は欄の数ではなく荷物の数（まとめた欄は複数のロットを含む）
+  if(pl.moved.length){
+    html+=`<div class="msg ok">※ 上段に入りきらない ${lotsIn(pl.moved)} 件を`
+        + `下段の空き欄に回しています。</div>`;
   }
   const parts=Object.keys(over).map(k=>`${FIT_LABEL[k]||k} ${over[k].size}件`);
   if(parts.length){
@@ -2921,7 +2929,7 @@ function renderSheet(){
   host.innerHTML=`<div class="sheet"><div class="sheetbox"><table>
     <colgroup>${Array(lay.cols).fill(`<col style="width:${lay.colW}px">`).join("")}</colgroup>
     ${rows}</table></div></div>`;
-  fitSheetText(lay);              // 折り返しは行の高さを変えるので線より先に確定させる
+  fitSheetText(pl);               // 折り返しは行の高さを変えるので線より先に確定させる
   // 救済で下段へ回した欄には線を引かない。同じロットがメインと軒下に分割配置された日、
   // アンカーの有無に任せると救済欄からメインの同じマスへ2本目の線が伸びて誤読させる
   drawLeaders(grid.anchors, bottom.map(e=>e.fromTop ? null : e.lot.id));
