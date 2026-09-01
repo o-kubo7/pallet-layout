@@ -1667,15 +1667,18 @@ function renderResult(lots, unknown, typeMix){
   const over=lots.filter(l=>l.rem>0);
   const usedAisle=sp.some(s=>s.cols.some(c=>c.aisle&&c.fills.length));
   const usedMix=sp.some(s=>s.cols.some(c=>c.fills.length>1));
-  // 配置図の表の欄数は様式で決まる（sheetLayout）。載りきらないロットは黙って消えるので知らせる。
-  // renderSheet() も同じ sheetLayout() を通すので、警告の件数と実際に紙へ出る欄数がずれない。
-  const topSlots=sheetSlots("top"), bottomSlots=sheetSlots("bottom");
-  const lay=sheetLayout(topSlots, bottomSlots);
-  const overTop=topSlots.length-lay.top;
+  // 配置図の表の欄数は様式で決まり、上段のあふれは下段の空き欄へ回る（sheetPlacement）。
+  // renderSheet() も同じ sheetPlacement() を通すので、警告の件数と実際に紙へ出る欄数がずれない。
+  // 回しきれずに紙から落ちる分だけを知らせる。
+  const pl=sheetPlacement();
+  const lay=pl.lay, topSlots=pl.top, bottomSlots=pl.bottom;
+  // 上段のうち紙に残るのは lay.top 欄。そこから先は moved の分だけ下段へ回っている
+  const kept=lay.top+pl.moved.length;
+  const overTop=topSlots.length-kept;
   const overBottom=bottomSlots.length-lay.bottom;
   if(overTop>0 || overBottom>0){
     const parts=[];
-    if(overTop>0) parts.push(`上段 ${lotsIn(topSlots.slice(lay.top))}件`);
+    if(overTop>0) parts.push(`上段 ${lotsIn(topSlots.slice(kept))}件`);
     if(overBottom>0) parts.push(`下段 ${lotsIn(bottomSlots.slice(lay.bottom))}件`);
     warnHtml+=`<div class="msg warn">⚠ 配置図の表に載りきらないロットがあります：${parts.join(" / ")}。ブロック図で確認してください。</div>`;
   }
@@ -2855,10 +2858,12 @@ function renderSheet(){
   // 上段も下段と同じ流儀で、先頭のエリアが基準になる。上段が軒下だけだったころは
   // 見出し「軒下」で足りていたが、掲載先が可変になり、上段に移したエリアのロットが
   // 紙のどこにあるか分からなくなっていた
-  const top=sheetSlots("top");
-  const bottom=sheetSlots("bottom");
-  // 欄が足りない日は wide（16列×42px・上段5欄・下段8欄）。総幅 672px は変わらない
-  const lay=sheetLayout(top, bottom);
+  // 上段・下段の欄と様式は sheetPlacement() が1回で決める。欄数超過の警告も同じ関数を通るので、
+  // 警告の件数と紙に出る欄がずれない。
+  // 欄が足りない日は wide（16列×42px・上段5欄・下段8欄）。総幅 672px は変わらない。
+  // それでも上段に入りきらない欄は、下段に空きがあればその末尾へ回っている（bottom の末尾）
+  const pl=sheetPlacement();
+  const top=pl.top, bottom=pl.bottom, lay=pl.lay;
   const d=headDate?new Date(headDate+"T00:00:00"):null;
   const mm=d?d.getMonth()+1:"", dd=d?d.getDate():"", dw=d?DOW[d.getDay()]:"";
   const totalP=lastLots.reduce((a,l)=>a+l.pallets,0);
@@ -2917,7 +2922,9 @@ function renderSheet(){
     <colgroup>${Array(lay.cols).fill(`<col style="width:${lay.colW}px">`).join("")}</colgroup>
     ${rows}</table></div></div>`;
   fitSheetText(lay);              // 折り返しは行の高さを変えるので線より先に確定させる
-  drawLeaders(grid.anchors, bottom.map(e=>e.lot.id));
+  // 救済で下段へ回した欄には線を引かない。同じロットがメインと軒下に分割配置された日、
+  // アンカーの有無に任せると救済欄からメインの同じマスへ2本目の線が伸びて誤読させる
+  drawLeaders(grid.anchors, bottom.map(e=>e.fromTop ? null : e.lot.id));
   applySheetZoom();
 }
 
@@ -3172,7 +3179,8 @@ function drawLeaders(anchors, slotIds){
   const byId={}; anchors.forEach(a=>{ byId[a.id]=a; });
   slotIds.forEach((id,i)=>{
     const a=byId[id], src=from[i];
-    if(!a || !src) return;                      // メイン外のロットには線を引かない
+    // メイン外のロットには線を引かない。救済で下段へ回した欄は id が null で渡ってくる
+    if(!a || !src) return;
     const row=grid[a.row]; if(!row) return;
     const dst=row.children[a.k]; if(!dst) return;
 
