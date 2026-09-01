@@ -1673,9 +1673,6 @@ function renderResult(lots, unknown, typeMix){
   const lay=sheetLayout(topSlots, bottomSlots);
   const overTop=topSlots.length-lay.top;
   const overBottom=bottomSlots.length-lay.bottom;
-  // まとめた欄は複数のロットを含む。欄の数で知らせると、実際に紙から落ちるロットの数を
-  // 過少に申告してしまう（1欄に6ロット入っていても「1件」になる）
-  const lotsIn=slots=>slots.reduce((a,g)=>a+(g.members?g.members.length:1),0);
   if(overTop>0 || overBottom>0){
     const parts=[];
     if(overTop>0) parts.push(`上段 ${lotsIn(topSlots.slice(lay.top))}件`);
@@ -2743,6 +2740,36 @@ function sheetSlots(tier){
   // 基準エリア名は直書きしない。gridRows() も同じ式で引くので、設定でメインの
   // 掲載先を変えても、まとめの除外対象と引き出し線の対象が常に一致する
   return mergeEntries(entries, sheetAreas("bottom")[0]||null);
+}
+/* 欄に入っている荷物の数。まとめた欄は複数のロットを含むので、欄の数で数えると
+   実際に紙から落ちるロットの数を過少に申告してしまう（1欄に6ロット入っていても「1件」）。
+   欄数超過の警告と、救済の告知の両方がここを通る。 */
+function lotsIn(slots){ return slots.reduce((a,g)=>a+(g.members?g.members.length:1),0); }
+/* 欄の注釈を、置き場所のエリア名だけから作る。
+   sheetEntries() は段ごとの基準エリア（上段なら軒下①）を注釈から省くが、
+   下段へ回した欄では注釈が唯一の場所情報になるので、基準を省かずに作り直す。
+   混載が1列に複数ロットを詰めるため、注釈が空の軒下①の欄が回ることは実際に起こる。 */
+function slotAreaNote(areas){ return (areas && areas.length) ? "※"+areas.join("・") : ""; }
+/* 上段・下段の欄と様式を1回で決める。欄数超過の警告と renderSheet() の両方がここを通る。
+   2か所で別々に数えると、警告の件数と実際に紙へ出る欄がずれる。
+   上段に入りきらない欄は、下段に空きがあればその末尾へ回す（救済）。
+   ・様式の判定は救済前の件数で行う。先に wide にして上段の欄を増やし、
+     それでもあふれる分だけを下段へ回す（上段の荷物はできるだけ上段に並べる）
+   ・sheetLayout() は上段が4欄を超えた時点で wide にするので、救済が起きる日は必ず wide。
+     SHEET_LAYOUTS の欄数を変えるとこの関係が崩れる
+   ・回せるのは下段の空きの数まで。回しきれない分は従来どおり警告に残る
+   ・回した欄は元の欄を浅く複製して作る。members と areas の配列は元の欄と共有するので、
+     どちらも書き換えないこと。元の欄（top の中身）自体も書き換えない
+   ・fromTop は renderSheet() が引き出し線の id を落とすのに使う目印 */
+function sheetPlacement(){
+  const top=sheetSlots("top");
+  const base=sheetSlots("bottom");
+  const lay=sheetLayout(top, base);
+  const free=Math.max(0, lay.bottom-base.length);
+  const over=Math.max(0, top.length-lay.top);
+  const moved=top.slice(lay.top, lay.top+Math.min(free, over))
+    .map(e=>({...e, fromTop:true, note:slotAreaNote(e.areas)}));
+  return {lay, top, bottom:base.concat(moved), moved};
 }
 /* 欄に入りきらない文字を水平に縮めて1行に収める。
    ・自然幅は .sheet の zoom で割って CSS px に直してから比を取る。
