@@ -1667,18 +1667,18 @@ function renderResult(lots, unknown, typeMix){
   const over=lots.filter(l=>l.rem>0);
   const usedAisle=sp.some(s=>s.cols.some(c=>c.aisle&&c.fills.length));
   const usedMix=sp.some(s=>s.cols.some(c=>c.fills.length>1));
-  // 配置図の表の欄数は様式で決まる（sheetLayout）。載りきらないロットは黙って消えるので知らせる。
-  // renderSheet() も同じ sheetLayout() を通すので、警告の件数と実際に紙へ出る欄数がずれない。
-  const topSlots=sheetSlots("top"), bottomSlots=sheetSlots("bottom");
-  const lay=sheetLayout(topSlots, bottomSlots);
-  const overTop=topSlots.length-lay.top;
+  // 配置図の表の欄数は様式で決まり、上段のあふれは下段の空き欄へ回る（sheetPlacement）。
+  // renderSheet() も同じ sheetPlacement() を通すので、警告の件数と実際に紙へ出る欄数がずれない。
+  // 回しきれずに紙から落ちる分だけを知らせる。
+  const pl=sheetPlacement();
+  const lay=pl.lay, topSlots=pl.top, bottomSlots=pl.bottom;
+  // 上段のうち紙に残るのは lay.top 欄。そこから先は moved の分だけ下段へ回っている
+  const kept=lay.top+pl.moved.length;
+  const overTop=topSlots.length-kept;
   const overBottom=bottomSlots.length-lay.bottom;
-  // まとめた欄は複数のロットを含む。欄の数で知らせると、実際に紙から落ちるロットの数を
-  // 過少に申告してしまう（1欄に6ロット入っていても「1件」になる）
-  const lotsIn=slots=>slots.reduce((a,g)=>a+(g.members?g.members.length:1),0);
   if(overTop>0 || overBottom>0){
     const parts=[];
-    if(overTop>0) parts.push(`上段 ${lotsIn(topSlots.slice(lay.top))}件`);
+    if(overTop>0) parts.push(`上段 ${lotsIn(topSlots.slice(kept))}件`);
     if(overBottom>0) parts.push(`下段 ${lotsIn(bottomSlots.slice(lay.bottom))}件`);
     warnHtml+=`<div class="msg warn">⚠ 配置図の表に載りきらないロットがあります：${parts.join(" / ")}。ブロック図で確認してください。</div>`;
   }
@@ -2734,8 +2734,9 @@ function mergeEntries(entries, baseArea){
   });
   return out;
 }
-/* 配置図の表の、段ごとの欄。renderSheet()（紙）と欄数超過の警告の両方がここを通る。
-   片方だけを通すと、警告の件数が実際に紙へ出る欄数とずれる。 */
+/* 配置図の表の、段ごとの欄。renderSheet()（紙）と欄数超過の警告の両方が
+   sheetPlacement() 経由でここを通る。片方だけを通すと、警告の件数が実際に紙へ出る欄数とずれる。
+   上段のあふれを下段へ回す救済は様式（lay）が要るのでここには書けない。sheetPlacement() を見ること。 */
 function sheetSlots(tier){
   const names=sheetAreas(tier);
   const entries=sheetEntries(names, names[0]||null);
@@ -2743,6 +2744,38 @@ function sheetSlots(tier){
   // 基準エリア名は直書きしない。gridRows() も同じ式で引くので、設定でメインの
   // 掲載先を変えても、まとめの除外対象と引き出し線の対象が常に一致する
   return mergeEntries(entries, sheetAreas("bottom")[0]||null);
+}
+/* 欄に入っている荷物の数。まとめた欄は複数のロットを含むので、欄の数で数えると
+   実際に紙から落ちるロットの数を過少に申告してしまう（1欄に6ロット入っていても「1件」）。
+   欄数超過の警告と、救済の告知の両方がここを通る。 */
+function lotsIn(slots){ return slots.reduce((a,g)=>a+(g.members?g.members.length:1),0); }
+/* 欄の注釈を、置き場所のエリア名だけから作る。
+   sheetEntries() は段ごとの基準エリア（上段なら軒下①）を注釈から省くが、
+   下段へ回した欄では注釈が唯一の場所情報になるので、基準を省かずに作り直す。
+   混載が1列に複数ロットを詰めるため、注釈が空の軒下①の欄が回ることは実際に起こる。
+   areas が空になることは sheetEntries() の作り上ありえない（欄は必ず1つ以上のエリアに置かれる）。
+   空文字を返す分岐は保険で、ここが空のまま回ると注釈のない欄が紙に出る。 */
+function slotAreaNote(areas){ return (areas && areas.length) ? "※"+areas.join("・") : ""; }
+/* 上段・下段の欄と様式を1回で決める。欄数超過の警告と renderSheet() の両方がここを通る。
+   2か所で別々に数えると、警告の件数と実際に紙へ出る欄がずれる。
+   上段に入りきらない欄は、下段に空きがあればその末尾へ回す（救済）。
+   ・様式の判定は救済前の件数で行う。先に wide にして上段の欄を増やし、
+     それでもあふれる分だけを下段へ回す（上段の荷物はできるだけ上段に並べる）
+   ・sheetLayout() は上段が4欄を超えた時点で wide にするので、救済が起きる日は必ず wide。
+     SHEET_LAYOUTS の欄数を変えるとこの関係が崩れる
+   ・回せるのは下段の空きの数まで。回しきれない分は従来どおり警告に残る
+   ・回した欄は元の欄を浅く複製して作る。members と areas の配列は元の欄と共有するので、
+     どちらも書き換えないこと。元の欄（top の中身）自体も書き換えない
+   ・fromTop は renderSheet() が引き出し線の id を落とすのに使う目印 */
+function sheetPlacement(){
+  const top=sheetSlots("top");
+  const base=sheetSlots("bottom");
+  const lay=sheetLayout(top, base);
+  const free=Math.max(0, lay.bottom-base.length);
+  const over=Math.max(0, top.length-lay.top);
+  const moved=top.slice(lay.top, lay.top+Math.min(free, over))
+    .map(e=>({...e, fromTop:true, note:slotAreaNote(e.areas)}));
+  return {lay, top, bottom:base.concat(moved), moved};
 }
 /* 欄に入りきらない文字を水平に縮めて1行に収める。
    ・自然幅は .sheet の zoom で割って CSS px に直してから比を取る。
@@ -2756,10 +2789,12 @@ const FIT_LABEL = {name:"品名", lot:"ロット", pal:"P数", note:"注釈"};
 const PRINT_ZOOM = 1.4;                 // 印刷CSSの .sheet{zoom} と必ず揃える
 const PRINT_H_PX = 733.2;               // A4横・余白8mm の印刷領域の高さ
 const PRINT_H_LIMIT = PRINT_H_PX*0.98;  // ブラウザごとの余白差を見込んで 98% を上限にする
-/* lay: 配置表の様式。renderSheet() からは求め済みのものを渡す。
-   applyDisplay() など様式を持たない呼び出し元のために省略可にしてある。 */
-function fitSheetText(lay){
-  if(!lay) lay=sheetLayout(sheetSlots("top"), sheetSlots("bottom"));
+/* pl: sheetPlacement() の戻り値（様式と、下段へ回した欄）。
+   renderSheet() からは求め済みのものを渡す。
+   applyDisplay() など配置を持たない呼び出し元のために省略可にしてある。 */
+function fitSheetText(pl){
+  if(!pl) pl=sheetPlacement();
+  const lay=pl.lay;
   const box=document.getElementById("sheetMsg");
   const sheet=document.querySelector("#sheetView .sheet");
   if(!sheet){ if(box) box.innerHTML=""; return; }
@@ -2799,6 +2834,12 @@ function fitSheetText(lay){
     html+=`<div class="msg ok">※ 荷物が多いため、今日は欄を増やしています`
         + `（上段 ${lay.top} 欄・下段 ${lay.bottom} 欄）。用紙の大きさは変わりません。</div>`;
   }
+  // 上段に入りきらない荷物を下段の空き欄へ回した日も、画面にだけ知らせる。
+  // 件数は欄の数ではなく荷物の数（まとめた欄は複数のロットを含む）
+  if(pl.moved.length){
+    html+=`<div class="msg ok">※ 上段に入りきらない ${lotsIn(pl.moved)} 件を`
+        + `下段の空き欄に回しています。</div>`;
+  }
   const parts=Object.keys(over).map(k=>`${FIT_LABEL[k]||k} ${over[k].size}件`);
   if(parts.length){
     html+=`<div class="msg warn">⚠ 文字が入りきらない欄があります：${parts.join(" / ")}。`
@@ -2828,10 +2869,12 @@ function renderSheet(){
   // 上段も下段と同じ流儀で、先頭のエリアが基準になる。上段が軒下だけだったころは
   // 見出し「軒下」で足りていたが、掲載先が可変になり、上段に移したエリアのロットが
   // 紙のどこにあるか分からなくなっていた
-  const top=sheetSlots("top");
-  const bottom=sheetSlots("bottom");
-  // 欄が足りない日は wide（16列×42px・上段5欄・下段8欄）。総幅 672px は変わらない
-  const lay=sheetLayout(top, bottom);
+  // 上段・下段の欄と様式は sheetPlacement() が1回で決める。欄数超過の警告も同じ関数を通るので、
+  // 警告の件数と紙に出る欄がずれない。
+  // 欄が足りない日は wide（16列×42px・上段5欄・下段8欄）。総幅 672px は変わらない。
+  // それでも上段に入りきらない欄は、下段に空きがあればその末尾へ回っている（bottom の末尾）
+  const pl=sheetPlacement();
+  const top=pl.top, bottom=pl.bottom, lay=pl.lay;
   const d=headDate?new Date(headDate+"T00:00:00"):null;
   const mm=d?d.getMonth()+1:"", dd=d?d.getDate():"", dw=d?DOW[d.getDay()]:"";
   const totalP=lastLots.reduce((a,l)=>a+l.pallets,0);
@@ -2889,8 +2932,10 @@ function renderSheet(){
   host.innerHTML=`<div class="sheet"><div class="sheetbox"><table>
     <colgroup>${Array(lay.cols).fill(`<col style="width:${lay.colW}px">`).join("")}</colgroup>
     ${rows}</table></div></div>`;
-  fitSheetText(lay);              // 折り返しは行の高さを変えるので線より先に確定させる
-  drawLeaders(grid.anchors, bottom.map(e=>e.lot.id));
+  fitSheetText(pl);               // 折り返しは行の高さを変えるので線より先に確定させる
+  // 救済で下段へ回した欄には線を引かない。同じロットがメインと軒下に分割配置された日、
+  // アンカーの有無に任せると救済欄からメインの同じマスへ2本目の線が伸びて誤読させる
+  drawLeaders(grid.anchors, bottom.map(e=>e.fromTop ? null : e.lot.id));
   applySheetZoom();
 }
 
@@ -2920,7 +2965,8 @@ function slotCells(entries,count,kind,extra){
   const span = v => v ? `<span class="fit">${esc(v)}</span>` : "";
   for(let i=0;i<count;i++){
     const e=entries[i], l=e&&e.lot;
-    // まとめていない欄（下段や設定オフ）は members を持たないので、自分自身を1件として扱う
+    // まとめの対象外の欄（メインに乗るロットや、まとめ設定オフ）は members を持たないので、
+    // 自分自身を1件として扱う。下段にも members を持つ欄は出る（救済で回ってきた欄を含む）
     const ms = e ? (e.members || [e]) : [];
     let inner="", cls="slot";
     if(kind==="name")        inner=span(l?l.name:"");
@@ -3118,7 +3164,7 @@ function gridNoticeRow(w, cols){
    座標は必ず getBoundingClientRect() で table 基準にそろえる。
    offsetLeft は td.g だけ position:relative のせいで基準が違うので使わない。
    anchors : gridRows() が返す [{id, k, row}]
-   slotIds : 下段の欄順に並んだロット id */
+   slotIds : 下段の欄順に並んだロット id（救済で下段へ回した欄は null） */
 function drawLeaders(anchors, slotIds){
   const sheet=document.querySelector("#sheetView .sheet");
   const box=sheet && sheet.querySelector(".sheetbox");
@@ -3145,7 +3191,8 @@ function drawLeaders(anchors, slotIds){
   const byId={}; anchors.forEach(a=>{ byId[a.id]=a; });
   slotIds.forEach((id,i)=>{
     const a=byId[id], src=from[i];
-    if(!a || !src) return;                      // メイン外のロットには線を引かない
+    // メイン外のロットには線を引かない。救済で下段へ回した欄は id が null で渡ってくる
+    if(!a || !src) return;
     const row=grid[a.row]; if(!row) return;
     const dst=row.children[a.k]; if(!dst) return;
 
