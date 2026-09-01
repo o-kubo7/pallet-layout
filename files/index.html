@@ -241,7 +241,8 @@
      表にぴったり重なるこのラッパを座標の原点にする */
   .sheet .sheetbox{position:relative;width:max-content}
   .sheet .leaders{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
-  /* 1列 48px×14＝672px。ロット（最大9文字）が区画セル（2列＝96px）に収まる幅 */
+  /* 総幅は 672px 固定。列数と1列の幅は SHEET_LAYOUTS が決める
+     （normal 48px×14 / wide 42px×16）。列幅は colgroup で与える */
   .sheet table{border-collapse:collapse;table-layout:fixed;
                width:672px;min-width:672px;max-width:672px;margin:0}
   .sheet td{border:1px solid #000;text-align:center;font-size:11px;padding:1px;
@@ -655,7 +656,26 @@ const FLOOR_POS = {
 // 「配置図の表」での欄の割り当て。エリア名は SPACES の sheet 属性から引く。
 // 返す順は SPACES の並び順。下段の先頭が基準エリアで、注釈を付けず、グリッドを描く。
 function sheetAreas(tier){ return SPACES.filter(s=>(s.sheet||"bottom")===tier).map(s=>s.name); }
-const SHEET_TOP_SLOTS = 4, SHEET_BOTTOM_SLOTS = 7; // 紙のレイアウトで決まる欄数。renderSheet と欄数超過の警告で共有
+/* 配置図の表の様式。荷物が多い日は上段・下段の欄を1つずつ増やした wide に切り替える。
+   総幅 672px は両方で同じ。672÷14=48、672÷16=42 でどちらも割り切れる。
+   ・normal … 現行の紙。左ブロック5列(240px)＋すき間1列(48px)＋上段4欄×2列(96px)＝14列
+   ・wide   … 左ブロック5列(210px)＋すき間1列(42px)＋上段5欄×2列(84px)＝16列
+              メインは14列×42px=588px で、右に2列(84px)余る。後日あふれブロックが入る用地。
+   左ブロックが両方とも5列なのは、曜日セルが5個並ぶため。5列未満にはできない。
+   wide の1列42pxは、あさ／ひるの丸印に要る36px（文字11px×2＋padding6＋border4＋tdの4）を満たす。
+   cols は SHEET_GRID_ORDER の要素数（メインの列数）以上でなければならない。
+   下回ると gridRows() の余り列が負になり、表が黙って崩れる。 */
+const SHEET_LAYOUTS = {
+  normal: {cols:14, colW:48, top:4, bottom:7},
+  wide:   {cols:16, colW:42, top:5, bottom:8},
+};
+/* 欄が足りない日だけ wide にする。判定は「まとめた後の欄数」（sheetSlots の戻り値）で行う。
+   上段だけが溢れた日でも上下段そろって wide になる。1つの表で列を共有しているので
+   上段と下段を別々の様式にはできない。 */
+function sheetLayout(topSlots, bottomSlots){
+  const n=SHEET_LAYOUTS.normal;
+  return (topSlots.length>n.top || bottomSlots.length>n.bottom) ? SHEET_LAYOUTS.wide : n;
+}
 
 /* ===== 品目マスタ（品名 → SNP。同じ品名で複数SNP可）===== */
 const DEFAULT_MASTER = (function(){
@@ -1647,17 +1667,19 @@ function renderResult(lots, unknown, typeMix){
   const over=lots.filter(l=>l.rem>0);
   const usedAisle=sp.some(s=>s.cols.some(c=>c.aisle&&c.fills.length));
   const usedMix=sp.some(s=>s.cols.some(c=>c.fills.length>1));
-  // 配置図の表は上段SHEET_TOP_SLOTS欄・下段SHEET_BOTTOM_SLOTS欄しかない。載りきらないロットは黙って消えるので知らせる。
+  // 配置図の表の欄数は様式で決まる（sheetLayout）。載りきらないロットは黙って消えるので知らせる。
+  // renderSheet() も同じ sheetLayout() を通すので、警告の件数と実際に紙へ出る欄数がずれない。
   const topSlots=sheetSlots("top"), bottomSlots=sheetSlots("bottom");
-  const overTop=topSlots.length-SHEET_TOP_SLOTS;
-  const overBottom=bottomSlots.length-SHEET_BOTTOM_SLOTS;
+  const lay=sheetLayout(topSlots, bottomSlots);
+  const overTop=topSlots.length-lay.top;
+  const overBottom=bottomSlots.length-lay.bottom;
   // まとめた欄は複数のロットを含む。欄の数で知らせると、実際に紙から落ちるロットの数を
   // 過少に申告してしまう（1欄に6ロット入っていても「1件」になる）
   const lotsIn=slots=>slots.reduce((a,g)=>a+(g.members?g.members.length:1),0);
   if(overTop>0 || overBottom>0){
     const parts=[];
-    if(overTop>0) parts.push(`上段 ${lotsIn(topSlots.slice(SHEET_TOP_SLOTS))}件`);
-    if(overBottom>0) parts.push(`下段 ${lotsIn(bottomSlots.slice(SHEET_BOTTOM_SLOTS))}件`);
+    if(overTop>0) parts.push(`上段 ${lotsIn(topSlots.slice(lay.top))}件`);
+    if(overBottom>0) parts.push(`下段 ${lotsIn(bottomSlots.slice(lay.bottom))}件`);
     warnHtml+=`<div class="msg warn">⚠ 配置図の表に載りきらないロットがあります：${parts.join(" / ")}。ブロック図で確認してください。</div>`;
   }
   // あふれブロックの描画が未実装なので、掲載先が over のエリアは配置の対象から外してある
@@ -2734,7 +2756,10 @@ const FIT_LABEL = {name:"品名", lot:"ロット", pal:"P数", note:"注釈"};
 const PRINT_ZOOM = 1.4;                 // 印刷CSSの .sheet{zoom} と必ず揃える
 const PRINT_H_PX = 733.2;               // A4横・余白8mm の印刷領域の高さ
 const PRINT_H_LIMIT = PRINT_H_PX*0.98;  // ブラウザごとの余白差を見込んで 98% を上限にする
-function fitSheetText(){
+/* lay: 配置表の様式。renderSheet() からは求め済みのものを渡す。
+   applyDisplay() など様式を持たない呼び出し元のために省略可にしてある。 */
+function fitSheetText(lay){
+  if(!lay) lay=sheetLayout(sheetSlots("top"), sheetSlots("bottom"));
   const box=document.getElementById("sheetMsg");
   const sheet=document.querySelector("#sheetView .sheet");
   if(!sheet){ if(box) box.innerHTML=""; return; }
@@ -2768,6 +2793,12 @@ function fitSheetText(){
   });
   if(!box) return;
   let html="";
+  // 荷物が多い日は欄が増え、紙のマス目の幅が変わる。現場が不具合と疑わないように
+  // 画面にだけ知らせる（#sheetMsg は印刷CSSで display:none なので紙には出ない）
+  if(lay===SHEET_LAYOUTS.wide){
+    html+=`<div class="msg ok">※ 荷物が多いため、今日は欄を増やしています`
+        + `（上段 ${lay.top} 欄・下段 ${lay.bottom} 欄）。用紙の大きさは変わりません。</div>`;
+  }
   const parts=Object.keys(over).map(k=>`${FIT_LABEL[k]||k} ${over[k].size}件`);
   if(parts.length){
     html+=`<div class="msg warn">⚠ 文字が入りきらない欄があります：${parts.join(" / ")}。`
@@ -2799,23 +2830,25 @@ function renderSheet(){
   // 紙のどこにあるか分からなくなっていた
   const top=sheetSlots("top");
   const bottom=sheetSlots("bottom");
+  // 欄が足りない日は wide（16列×42px・上段5欄・下段8欄）。総幅 672px は変わらない
+  const lay=sheetLayout(top, bottom);
   const d=headDate?new Date(headDate+"T00:00:00"):null;
   const mm=d?d.getMonth()+1:"", dd=d?d.getDate():"", dw=d?DOW[d.getDay()]:"";
   const totalP=lastLots.reduce((a,l)=>a+l.pallets,0);
   const ring=(v,on)=>on?`<span class="ring">${v}</span>`:v;
   const E='<td class="none"></td>';
 
-  // 全体を14列（雛形のB〜O列）の1つの表にして、列を揃える
+  // 全体を1つの表にして列を揃える。列数は様式で決まる（normal 14列＝雛形のB〜O列 / wide 16列）
   let rows="";
 
   // 行1：月日（列1から）＋ タイトル（下は太罫）
   rows+=`<tr><td class="hd" colspan="5"><div class="fldrow c5">`
       + `<span>${mm}</span><span>月</span><span>${dd}</span><span>日</span></div></td>${E}`
-      + `<td class="ttl bb2" colspan="8">軒下</td></tr>`;
+      + `<td class="ttl bb2" colspan="${lay.top*2}">軒下</td></tr>`;
 
   // 行2：曜日 ＋ 上段の品名（品名欄は太枠で囲う）
   rows+=`<tr class="r1">${["月","火","水","木","金"].map(x=>`<td class="dow">${ring(x,x===dw)}</td>`).join("")}`
-      + `${E}${slotCells(top,SHEET_TOP_SLOTS,"name","bb2")}</tr>`;
+      + `${E}${slotCells(top,lay.top,"name","bb2")}</tr>`;
 
   // 行3：総パレット数・あさ／ひる ＋ 上段のロット
   //      左ブロックは用紙どおり行4まで（2行ぶん）ぶち抜き
@@ -2823,40 +2856,40 @@ function renderSheet(){
       + `<span>${totalP}</span><span>P</span></div></td>`
       + `<td class="dow" rowspan="2">${ring("あさ",headTiming==="あさ")}</td>`
       + `<td class="dow" rowspan="2">${ring("ひる",headTiming==="ひる")}</td>${E}`
-      + `${slotCells(top,SHEET_TOP_SLOTS,"lot")}</tr>`;
+      + `${slotCells(top,lay.top,"lot")}</tr>`;
 
   // 行4：上段のパレット数（左5列は上の行の rowspan で埋まっている）
-  rows+=`<tr class="r3">${E}${slotCells(top,SHEET_TOP_SLOTS,"pallet")}</tr>`;
+  rows+=`<tr class="r3">${E}${slotCells(top,lay.top,"pallet")}</tr>`;
 
   // 行5：上段の注釈。行3 の rowspan は行4 までしか届かないので、
-  //      左5列はこの行で自分で埋める（5 + 1 + 4×2 = 14 列）
+  //      左5列はこの行で自分で埋める（5 + 1 + lay.top×2 = lay.cols。normal は 5+1+4×2=14 列、wide は 5+1+5×2=16 列）
   rows+=`<tr class="note-row"><td class="none" colspan="5"></td>${E}`
-      + `${slotCells(top,SHEET_TOP_SLOTS,"note")}</tr>`;
+      + `${slotCells(top,lay.top,"note")}</tr>`;
 
   // 上下段の区切り（用紙では太罫1本）
-  rows+=`<tr class="gap"><td class="none sep" colspan="14"></td></tr>`;
+  rows+=`<tr class="gap"><td class="none sep" colspan="${lay.cols}"></td></tr>`;
 
-  // 下段（7区画）：品名／ロット／パレット数／注記
-  rows+=`<tr>${slotCells(bottom,SHEET_BOTTOM_SLOTS,"name","bb2")}</tr>`;
-  rows+=`<tr>${slotCells(bottom,SHEET_BOTTOM_SLOTS,"lot")}</tr>`;
+  // 下段（lay.bottom 区画。normal 7 / wide 8）：品名／ロット／パレット数／注記
+  rows+=`<tr>${slotCells(bottom,lay.bottom,"name","bb2")}</tr>`;
+  rows+=`<tr>${slotCells(bottom,lay.bottom,"lot")}</tr>`;
   // この行の各セルの下辺が引き出し線の起点になる
-  rows+=`<tr class="btmp">${slotCells(bottom,SHEET_BOTTOM_SLOTS,"pallet")}</tr>`;
-  rows+=`<tr class="note-row">${slotCells(bottom,SHEET_BOTTOM_SLOTS,"note")}</tr>`;
-  rows+=`<tr class="gap"><td class="none" colspan="14"></td></tr>`;
+  rows+=`<tr class="btmp">${slotCells(bottom,lay.bottom,"pallet")}</tr>`;
+  rows+=`<tr class="note-row">${slotCells(bottom,lay.bottom,"note")}</tr>`;
+  rows+=`<tr class="gap"><td class="none" colspan="${lay.cols}"></td></tr>`;
 
   // グリッド（メイン）
-  const grid=gridRows();
+  const grid=gridRows(lay.cols-SHEET_GRID_ORDER.length);
   // グリッドが描けないときは、グリッドがあった位置に案内を出す。
   // 紙を見た人が「ここに図があるはずだ」と分かる位置に置く。
-  if(grid.warn && grid.warn.kind!=="extra") rows+=gridNoticeRow(grid.warn);
+  if(grid.warn && grid.warn.kind!=="extra") rows+=gridNoticeRow(grid.warn, lay.cols);
   rows+=grid.html;
   // 12列以上のときはグリッド自体は描けているので、案内はその下に置く
-  if(grid.warn && grid.warn.kind==="extra")  rows+=gridNoticeRow(grid.warn);
+  if(grid.warn && grid.warn.kind==="extra")  rows+=gridNoticeRow(grid.warn, lay.cols);
 
   host.innerHTML=`<div class="sheet"><div class="sheetbox"><table>
-    <colgroup>${Array(14).fill('<col style="width:48px">').join("")}</colgroup>
+    <colgroup>${Array(lay.cols).fill(`<col style="width:${lay.colW}px">`).join("")}</colgroup>
     ${rows}</table></div></div>`;
-  fitSheetText();                 // 折り返しは行の高さを変えるので線より先に確定させる
+  fitSheetText(lay);              // 折り返しは行の高さを変えるので線より先に確定させる
   drawLeaders(grid.anchors, bottom.map(e=>e.lot.id));
   applySheetZoom();
 }
@@ -2940,7 +2973,12 @@ function gridWarn(sp){
 // 欄の基準エリア（sheetEntries の baseArea）と必ず同じエリアにする。
 // ここを固定名にしておくと、基準エリアの掲載先を変えたときに
 // 欄とグリッドが別のエリアを指し、引き出し線が的外れになる。
-function gridRows(){
+/* pad: 表の右に余る列数。wide の様式ではメイン14列の右に2列（84px）余るので、
+   各行の末尾に空セルを足して表全体の列数をそろえる。
+   ここは後日あふれブロックが入る用地。罫線も背景色も持たせない
+   （背景色は既定で印刷されないため、意味を持たせてはいけない）。 */
+function gridRows(pad){
+  const padCell = pad>0 ? `<td class="none" colspan="${pad}"></td>` : "";
   const sp=lastSp.find(s=>s.name===sheetAreas("bottom")[0]);
   const warn=gridWarn(sp);
   // 下段が空、または設定でエリア名を変えて見つからないことがある。
@@ -3033,7 +3071,7 @@ function gridRows(){
          + (id!=null?`<span class="mk">${half?"半":""}</span>`:"")
          + `</td>`;
     });
-    rows+=`<tr class="grow">${tds}</tr>`;
+    rows+=`<tr class="grow">${tds}${padCell}</tr>`;
   }
   // 列番号
   let nums="";
@@ -3046,7 +3084,7 @@ function gridRows(){
     if(a) anchors.push(a);
   });
 
-  return {html: rows+`<tr>${nums}</tr>`, anchors, warn};
+  return {html: rows+`<tr>${nums}${padCell}</tr>`, anchors, warn};
 }
 
 /* 大きな配置図が出せない／欠けていることを伝える文。素のテキストを返す。
@@ -3071,8 +3109,8 @@ function gridNoticeText(w){
 
 /* 上の文を表の中の1行にする。#sheetMsg は印刷CSSで display:none になるので、
    紙に残すには表の中に置く必要がある。 */
-function gridNoticeRow(w){
-  return `<tr class="gnote"><td colspan="14">${esc(gridNoticeText(w))}</td></tr>`;
+function gridNoticeRow(w, cols){
+  return `<tr class="gnote"><td colspan="${cols}">${esc(gridNoticeText(w))}</td></tr>`;
 }
 
 /* 下段の欄からメインのスペースへ引き出し線を引く。
