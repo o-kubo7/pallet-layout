@@ -655,7 +655,27 @@ const FLOOR_POS = {
 // 「配置図の表」での欄の割り当て。エリア名は SPACES の sheet 属性から引く。
 // 返す順は SPACES の並び順。下段の先頭が基準エリアで、注釈を付けず、グリッドを描く。
 function sheetAreas(tier){ return SPACES.filter(s=>(s.sheet||"bottom")===tier).map(s=>s.name); }
-const SHEET_TOP_SLOTS = 4, SHEET_BOTTOM_SLOTS = 7; // 紙のレイアウトで決まる欄数。renderSheet と欄数超過の警告で共有
+/* 配置図の表の様式。荷物が多い日は上段・下段の欄を1つずつ増やした wide に切り替える。
+   総幅 672px は両方で同じ。672÷14=48、672÷16=42 でどちらも割り切れる。
+   ・normal … 現行の紙。左ブロック5列(240px)＋すき間1列(48px)＋上段4欄×2列(96px)＝14列
+   ・wide   … 左ブロック5列(210px)＋すき間1列(42px)＋上段5欄×2列(84px)＝16列
+              メインは14列×42px=588px で、右に2列(84px)余る。後日あふれブロックが入る用地。
+   左ブロックが両方とも5列なのは、曜日セルが5個並ぶため。5列未満にはできない。
+   wide の1列42pxは、あさ／ひるの丸印に要る36px（文字11px×2＋padding6＋border4＋tdの4）を満たす。
+   cols は SHEET_GRID_ORDER の要素数（メインの列数）以上でなければならない。
+   下回ると gridRows() の余り列が負になり、表が黙って崩れる。 */
+const SHEET_LAYOUTS = {
+  normal: {cols:14, colW:48, top:4, bottom:7},
+  wide:   {cols:16, colW:42, top:5, bottom:8},
+};
+/* 欄が足りない日だけ wide にする。判定は「まとめた後の欄数」（sheetSlots の戻り値）で行う。
+   上段だけが溢れた日でも上下段そろって wide になる。1つの表で列を共有しているので
+   上段と下段を別々の様式にはできない。 */
+function sheetLayout(topSlots, bottomSlots){
+  const n=SHEET_LAYOUTS.normal;
+  return (topSlots.length>n.top || bottomSlots.length>n.bottom) ? SHEET_LAYOUTS.wide : n;
+}
+const SHEET_TOP_SLOTS = SHEET_LAYOUTS.normal.top, SHEET_BOTTOM_SLOTS = SHEET_LAYOUTS.normal.bottom;
 
 /* ===== 品目マスタ（品名 → SNP。同じ品名で複数SNP可）===== */
 const DEFAULT_MASTER = (function(){
