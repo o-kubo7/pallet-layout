@@ -676,7 +676,6 @@ function sheetLayout(topSlots, bottomSlots){
   const n=SHEET_LAYOUTS.normal;
   return (topSlots.length>n.top || bottomSlots.length>n.bottom) ? SHEET_LAYOUTS.wide : n;
 }
-const SHEET_TOP_SLOTS = SHEET_LAYOUTS.normal.top, SHEET_BOTTOM_SLOTS = SHEET_LAYOUTS.normal.bottom;
 
 /* ===== 品目マスタ（品名 → SNP。同じ品名で複数SNP可）===== */
 const DEFAULT_MASTER = (function(){
