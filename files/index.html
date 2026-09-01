@@ -2838,7 +2838,7 @@ function renderSheet(){
   const ring=(v,on)=>on?`<span class="ring">${v}</span>`:v;
   const E='<td class="none"></td>';
 
-  // 全体を14列（雛形のB〜O列）の1つの表にして、列を揃える
+  // 全体を1つの表にして列を揃える。列数は様式で決まる（normal 14列＝雛形のB〜O列 / wide 16列）
   let rows="";
 
   // 行1：月日（列1から）＋ タイトル（下は太罫）
@@ -2862,14 +2862,14 @@ function renderSheet(){
   rows+=`<tr class="r3">${E}${slotCells(top,lay.top,"pallet")}</tr>`;
 
   // 行5：上段の注釈。行3 の rowspan は行4 までしか届かないので、
-  //      左5列はこの行で自分で埋める（5 + 1 + 4×2 = 14 列）
+  //      左5列はこの行で自分で埋める（5 + 1 + lay.top×2 = lay.cols。normal は 5+1+4×2=14 列、wide は 5+1+5×2=16 列）
   rows+=`<tr class="note-row"><td class="none" colspan="5"></td>${E}`
       + `${slotCells(top,lay.top,"note")}</tr>`;
 
   // 上下段の区切り（用紙では太罫1本）
   rows+=`<tr class="gap"><td class="none sep" colspan="${lay.cols}"></td></tr>`;
 
-  // 下段（7区画）：品名／ロット／パレット数／注記
+  // 下段（lay.bottom 区画。normal 7 / wide 8）：品名／ロット／パレット数／注記
   rows+=`<tr>${slotCells(bottom,lay.bottom,"name","bb2")}</tr>`;
   rows+=`<tr>${slotCells(bottom,lay.bottom,"lot")}</tr>`;
   // この行の各セルの下辺が引き出し線の起点になる
