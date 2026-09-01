@@ -2870,13 +2870,13 @@ function renderSheet(){
   rows+=`<tr class="gap"><td class="none" colspan="${lay.cols}"></td></tr>`;
 
   // グリッド（メイン）
-  const grid=gridRows();
+  const grid=gridRows(lay.cols-SHEET_GRID_ORDER.length);
   // グリッドが描けないときは、グリッドがあった位置に案内を出す。
   // 紙を見た人が「ここに図があるはずだ」と分かる位置に置く。
-  if(grid.warn && grid.warn.kind!=="extra") rows+=gridNoticeRow(grid.warn);
+  if(grid.warn && grid.warn.kind!=="extra") rows+=gridNoticeRow(grid.warn, lay.cols);
   rows+=grid.html;
   // 12列以上のときはグリッド自体は描けているので、案内はその下に置く
-  if(grid.warn && grid.warn.kind==="extra")  rows+=gridNoticeRow(grid.warn);
+  if(grid.warn && grid.warn.kind==="extra")  rows+=gridNoticeRow(grid.warn, lay.cols);
 
   host.innerHTML=`<div class="sheet"><div class="sheetbox"><table>
     <colgroup>${Array(lay.cols).fill(`<col style="width:${lay.colW}px">`).join("")}</colgroup>
@@ -2965,7 +2965,12 @@ function gridWarn(sp){
 // 欄の基準エリア（sheetEntries の baseArea）と必ず同じエリアにする。
 // ここを固定名にしておくと、基準エリアの掲載先を変えたときに
 // 欄とグリッドが別のエリアを指し、引き出し線が的外れになる。
-function gridRows(){
+/* pad: 表の右に余る列数。wide の様式ではメイン14列の右に2列（84px）余るので、
+   各行の末尾に空セルを足して表全体の列数をそろえる。
+   ここは後日あふれブロックが入る用地。罫線も背景色も持たせない
+   （背景色は既定で印刷されないため、意味を持たせてはいけない）。 */
+function gridRows(pad){
+  const padCell = pad>0 ? `<td class="none" colspan="${pad}"></td>` : "";
   const sp=lastSp.find(s=>s.name===sheetAreas("bottom")[0]);
   const warn=gridWarn(sp);
   // 下段が空、または設定でエリア名を変えて見つからないことがある。
@@ -3058,7 +3063,7 @@ function gridRows(){
          + (id!=null?`<span class="mk">${half?"半":""}</span>`:"")
          + `</td>`;
     });
-    rows+=`<tr class="grow">${tds}</tr>`;
+    rows+=`<tr class="grow">${tds}${padCell}</tr>`;
   }
   // 列番号
   let nums="";
@@ -3071,7 +3076,7 @@ function gridRows(){
     if(a) anchors.push(a);
   });
 
-  return {html: rows+`<tr>${nums}</tr>`, anchors, warn};
+  return {html: rows+`<tr>${nums}${padCell}</tr>`, anchors, warn};
 }
 
 /* 大きな配置図が出せない／欠けていることを伝える文。素のテキストを返す。
@@ -3096,8 +3101,8 @@ function gridNoticeText(w){
 
 /* 上の文を表の中の1行にする。#sheetMsg は印刷CSSで display:none になるので、
    紙に残すには表の中に置く必要がある。 */
-function gridNoticeRow(w){
-  return `<tr class="gnote"><td colspan="14">${esc(gridNoticeText(w))}</td></tr>`;
+function gridNoticeRow(w, cols){
+  return `<tr class="gnote"><td colspan="${cols}">${esc(gridNoticeText(w))}</td></tr>`;
 }
 
 /* 下段の欄からメインのスペースへ引き出し線を引く。
