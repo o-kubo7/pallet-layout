@@ -162,6 +162,97 @@
   .dspgrid label.chk{justify-content:flex-start}
   .dspgrid input[type=number]{width:72px}
 
+  /* ===== [試作] 退避スペース ===== */
+  .zone-stash{background:#eef2ff;color:#3730a3}
+  /* 倉庫のフロア図とは別立て。実在しない場所だと一目で分かるようにする */
+  .stashfloor{margin-top:14px;border-style:dashed;border-color:#a5b4fc;background:#fbfbff}
+  .stashlead{margin:6px 0 10px;font-size:11px;color:var(--muted)}
+  /* 倉庫に実在しない置き場なので、枠を破線にして実際のエリアと区別する */
+  #zone-stash .col,#zone-stash .hrow{border-style:dashed;background:#f8fafc}
+  #zone-stash .space .name{color:#4f46e5}
+  .stashbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted);
+            margin:6px 0 0}
+  .stashbar b{color:#3730a3}
+  /* ===== [試作] なぞって選ぶ ===== */
+  /* touch-action は指が触れた瞬間に評価される。なぞり始めてから付けても遅く、
+     ブラウザが先にパンを始めて pointercancel で中断する。だからサブモードの
+     あいだは全マスにあらかじめ付けておく（マウスにはこの制約が無い）。 */
+  #mapBody.sweep .cell[data-lot]{touch-action:none;cursor:crosshair}
+  /* 指のときだけ「画面を動かす／なぞる」の2択。判定そのものはPCと同じなので、
+     覚えることは増やさない。ボタン自体に何が起きるかを書く。 */
+  .toolctl{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;margin-bottom:10px}
+  .toolctl .lbl{font-size:12px;color:var(--muted);align-self:center;margin-right:2px}
+  .toolbtn{border:2px solid var(--line);background:#fff;border-radius:10px;padding:7px 14px;min-height:54px;
+           cursor:pointer;color:#374151;display:flex;flex-direction:column;align-items:center;justify-content:center;
+           gap:1px;font-size:13px;font-weight:700;line-height:1.3;min-width:118px}
+  .toolbtn i{font-style:normal;font-size:11px;font-weight:400;color:var(--muted)}
+  .toolbtn.on{border-color:var(--accent);background:#eff6ff;color:#1d4ed8}
+  .toolbtn.on i{color:#3b82f6}
+  /* 盤の上端に貼りつく状態表示。長い盤をたどっても、いまの状態が視界から消えない */
+  /* 取り消しは帯の中に入れる。盤をたどっている最中でも指の近くに残る */
+  .toolflag{position:sticky;top:0;z-index:30;display:none;padding:9px 12px;border-radius:8px;
+            font-size:13px;font-weight:700;color:#fff;text-align:center;margin-bottom:8px;
+            gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
+  .flagundo{border:0;border-radius:6px;padding:7px 12px;background:#fff;color:#1f2937;
+            font-weight:700;font-size:12px;cursor:pointer;min-height:38px}
+  .toolflag{background:#334155}
+  .toolflag.hasSel{background:#2563eb}
+  #mapBody.sweep{outline:3px solid #2563eb;outline-offset:8px;border-radius:6px}
+  /* 運んでいる間は、選んだマスを薄くして「いま持ち上げている」ことを示す。
+     指の下の吹き出しだけだと、マスの上に重ねるまで移動中だと分からない。 */
+  #mapBody.moving .cell.sel{opacity:.4}
+
+  #mapBody.sweep .scroller{background-image:none}
+  /* 退避スペース。盤のすぐそばに置きたいので、既定は画面の隅に浮かせる。
+     position:sticky＋float なので #mapBody の中だけに居る。タブやヘッダを覆わない。
+     役目は3つで、状態で入れ替わる。
+       ふだん  … 中身をマスで見せる
+       掴み中  … 受け皿（⇩ ここへ）
+       選択中  … 倉庫へ戻す */
+  .stashdock{z-index:60;background:#eef2ff;border:2px solid #6366f1;border-radius:10px;
+             padding:5px 6px;box-shadow:0 6px 20px rgba(0,0,0,.16);
+             display:flex;flex-direction:column;gap:3px;overflow:hidden;--cell:16px}
+  /* タブ列が sticky なので、その高さぶん下げないとタブを覆ってしまう。
+     高さは JS が測って --docktop に入れる（端末で変わるため）。 */
+  .stashdock.pos-tr,.stashdock.pos-tl{position:sticky;top:var(--docktop,56px);
+             width:33vw;height:33vw;min-width:118px;min-height:118px;max-width:190px;max-height:190px}
+  .stashdock.pos-tr{float:right;margin:0 0 6px 8px}
+  .stashdock.pos-tl{float:left;margin:0 8px 6px 0}
+  .stashdock.pos-bottom{position:fixed;left:0;right:0;bottom:0;width:auto;height:auto;
+             border-radius:0;border-width:2px 0 0 0;padding:6px 12px calc(6px + var(--safe))}
+  /* PC は盤が広いので、隅に置いても邪魔にならない大きさにする */
+  @media (min-width:700px){
+    .stashdock.pos-tr,.stashdock.pos-tl{width:240px;height:210px;max-width:none;max-height:none;--cell:18px}
+  }
+  .stashdock.big.pos-tr,.stashdock.big.pos-tl{width:72vw;height:56vh;max-width:520px;max-height:560px;--cell:20px}
+  .sb-head{display:flex;align-items:center;gap:4px;flex:none}
+  /* 「退避スペース 12P」は狭い枠に入りきらないことがあるので、折り返しを許す */
+  .sb-title{font-weight:700;font-size:11px;line-height:1.3;color:#312e81;flex:1;min-width:0}
+  .sb-exp{border:1px solid #c7d2fe;background:#fff;color:#312e81;border-radius:6px;
+          min-width:30px;min-height:28px;font-size:12px;font-weight:700;cursor:pointer;flex:none}
+  .sb-body{flex:1;min-height:0;overflow:auto;background:#fff;border-radius:6px;padding:4px}
+  .stashdock.pos-bottom .sb-body{max-height:96px}
+  .sb-body .spaces{gap:6px}
+  .sb-body .space .name{display:none}
+  .sb-body .colcap{font-size:9px;margin-top:1px}
+  .sb-empty{color:#6b7280;font-size:11px;line-height:1.4;padding:6px 2px;text-align:center}
+  .sb-back{display:none;flex:none;border:0;border-radius:6px;background:#2563eb;color:#fff;
+           font-weight:700;font-size:12px;min-height:34px;cursor:pointer}
+  .stashdock.acting .sb-back{display:block}
+  .stashdock.acting{background:#fef3c7;border-color:#f59e0b}
+  /* 掴んでいる間は中身をそのまま見せ、枠だけで「ここに落とせる」と知らせる。
+     素の状態から「ここへドラッグ」と書いてあるので、文字を出し直す必要はない。 */
+  .stashdock.dropping{border-color:#4338ca;box-shadow:0 0 0 3px #c7d2fe,0 6px 20px rgba(0,0,0,.16);
+                      pointer-events:none}
+  .stashdock.dropping.hit{border-color:#312e81;background:#c7d2fe;
+                          box-shadow:0 0 0 5px #6366f1,0 8px 24px rgba(0,0,0,.25)}
+  /* 帯もタブの下に貼りつける（退避スペースと同じ基準にそろえる） */
+  .toolflag{top:var(--docktop,56px)}
+  /* 退避スペースは float なので、帯の文字は自動でその手前で折り返す。
+     padding を足すと二重に狭まって1行が数文字になるので、足さない。 */
+  /* 下に置いたときだけ、バーのぶんの余白を作る */
+  #mapBody.dock-bottom{padding-bottom:130px}
+
   .msg{padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:10px}
   .msg.ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
   .msg.warn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
@@ -455,8 +546,25 @@
       </h2>
       <div id="editHint" class="hint" style="display:none;margin-bottom:8px">✏ 編集モード：マスをタップするとその列が「通路（灰・破線）」⇔「通常」に切り替わります。</div>
       <div id="moveHint" class="hint" style="display:none;margin-bottom:8px">✋ 移動モード：同じロットのマスをタップして選び、選んだマスをドラッグして別の列へ運びます。
+        退避スペースへも運べます。<span id="selCount"></span>
         <button class="btn-mini" onclick="clearSel()">選択解除</button></div>
+      <div class="toolctl" id="toolCtl" style="display:none">
+        <span class="lbl">指の使い方</span>
+        <button class="toolbtn on" id="toolScrollBtn" onclick="setTool('scroll')">👆 画面を動かす<i>タップで1マスずつ</i></button>
+        <button class="toolbtn" id="toolSweepBtn" onclick="setTool('sweep')">🖐 なぞる<i>まとめて選ぶ・外す</i></button>
+      </div>
 
+
+      <div class="sizectl" id="dockCtl">
+        <span class="lbl">案内</span>
+        <button class="sizebtn on" id="navOnBtn" onclick="setNav(true)">表示</button>
+        <button class="sizebtn" id="navOffBtn" onclick="setNav(false)">非表示</button>
+        <span class="grp"><span class="lbl">退避スペースの位置</span>
+          <button class="sizebtn" id="dockTlBtn" onclick="setDockPos('tl')">左上</button>
+          <button class="sizebtn on" id="dockTrBtn" onclick="setDockPos('tr')">右上</button>
+          <button class="sizebtn" id="dockBtBtn" onclick="setDockPos('bottom')">下</button>
+        </span>
+      </div>
       <div class="sizectl" id="sizeCtl">
         <span class="lbl">マスの大きさ</span>
         <button class="sizebtn" data-size="20" onclick="setCellSize(20)">小</button>
@@ -466,6 +574,22 @@
 
       <div id="messages"></div>
       <div id="mapBody">
+        <!-- [試作] 退避スペース。既定は右上。#mapBody の中に置くので、
+             上のタブやヘッダを覆わずに、盤のそばへ貼りつく。 -->
+        <div class="stashdock pos-tr" id="stashDock">
+          <div class="sb-head">
+            <span class="sb-title">退避</span>
+            <button class="sb-exp" id="sbExpBtn" onclick="toggleStashPanel()" aria-label="広げる">⤢</button>
+          </div>
+          <div class="sb-body"><div class="spaces" id="zone-stash-mini"></div>
+            <div class="sb-empty" id="sbEmpty">ここへ<br>ドラッグ</div></div>
+          <button class="sb-back" id="sbBackBtn" onclick="returnSelToWarehouse()">◀ 倉庫へ戻す</button>
+        </div>
+        <div class="toolflag" id="toolFlag">
+          <span id="toolFlagText"></span>
+          <button class="flagundo" id="sweepUndoBtn" style="display:none"
+                  onclick="undoSweep()">↩ いまのなぞりを取り消す</button>
+        </div>
         <div id="legend" class="legend"></div>
 
         <div class="floor">
@@ -477,6 +601,17 @@
           <div class="zone-title zone-near">倉庫内（収納庫に近い）</div>
           <div class="scroller"><div class="spaces" id="zone-near"></div></div>
         </div>
+
+        <!-- [試作] 第3のゾーン。倉庫に実在しないので、フロア図の枠の外に別立てで置く -->
+        <div class="floor stashfloor">
+          <div class="zone-title zone-stash">退避スペース</div>
+          <p class="stashlead">倉庫には無い、画面の上だけの置き場。編集のあいだ荷物を逃がして、倉庫の側を空けるために使います。</p>
+          <div class="scroller"><div class="spaces" id="zone-stash"></div></div>
+          <div class="stashbar" id="stashBar"></div>
+          <button class="btn btn-ghost" id="stashBackBtn" style="display:none;margin-top:8px"
+                  onclick="returnSelToWarehouse()">選択したマスを倉庫へ戻す</button>
+        </div>
+
 
         <div class="note" style="margin-top:10px">
           <span><b>越</b>＝通路へはみ出し</span>
@@ -637,6 +772,11 @@ const DEFAULT_SPACES = [
   // あふれ受け。普段はここまで来ない
   {name:"出庫口横", zone:"far", orient:"h", block:99, sheet:"top", cols:[{h:2},{h:2}]},
   {name:"5棟壁際", zone:"far", orient:"h", block:99, sheet:"top", cols:[{h:6},{h:6},{h:6}]},
+  // [試作] 退避スペース。倉庫には実在しない、編集のあいだだけ使う置き場。
+  // 自動配置では使わず（areaCandidates）、配置図の表にも欄を作らない（sheet:"none"）。
+  // 列は足りなくなったら ensureStashRoom() が足す。
+  {name:"退避", zone:"stash", orient:"v", block:99, align:"top", sheet:"none",
+   cols:[{h:7},{h:7},{h:7}]},
 ];
 // 運用上ひとつづきに使うエリア。①が埋まったら②へ、と列を連結して連続窓を探す。
 // 設定でスペース名を変えるとこの連結は外れ、別エリア扱いになる。
@@ -730,7 +870,7 @@ let fracMode=false;   // true なら「満載数P 半」表記
 const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", display:"palletApp.display", merge:"palletApp.merge"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
-const SPACES_SAVE_VERSION = 2;
+const SPACES_SAVE_VERSION = 3;   // [試作] 退避スペースを足したので上げる
 // 列の高さ・列数・エリア数の上限。drawZone() は col.h 個の div を innerHTML で
 // 組み立てるので、上限のない値（打ち間違いの桁違い等）はタブを固まらせる。
 // 例外にならないので bootDraw() の try/catch では捕まえられない。
@@ -1537,6 +1677,9 @@ function areaCandidates(sp){
   // 空のまま残したいため。AREA_GROUPS の連結も byName に入らないことで自然に外れる。
   const overNames=new Set(sheetAreas("over"));
   sp=sp.filter(s=>!overNames.has(s.name));
+  // [試作] 退避スペースは倉庫ではないので、自動配置の候補に入れない。
+  // 手で運び込むことだけができる。
+  sp=sp.filter(s=>s.zone!=="stash");
   const byName={}; sp.forEach(s=>byName[s.name]=s);
   const done=new Set(), out=[];
   const push=members=>{
@@ -1703,6 +1846,12 @@ function renderResult(lots, unknown, typeMix){
     warnHtml+=`<div class="msg warn">⚠ 次のエリアには荷物が残っています（配置図の表には出ません）：${overStillFilled.join("・")}。「▶ 自動配置を作成」をもう一度押すか、掲載先を戻してください。</div>`;
   }
 
+  // [試作] 退避に残ったままだと配置図の表（紙）に出ない。既存の
+  // 「over エリアに荷物が残っています」と同じ趣旨の知らせを退避にも出す。
+  const stashN=stashTotal(sp);
+  if(stashN>0){
+    warnHtml+=`<div class="msg warn">⚠ 退避スペースに ${stashN}P 残っています。配置図の表には出ません。倉庫内・倉庫外へ戻してください。</div>`;
+  }
   if(over.length){
     m.innerHTML=warnHtml+`<div class="msg warn">⚠ 入りきらない荷物があります：${over.map(l=>`${l.name}(${l.code}) 残${l.rem}P`).join(" / ")}</div>`;
   }else{
@@ -1715,6 +1864,14 @@ function renderResult(lots, unknown, typeMix){
 
   drawZone("zone-far", sp.filter(s=>s.zone==="far"), colorOf);
   drawZone("zone-near", sp.filter(s=>s.zone==="near"), colorOf);
+  // [試作] 描く前に空き列を整える。1本余らせておかないと
+  // 「移動先の空きが足りません」で退避できなくなる。
+  ensureStashRoom(sp);
+  drawZone("zone-stash", sp.filter(s=>s.zone==="stash"), colorOf);
+  // 下のバーの中にも同じマスを描く。キーが同じなので、どちらで選んでも同じ扱いになる
+  drawZone("zone-stash-mini", sp.filter(s=>s.zone==="stash"), colorOf);
+  drawStashBar(sp, lots);
+  drawStashDock(sp, lots);
 
   const total=lots.reduce((a,b)=>a+b.pallets,0);
   const rem=over.reduce((a,b)=>a+b.rem,0);
@@ -1744,13 +1901,25 @@ function run(goMap){
     document.getElementById("legend").innerHTML="";
     document.getElementById("zone-far").innerHTML="";
     document.getElementById("zone-near").innerHTML="";
+    document.getElementById("zone-stash").innerHTML="";
     document.getElementById("summary").textContent="";
     if(goMap) switchTab('edit');
     return;
   }
 
   const allowMix=document.getElementById("mixChk").checked;
+  // [試作] 退避は自動配置し直しても残す。荷物が多い日に逃がしたものが
+  // 「▶ 自動配置を作成」で倉庫へ戻ってしまうと、退避そのものが用を成さない。
+  // ロットIDは入力行の順番で変わるので、readLots() と同じ 品名＋ロット で引き当てる。
+  const keepStash=stashCounts();
+  lots.forEach(l=>{
+    const n=keepStash[lotKey(l)]||0;
+    if(n>0){ l.stashed=Math.min(n,l.pallets); l.pallets-=l.stashed; }
+  });
   lastSp=place(lots,allowMix); lastLots=lots; hasResult=true;
+  // 倉庫へ置く分だけを place() に渡したので、退避分をここで積み戻し、
+  // 合計表示のためにパレット数も元に戻す。
+  lots.forEach(l=>{ if(l.stashed){ putToStash(lastSp,l.id,l.stashed); l.pallets+=l.stashed; } });
   lastFp=inputFingerprint();   // この配置を作った時点の入力と列構成
   clearManual();               // 配置し直したので手動調整は捨てる
 
@@ -1945,6 +2114,9 @@ function areaKeyOf(name){
 function blockCountOf(sp, lotId){
   const groups={};
   sp.forEach(s=>{
+    // [試作] 退避は倉庫の中の「何か所に分かれたか」に数えない。
+    // 数えると、一部を退避するたびに「2か所に分かれます」と聞かれてしまう。
+    if(s.zone==="stash") return;
     const k=areaKeyOf(s.name);
     (groups[k]=groups[k]||[]).push(...s.cols);
   });
@@ -2063,7 +2235,10 @@ function setMoveMode(on){
   b.className = "btn "+(on?"btn-on":"btn-ghost");
   b.textContent = on?"移動を終了":"ロットを移動";
   document.getElementById("moveHint").style.display = on?"block":"none";
-  if(!on) clearSel();
+  // [試作] 指の2択は移動モードの中だけ。マウスだけの端末には出さない
+  document.getElementById("toolCtl").style.display = (on && isTouchDevice())?"flex":"none";
+  if(!on){ clearSel(); setTool("scroll"); }
+  updateFlag();
 }
 // 2つのモードは排他。通路編集は前提そのものを変えるので、従来どおり配置し直す。
 function toggleEdit(){
@@ -2090,6 +2265,9 @@ function toggleMove(){
 function clearSel(){
   sel.lotId=null; sel.cells.clear();
   document.querySelectorAll(".cell.sel").forEach(c=>c.classList.remove("sel"));
+  if(typeof showSelCount==="function") showSelCount();
+  if(typeof hideSweepUndo==="function") hideSweepUndo();
+  if(typeof drawStashDock==="function") drawStashDock(lastSp, lastLots);
 }
 function cellKey(cellEl){
   const w=cellEl.closest(".colwrap");
@@ -2105,6 +2283,8 @@ function toggleCell(cellEl){
   if(sel.cells.has(k)){ sel.cells.delete(k); cellEl.classList.remove("sel"); }
   else { sel.cells.add(k); cellEl.classList.add("sel"); }
   if(sel.cells.size===0) sel.lotId=null;
+  showSelCount();
+  hideSweepUndo();          // タップで選び直したら、なぞりの取り消しは出さない
 }
 
 document.addEventListener("click",e=>{
@@ -2245,7 +2425,9 @@ function highlightDrop(x,y){
 // 端の自動スクロールは rAF で回す。pointermove の中で送ると、
 // 指を端で止めた瞬間にイベントが来なくなってスクロールも止まる。
 function edgeTick(){
-  if(!drag || !drag.started){ edge.raf=0; return; }
+  // [試作] なぞり選択中も端で送る
+  const live = (drag && drag.started) || (sweep && sweep.started);
+  if(!live){ edge.raf=0; return; }
   const x=edge.x, y=edge.y;
   document.querySelectorAll("#mapBody .scroller").forEach(sc=>{
     const r=sc.getBoundingClientRect();
@@ -2269,10 +2451,15 @@ function endDrag(){
   drag=null; lastDropKey=null;
   if(edge.raf){ cancelAnimationFrame(edge.raf); edge.raf=0; }
   clearDropMark();
+  showStashDock(false);
+  if(typeof setMoving==="function") setMoving(false);
 }
 // 検証して lastSp を更新する。動くマスが無い場合と容量不足は黙って中止する。
 function applyMove(spaceName, colIndex){
   const counts=selCounts(sel.cells);
+  // [試作] 退避スペースは倉庫に実在しないので、列の高さは制約ではない。
+  // 落とす枚数が入るところまで伸ばす（倉庫のエリアには何もしない）。
+  growStashCol(spaceName, colIndex, movingCount(counts, spaceName, colIndex));
   const v=validateMove(lastSp, sel.lotId, counts, spaceName, colIndex);
   if(!v.ok) return;
   if(v.needConfirm){
@@ -2291,11 +2478,9 @@ document.addEventListener("pointerdown",e=>{
   // 乗っ取ると1本目のゴーストが孤児になって画面に残る。
   if(drag) return;
   dragMoved=false;
-  if(!moveMode || !sel.cells.size) return;
-  if(e.button!=null && e.button!==0) return;    // 右クリック・中クリックでは始めない
-  const c=e.target.closest(".cell"); if(!c) return;
-  if(!c.classList.contains("sel")) return;      // 選択済みのマスからだけ掴める
-  drag={id:e.pointerId, x0:e.clientX, y0:e.clientY, started:false, ghost:null, target:c};
+  // [試作] ここでは掴まない。選択済みのマスから始めた指が「外す」なのか
+  // 「運ぶ」なのかは、そのあと指がどこへ行ったかで決まる（下の「マスの選び方」）。
+  // 決まった時点で drag を組み立てるので、以降は従来どおりの移動処理が動く。
 });
 document.addEventListener("pointermove",e=>{
   if(!drag || e.pointerId!==drag.id) return;
@@ -2311,14 +2496,29 @@ document.addEventListener("pointermove",e=>{
   }
   drag.ghost.style.left=e.clientX+"px";
   drag.ghost.style.top =e.clientY+"px";
-  highlightDrop(e.clientX, e.clientY);
+  // [試作] 退避スペースは盤のずっと下にある。指で運べる距離ではないので、
+  // 掴んでいるあいだだけ画面下端に受け皿を出す。
+  showStashDock(true);
+  if(overStashDock(e.clientX, e.clientY)){
+    document.getElementById("stashDock").classList.add("hit");
+    clearDropMark(); lastDropKey="__dock";
+  }else{
+    document.getElementById("stashDock").classList.remove("hit");
+    highlightDrop(e.clientX, e.clientY);
+  }
   edgeScroll(e.clientX, e.clientY);
 });
 document.addEventListener("pointerup",e=>{
   if(!drag || e.pointerId!==drag.id) return;
   const started=drag.started, x=e.clientX, y=e.clientY;
+  const onDock = started && overStashDock(x,y);   // [試作] 受け皿の上で離したか
   endDrag();
   if(!started) return;                          // 動いていなければタップ（click 側で処理）
+  if(onDock){
+    const s=stashSpaces(lastSp)[0];
+    if(s) applyMove(s.name, firstFreeStashCol());
+    return;
+  }
   const w=wrapAt(x,y); if(!w) return;
   applyMove(w.dataset.space, parseInt(w.dataset.col));
 });
@@ -2327,13 +2527,454 @@ document.addEventListener("pointerup",e=>{
 document.addEventListener("pointercancel",e=>{ if(drag && e.pointerId===drag.id) endDrag(); });
 document.addEventListener("lostpointercapture",e=>{ if(drag && e.pointerId===drag.id) endDrag(); });
 
+/* ---------- [試作] 退避スペース ---------- */
+const STASH_COL_H=4;            // 退避の1列の高さ。隅の小さな盤に収まる高さにする
+const STASH_MAX_COLS=14;        // 際限なく伸ばさない
+const STASH_COL_MAX_H=21;       // 1列に積める上限（架空の場所なので倉庫より緩い）
+function lotKey(l){ return (l.name||"")+"\u0000"+(l.lot||""); }
+function stashSpaces(sp){ return (sp||[]).filter(s=>s.zone==="stash"); }
+// 退避に今ある枚数を {品名\0ロット: 枚数} で返す
+function stashCounts(){
+  const out={};
+  if(!lastSp||!lastLots) return out;
+  stashSpaces(lastSp).forEach(s=>s.cols.forEach(c=>c.fills.forEach(f=>{
+    const l=lastLots.find(x=>x.id===f.id); if(!l) return;
+    const k=lotKey(l); out[k]=(out[k]||0)+f.count;
+  })));
+  return out;
+}
+function stashTotal(sp){
+  let n=0;
+  stashSpaces(sp||lastSp).forEach(s=>s.cols.forEach(c=>{ n+=used(c); }));
+  return n;
+}
+// 退避スペースへ直に積む。自動配置のあとから呼ぶ
+function putToStash(sp,lotId,count){
+  const s=stashSpaces(sp)[0]; if(!s) return;
+  let rem=count;
+  while(rem>0){
+    let col=s.cols.find(c=>used(c)<c.h);
+    if(!col){
+      if(s.cols.length>=STASH_MAX_COLS) return;
+      col={h:STASH_COL_H,aisle:false,fills:[]}; s.cols.push(col);
+    }
+    const put=Math.min(rem,col.h-used(col));
+    col.fills.push({id:lotId,count:put}); rem-=put;
+  }
+  normalizeFills(sp);
+}
+function firstFreeStashCol(){
+  const s=stashSpaces(lastSp)[0]; if(!s) return 0;
+  for(let i=0;i<s.cols.length;i++) if(used(s.cols[i])<s.cols[i].h) return i;
+  return s.cols.length-1;
+}
+// 退避の列だけ、落とす枚数が入るまで高さを伸ばす
+function growStashCol(spaceName, colIndex, n){
+  const s=stashSpaces(lastSp).find(x=>x.name===spaceName); if(!s) return;
+  const c=s.cols[colIndex]; if(!c) return;
+  const need=used(c)+n;
+  if(need>c.h) c.h=Math.min(need, STASH_COL_MAX_H);
+}
+function overStashDock(x,y){
+  const d=document.getElementById("stashDock");
+  if(!d || !d.classList.contains("dropping")) return false;
+  const r=d.getBoundingClientRect();
+  return x>=r.left && x<=r.right && y>=r.top && y<=r.bottom;
+}
+function showStashDock(on){
+  const d=document.getElementById("stashDock"); if(!d) return;
+  // 退避の中身だけを掴んでいるときは受け皿にしない（同じ場所へ落とすだけになる）
+  const fromWarehouse=[...sel.cells].some(k=>k.split("|")[0]!=="退避");
+  d.classList.toggle("dropping", !!(on && fromWarehouse));
+}
+/* 退避の中は位置に意味が無いので、描く前に詰め直して形をそろえる。
+   落とすたびに列の高さが伸びると、隅の小さな盤では形が崩れて読めなくなる。 */
+function repackStash(sp){
+  stashSpaces(sp).forEach(s=>{
+    const items=[];
+    s.cols.forEach(c=>c.fills.forEach(f=>items.push({id:f.id,count:f.count})));
+    const merged=[];
+    items.forEach(it=>{
+      const last=merged[merged.length-1];
+      if(last && last.id===it.id) last.count+=it.count; else merged.push({id:it.id,count:it.count});
+    });
+    s.cols=[]; let col=null;
+    merged.forEach(it=>{
+      let rem=it.count;
+      while(rem>0){
+        if(!col || used(col)>=col.h){ col={h:STASH_COL_H,aisle:false,fills:[]}; s.cols.push(col); }
+        const put=Math.min(rem, col.h-used(col));
+        col.fills.push({id:it.id,count:put}); rem-=put;
+      }
+    });
+    if(!s.cols.length) s.cols.push({h:STASH_COL_H,aisle:false,fills:[]});
+  });
+}
+// 末尾に空き列を1本だけ残す。0本だと運び込めず、2本以上あると横に間延びする。
+// 空になった列は伸ばした高さも戻す
+function ensureStashRoom(sp){
+  repackStash(sp);
+  stashSpaces(sp).forEach(s=>{
+    s.cols.forEach(c=>{ if(used(c)===0) c.h=STASH_COL_H; });
+    while(s.cols.length>1 && used(s.cols[s.cols.length-1])===0
+                          && used(s.cols[s.cols.length-2])===0) s.cols.pop();
+    const last=s.cols[s.cols.length-1];
+    if((!last || used(last)>0) && s.cols.length<STASH_MAX_COLS)
+      s.cols.push({h:STASH_COL_H,aisle:false,fills:[]});
+  });
+}
+/* 退避スペースの表示。タブを切り替えると #tab-edit ごと display:none になるので、
+   タブの出し分けは要らない。中身はマスで見せる（退避も「置き場」なので、
+   盤と同じ見た目・同じ操作で扱えるほうが覚えることが少ない）。 */
+function drawStashDock(sp, lots){
+  const d=document.getElementById("stashDock"); if(!d) return;
+  d.style.display=hasResult?"flex":"none";
+  const inStash = sel.cells.size>0 && [...sel.cells].every(k=>k.split("|")[0]==="退避");
+  d.classList.toggle("acting", inStash);
+  const per={};
+  stashSpaces(sp||lastSp||[]).forEach(s=>s.cols.forEach(c=>c.fills.forEach(f=>{
+    per[f.id]=(per[f.id]||0)+f.count;
+  })));
+  const total=Object.keys(per).reduce((a,k)=>a+per[k],0);
+  d.querySelector(".sb-title").textContent = inStash
+    ? sel.cells.size+"マス選択中"
+    : (total? "退避スペース "+total+"P" : "退避スペース");
+  // 空のときは空っぽの列を見せない。「ここへドラッグ」だけにする
+  const emp=document.getElementById("sbEmpty");
+  if(emp) emp.style.display = total? "none" : "block";
+  const mini=document.getElementById("zone-stash-mini");
+  if(mini) mini.style.display = total? "" : "none";
+  if(!total) d.classList.remove("big");
+}
+// 広げる／戻す。狭い隅では全部が見えないことがあるので、確かめたいときだけ大きくする
+function toggleStashPanel(){
+  const d=document.getElementById("stashDock");
+  d.classList.toggle("big");
+  document.getElementById("sbExpBtn").textContent=d.classList.contains("big")?"⤡":"⤢";
+}
+
+/* 退避スペースの位置。右利きは右上、左利きは左上。下は従来の帯。
+   指の移動を短くするための設定なので、選んだら覚えておく。 */
+let dockPos="tr";
+// タブ列の高さを測って、貼りつく位置の基準にする
+function syncDockTop(){
+  const t=document.querySelector(".tabs");
+  const h=t?Math.round(t.getBoundingClientRect().height):48;
+  document.documentElement.style.setProperty("--docktop",(h+8)+"px");
+}
+window.addEventListener("resize",syncDockTop);
+function setDockPos(v){
+  syncDockTop();
+  dockPos=(v==="tl"||v==="bottom")?v:"tr";
+  const d=document.getElementById("stashDock"), m=document.getElementById("mapBody");
+  if(d) d.className="stashdock pos-"+dockPos+(d.classList.contains("big")?" big":"");
+  if(m){ ["tr","tl","bottom"].forEach(k=>m.classList.toggle("dock-"+k, k===dockPos)); }
+  [["dockTrBtn","tr"],["dockTlBtn","tl"],["dockBtBtn","bottom"]].forEach(function(x){
+    const b=document.getElementById(x[0]);
+    if(b) b.classList.toggle("on", dockPos===x[1]);
+  });
+  saveData("palletApp.stashPos", dockPos);
+  drawStashDock(lastSp, lastLots);
+}
+/* 案内（盤の上の帯）の表示・非表示。慣れた人には邪魔になるため。
+   ただし「いまのなぞりを取り消す」だけは、非表示でも出す。取り消せないと困る。 */
+let navShow=true;
+function setNav(on){
+  navShow=!!on;
+  const a=document.getElementById("navOnBtn"), b=document.getElementById("navOffBtn");
+  if(a) a.classList.toggle("on", navShow);
+  if(b) b.classList.toggle("on", !navShow);
+  saveData("palletApp.navShow", navShow);
+  updateFlag();
+}
+// 退避の中身を1行で見せる。誰が何枚逃げているかが分からないと戻し忘れる
+// 退避の中身を1行で見せる。誰が何枚逃げているかが分からないと戻し忘れる
+function drawStashBar(sp, lots){
+  const el=document.getElementById("stashBar"); if(!el) return;
+  const per={};
+  stashSpaces(sp).forEach(s=>s.cols.forEach(c=>c.fills.forEach(f=>{
+    per[f.id]=(per[f.id]||0)+f.count;
+  })));
+  const ids=Object.keys(per);
+  if(!ids.length){ el.innerHTML='<span>いまは空です。マスを選んでここへ運ぶと、倉庫の側が空きます。</span>'; return; }
+  el.innerHTML='<span>退避中：</span>'+ids.map(id=>{
+    const l=(lots||lastLots||[]).find(x=>x.id===parseInt(id));
+    return '<span><b>'+(l?esc(l.name)+" / "+(esc(l.lot)||"—"):"?")+'</b> '+per[id]+'P</span>';
+  }).join("　");
+}
+
+/* ---------- [試作] マスの選び方 ----------
+   覚えることを1つにするため、PCでもスマホでも判定は同じにする。
+
+     未選択のマスから  … タップで選ぶ／なぞると続けて選ぶ
+     選択済みのマスから … 選択の中をなぞると外れる
+                         選択の外へ出すと運ぶ（従来のドラッグ）
+     タップは今までどおり1マスの入り切り
+
+   選択済みのマスから始めたとき、外すのか運ぶのかは
+   「そのあと指がどこへ行ったか」で決める。中に留まれば外す、外へ出れば運ぶ。
+   外し始めたあとで外へ出た場合は、外した分を戻してから運びに切り替える
+   （下の受け皿まで指を引くと、途中で自分の選択の上を通るため）。
+
+   違うのは指だけ。指はマスに触れた瞬間にブラウザがスクロールを始めてしまい、
+   触れたあとから touch-action:none にはできない。だから指のときだけ
+   「画面を動かす／なぞる」の2択を出す。マウスにこの制約は無いので出さない。 */
+let tool="scroll";               // 指のときだけ意味を持つ： "scroll" | "sweep"
+let sweep=null;                  // {id,x0,y0,started,target,mode,erased,lotId0}
+let sweepUndo=null;              // ひとなぞり前の選択（取り消し用）
+
+function isTouchDevice(){
+  try{ return window.matchMedia("(any-pointer: coarse)").matches; }
+  catch(e){ return "ontouchstart" in window; }
+}
+function setTool(t){
+  tool=t;
+  document.getElementById("mapBody").classList.toggle("sweep", t==="sweep");
+  [["toolScrollBtn","scroll"],["toolSweepBtn","sweep"]].forEach(function(x){
+    const b=document.getElementById(x[0]);
+    if(b) b.classList.toggle("on", t===x[1]);
+  });
+  updateFlag();
+}
+// 盤の上端に貼りつく帯。いまの状態と、直前のなぞりの取り消しを出す。
+// 盤は縦に長いので、下までたどっても状態が視界から消えないようにする。
+function updateFlag(){
+  const f=document.getElementById("toolFlag"), t=document.getElementById("toolFlagText");
+  if(!f||!t) return;
+  const n=sel.cells.size;
+  const moving=document.getElementById("mapBody").classList.contains("moving");
+  let msg="";
+  if(moving)               msg="✋ "+n+"マスを運んでいます ／ 置きたい列の上で指を離してください";
+  else if(n>0)             msg="✋ "+n+"マス選択中 ／ そのまま外へドラッグで運ぶ・選択の中をなぞると外れる";
+  else if(tool==="sweep")  msg="🖐 マスをなぞると、同じロットをまとめて選べます";
+  else if(moveMode)        msg="👆 マスをタップすると選べます";
+  if(!navShow) msg="";
+  t.textContent=msg;
+  const ub=document.getElementById("sweepUndoBtn");
+  const undoOn = ub && ub.style.display!=="none";
+  f.style.display=(moveMode && (msg||undoOn))?"flex":"none";
+  f.classList.toggle("hasSel", n>0);
+}
+function showSweepUndo(){
+  const b=document.getElementById("sweepUndoBtn"); if(b) b.style.display="";
+  updateFlag();
+}
+function hideSweepUndo(){
+  sweepUndo=null;
+  const b=document.getElementById("sweepUndoBtn"); if(b) b.style.display="none";
+  if(typeof updateFlag==="function") updateFlag();
+}
+// なぞりすぎたときの逃げ道。1タップでひとなぞり前に戻す
+function undoSweep(){
+  if(!sweepUndo) return;
+  sel.lotId=sweepUndo.lotId;
+  sel.cells=new Set(sweepUndo.cells);
+  repaintSel();
+  hideSweepUndo();
+}
+// sel の中身どおりに .sel を貼り直す
+function repaintSel(){
+  document.querySelectorAll("#mapBody .cell.sel").forEach(c=>c.classList.remove("sel"));
+  document.querySelectorAll("#mapBody .cell[data-lot]").forEach(c=>{
+    if(sel.cells.has(cellKey(c))) c.classList.add("sel");
+  });
+  showSelCount();
+}
+function afterSelChange(){ showSelCount(); updateFlag(); drawStashDock(lastSp, lastLots); }
+function showSelCount(){
+  const el=document.getElementById("selCount");
+  if(el) el.textContent = sel.cells.size ? "（"+sel.cells.size+"マス選択中）" : "";
+  if(typeof updateFlag==="function") updateFlag();
+  // タップで選んだときもここを通るので、退避スペースの表示も合わせる
+  if(typeof drawStashDock==="function") drawStashDock(lastSp, lastLots);
+  // [試作] 退避の中身を選んでいるときだけ「戻す」を出す。
+  // 倉庫へ戻すには盤を大きくさかのぼる必要があり、ドラッグだけでは遠すぎる。
+  const b=document.getElementById("stashBackBtn");
+  if(b){
+    const inStash = sel.cells.size>0 && [...sel.cells].every(k=>k.split("|")[0]==="退避");
+    b.style.display = inStash ? "" : "none";
+    if(inStash) b.textContent="選択した "+sel.cells.size+"マスを倉庫へ戻す";
+  }
+}
+// 選択した退避分を、自動配置と同じ考え方で倉庫の空き列へ戻す。
+// 種別に合う側（仕掛品＝倉庫内 / 商品＝倉庫外）を先に見る。
+function returnSelToWarehouse(){
+  if(!sel.cells.size) return;
+  if(![...sel.cells].every(k=>k.split("|")[0]==="退避")) return;
+  const n=sel.cells.size;
+  const lot=lastLots?lastLots.find(l=>l.id===sel.lotId):null;
+  const home=(lot&&lot.type==="仕掛品")?"near":"far";
+  const cand=[];
+  lastSp.filter(s=>s.zone!=="stash").forEach(s=>s.cols.forEach((c,i)=>{
+    if(c.aisle) return;                       // 通路へは戻さない
+    if(c.h-used(c)>=n) cand.push({name:s.name, idx:i, home:(s.zone===home)?0:1});
+  }));
+  cand.sort((a,b)=>a.home-b.home);
+  if(!cand.length){
+    alert(n+"マスがまとめて入る列が倉庫にありません。\n少しずつ選ぶか、列を選んでドラッグしてください。");
+    return;
+  }
+  applyMove(cand[0].name, cand[0].idx);
+}
+function selAdd(c){
+  if(!c || c.dataset.lot==null) return;
+  const id=parseInt(c.dataset.lot);
+  if(sel.lotId==null) sel.lotId=id;
+  else if(sel.lotId!==id) return;        // 別ロットのマスは拾わない
+  const k=cellKey(c);
+  if(sel.cells.has(k)) return;
+  sel.cells.add(k); c.classList.add("sel"); afterSelChange();
+}
+function selDel(c){
+  if(!c) return;
+  const k=cellKey(c);
+  if(!sel.cells.has(k)) return;
+  sel.cells.delete(k); c.classList.remove("sel");
+  if(sweep) sweep.erased.push(k);
+  if(sel.cells.size===0) sel.lotId=null;
+  afterSelChange();
+}
+function cellAt(x,y){
+  const el=document.elementFromPoint(x,y);
+  const c=el?el.closest(".cell"):null;
+  return (c && c.closest("#mapBody")) ? c : null;
+}
+function isSelCell(c){ return !!c && c.classList.contains("sel"); }
+function inMap(x,y){
+  const m=document.getElementById("mapBody"); if(!m) return false;
+  const r=m.getBoundingClientRect();
+  return x>=r.left && x<=r.right && y>=r.top && y<=r.bottom;
+}
+// 外した分を戻す。運びに切り替えるときに使う
+function restoreErased(){
+  if(!sweep || !sweep.erased.length) return;
+  if(sel.lotId==null) sel.lotId=sweep.lotId0;
+  sweep.erased.forEach(k=>sel.cells.add(k));
+  sweep.erased=[];
+  repaintSel(); updateFlag();
+}
+/* 「運ぶ」に切り替える。
+   吹き出し・受け皿・落とし先の色分けは、次の pointermove を待たずにここで出す。
+   待つと、指を止めているあいだ何も起きていないように見える。 */
+function toMove(x,y){
+  if(!sweep) return;
+  const t=sweep.target, id=sweep.id, x0=sweep.x0, y0=sweep.y0;
+  // 捕捉は解かない。ここで解くと lostpointercapture が飛び、
+  // 直後に組み立てた drag を既存のハンドラが片付けてしまう。
+  sweep=null;
+  hideSweepUndo();
+  const lot=lastLots?lastLots.find(l=>l.id===sel.lotId):null;
+  const g=document.createElement("div");
+  g.className="dragghost";
+  g.textContent=(lot?lot.name+" ":"")+sel.cells.size+"P";
+  g.style.left=x+"px"; g.style.top=y+"px";
+  document.body.appendChild(g);
+  drag={id:id, x0:x0, y0:y0, started:true, ghost:g, target:t};
+  dragMoved=true;
+  setMoving(true);
+  showStashDock(true);
+  highlightDrop(x,y);
+}
+// 運んでいる最中かどうかを盤と帯に反映する
+function setMoving(on){
+  const m=document.getElementById("mapBody");
+  if(m) m.classList.toggle("moving", !!on);
+  updateFlag();
+}
+
+document.addEventListener("pointerdown",e=>{
+  if(sweep||drag) return;
+  if(!moveMode) return;
+  if(e.button!=null && e.button!==0) return;
+  const c=e.target.closest(".cell"); if(!c||!c.closest("#mapBody")) return;
+  if(c.dataset.lot==null) return;                 // 空マスからは始めない
+  const onSel=c.classList.contains("sel");
+  // 指のとき：なぞるを選んでいないなら、未選択のマスからは始めない（画面を動かせる）。
+  // 選択済みのマスには元から touch-action:none が付いているので、運ぶのはいつでもできる。
+  if(e.pointerType!=="mouse" && tool!=="sweep" && !onSel) return;
+  sweep={id:e.pointerId, x0:e.clientX, y0:e.clientY, started:false, target:c,
+         mode: onSel ? null : "pick",             // null＝外すか運ぶか未定
+         erased:[], lotId0:sel.lotId};
+});
+document.addEventListener("pointermove",e=>{
+  if(!sweep || e.pointerId!==sweep.id) return;
+  if(!sweep.started){
+    if(Math.abs(e.clientX-sweep.x0)<6 && Math.abs(e.clientY-sweep.y0)<6) return;
+    sweep.started=true;
+    dragMoved=true;                               // 直後の click で選択を戻さない
+    sweepUndo={lotId:sel.lotId, cells:[...sel.cells]};
+    try{ sweep.target.setPointerCapture(sweep.id); }catch(err){}
+    if(sweep.mode==="pick") selAdd(sweep.target);
+  }
+  const c=cellAt(e.clientX,e.clientY);
+  const out=!inMap(e.clientX,e.clientY);
+  // マスの上に無いまま1マス分以上離れたか。列と列の隙間（数px）で
+  // 誤って「運ぶ」に倒れないよう、マス1つぶんの余裕を見る。
+  const cw=(sweep.target.getBoundingClientRect().width)||30;
+  const far=Math.abs(e.clientX-sweep.x0)>cw*1.2 || Math.abs(e.clientY-sweep.y0)>cw*1.2;
+
+  if(sweep.mode==="pick"){ selAdd(c); edgeScroll(e.clientX,e.clientY); return; }
+
+  if(sweep.mode===null){
+    // 選択済みのマスから始めた。次に触れたものが答えになる
+    if(c && c!==sweep.target && isSelCell(c)){    // 選択の中をなぞっている → 外す
+      sweep.mode="erase"; selDel(sweep.target); selDel(c);
+    }else if((c && !isSelCell(c)) || out || (!c && far)){
+      // 選択の外へ出た → 運ぶ。マスの無い余白へ出た場合もここに入るので、
+      // 「他のマスに重ねるまで何も起きない」ことにはならない。
+      toMove(e.clientX,e.clientY); return;
+    }
+    edgeScroll(e.clientX,e.clientY);
+    return;
+  }
+
+  if(sweep.mode==="erase"){
+    // いま自分で外したマスは「選択の外」とは見なさない。
+    // 見なすと、1マス外した次の瞬間に運びへ切り替わってしまう。
+    const mine = c && sweep.erased.indexOf(cellKey(c))>=0;
+    if((c && !isSelCell(c) && !mine) || out){     // 本当に外へ出た → 外した分を戻して運びへ
+      restoreErased(); toMove(e.clientX,e.clientY); return;
+    }
+    selDel(c);
+    edgeScroll(e.clientX,e.clientY);
+  }
+});
+function endSweep(){
+  if(sweep){
+    try{ sweep.target.releasePointerCapture(sweep.id); }catch(err){}
+    if(sweep.started && sweep.mode && sweepUndo) showSweepUndo();
+  }
+  sweep=null;
+  if(edge.raf){ cancelAnimationFrame(edge.raf); edge.raf=0; }
+}
+document.addEventListener("pointerup",e=>{ if(sweep && e.pointerId===sweep.id) endSweep(); });
+document.addEventListener("pointercancel",e=>{ if(sweep && e.pointerId===sweep.id) endSweep(); });
+document.addEventListener("lostpointercapture",e=>{ if(sweep && e.pointerId===sweep.id) endSweep(); });
+
+// [試作] 保存してある「案内」と「退避の位置」を反映する
+(function initDockPrefs(){
+  const n=loadData("palletApp.navShow");
+  setNav(n===null||n===undefined ? true : !!n);
+  setDockPos(loadData("palletApp.stashPos") || "tr");
+})();
+
 /* ---------- スペース設定 ---------- */
 /* 設定テキストへの書き出し。
    withSheet を偽にすると掲載先を除いた 5 項目になる。
    inputFingerprint() が使う。掲載先は紙のどこに書くかであって倉庫の形ではないので、
    手動調整を残すかどうかの判定には入れない。 */
+/* [試作] 退避スペースは設定テキストに出さない（区分 stash が applyConfig の
+   near/far チェックに弾かれるため）。出さない代わりに、一覧を組み直したあとで
+   必ず足し直す。足し直さないと「設定を反映」でエリアごと消える。 */
+function stashDefault(){ return clone(DEFAULT_SPACES.filter(s=>s.zone==="stash")); }
+function withStash(list){
+  if(list.some(s=>s.zone==="stash")) return list;
+  return list.concat(stashDefault());
+}
 function spacesToText(withSheet=true){
-  return SPACES.map(s=>{
+  // [試作] 退避スペースは設定テキストに出さない。出すと区分 stash が
+  // applyConfig() の near/far チェックに弾かれ、設定を反映できなくなる。
+  return SPACES.filter(s=>s.zone!=="stash").map(s=>{
     const cols=s.cols.map(c=>c.h+(c.aisle?"*":"")).join(",");
     const base=`${s.name} | ${s.zone} | ${s.orient||"v"} | ${s.block||99} | ${cols}`;
     return withSheet ? `${base} | ${s.sheet||"bottom"}` : base;
@@ -2385,7 +3026,7 @@ function applyConfig(){
   // 掲載先だけの変更なら再配置しない。run() は clearManual() を呼ぶので、
   // 通すとブロック図で手動調整した配置が消える。
   const geomBefore=spacesToText(false);
-  SPACES=out;
+  SPACES=withStash(out);          // [試作] 退避スペースを取り戻す
   saveData(STORE_KEY.spaces, {v:SPACES_SAVE_VERSION, spaces:SPACES});
   // 省略された掲載先は上で解決済み。resetConfig() と同じく正規形を書き戻して、
   // 実際に保存された内容が画面に出るようにする。
@@ -2473,12 +3114,12 @@ function validSpaces(a){
 }
 // 欠けた値・知らない値を既定に寄せる。捨てるのは validSpaces() が偽のときだけ。
 function normalizeSpaces(a){
-  const SHEETS=["top","bottom","over"];
+  const SHEETS=["top","bottom","over","none"];   // [試作] none＝紙に載せない（退避）
   return a.map(s=>{
     const def=DEFAULT_SPACES.find(d=>d.name===s.name);
     return {
       name:s.name,
-      zone:(s.zone==="near"||s.zone==="far")?s.zone:(def?def.zone:"near"),
+      zone:(s.zone==="near"||s.zone==="far"||s.zone==="stash")?s.zone:(def?def.zone:"near"),
       orient:(s.orient==="h")?"h":"v",
       block:Number.isFinite(s.block)?s.block:99,
       align:s.align,
@@ -2491,7 +3132,8 @@ function normalizeSpaces(a){
 function showCapacity(){
   // 掲載先が over のエリアは配置の対象外なので、収容能力からも除く。
   const overNames=new Set(sheetAreas("over"));
-  const live=SPACES.filter(s=>!overNames.has(s.name));
+  // [試作] 退避スペースは倉庫の収容能力ではないので除く
+  const live=SPACES.filter(s=>!overNames.has(s.name) && s.zone!=="stash");
   const sum=(z,f)=>live.filter(s=>s.zone===z).reduce((a,s)=>a+s.cols.filter(f).reduce((x,c)=>x+c.h,0),0);
   const excluded=overNames.size?`　（あふれ指定のため除外：${[...overNames].join("・")}）`:"";
   document.getElementById("capacity").textContent=
@@ -3247,7 +3889,7 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","
     showCfgNote("保存されていた設定を読み込めなかったので、初期値に戻しました。");
     return;
   }
-  SPACES=normalizeSpaces(d.spaces);
+  SPACES=withStash(normalizeSpaces(d.spaces));   // [試作] 保存に無くても足す
 })();
 document.getElementById("cfgText").value=spacesToText();
 showCapacity();
