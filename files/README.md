@@ -60,7 +60,7 @@ icon-512.png    アイコン
 1. `index.html` を修正する
 2. `sw.js` の6行目付近にある `CACHE_VERSION` の数字を上げる
    ```js
-   const CACHE_VERSION = "v28";   // → "v29" に変更
+   const CACHE_VERSION = "v29";   // → "v30" に変更
    ```
 3. 両方をコミット・プッシュ
 

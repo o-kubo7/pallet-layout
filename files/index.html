@@ -2213,7 +2213,10 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
   const next=clone(sp);
   moveCells(next, lotId, counts, destSpaceName, destColIndex);
   const after=blockCountOf(next, lotId);
-  return {ok:true, needConfirm: after>before, before, after, next};
+  // before が 0 になるのは、そのロットが倉庫に1マスも無いとき（退避スペースに
+  // 逃がしてある状態）。blockCountOf は退避を数えないのでそうなる。
+  // このとき 0→1 は「分かれた」のではなく「倉庫に置いた」だけなので聞かない。
+  return {ok:true, needConfirm: before>0 && after>before, before, after, next};
 }
 
 /* ---------- 通路編集 / ロット移動（モードと選択） ---------- */
