@@ -10,16 +10,20 @@
 
 | | |
 |---|---|
-| ブランチ | `claude/intuitive-layout-editing-4nszpb`（`origin/main` = `a431c47` の直上に3コミット） |
-| PR | https://github.com/o-kubo7/pallet-layout/pull/1 → `main` |
-| マージ | **未（利用者が判断）** |
-| CACHE_VERSION | v27 → **v28** |
+| ブランチ | `claude/intuitive-layout-editing-4nszpb` |
+| PR #1 | **マージ済み**（2026-09-03 20:12 UTC / マージコミット `ae7a699`） |
+| GitHub Pages | 実行 #9 成功。公開版に反映済み |
+| CACHE_VERSION | v27 → v28 → **v29**（マージ後の修正で再度上げた） |
+
+マージ後、実機で使って見つかった修正を別途入れている（§10）。
 
 ```
+ae7a699 Merge pull request #1        ← main に入った
+c0975f7 docs: 作業記録を残し、README を実態に合わせる
 36a672f chore: CACHE_VERSION を v28 に上げる
 6e53c36 feat: 配置編集に退避スペースとなぞり選択を足す
 78e88a4 docs: 退避スペースとなぞり選択の設計書を追加する
-a431c47 (main) Merge feat/sheet-top-overflow-rescue
+a431c47 Merge feat/sheet-top-overflow-rescue（マージ前の main）
 ```
 
 ---
@@ -152,3 +156,30 @@ FN: colCount 14 / colW ["48px"] / tableW 673.4 / tableH 473.2
   `docs/memos/2026-08-27-sheet-improvements-memo.md` を参照しているが、
   コミットされていない（`.gitignore` にも無いので、単に未追加）。
   このファイルが `docs/memos/` の最初のコミットになる
+
+---
+
+## 10. マージ後の修正
+
+### 退避スペースから倉庫へ戻すと、意味のない確認が出た（2026-09-03 実機）
+
+> 部品1 / 5555 が **0か所から 1か所に分かれます**。このまま移動しますか？
+
+`blockCountOf` は退避スペースを数えない（設計書 §7 エッジケース）。そのためロットを丸ごと逃がすと
+倉庫側の数が 0 になり、戻すときに 0 → 1 で `after > before` が成り立って
+`needConfirm` が立っていた。**0 → 1 は分割ではなく最初の設置**なので、
+`validateMove` の判定に `before > 0` を足した。
+
+```js
+// 直す前
+return {ok:true, needConfirm: after>before, before, after, next};
+// 直したあと
+return {ok:true, needConfirm: before>0 && after>before, before, after, next};
+```
+
+倉庫に1マスでもあるロット（`before >= 1`）の挙動は変わらない。
+実際に「1か所 → 2か所」では今までどおり確認が出ることを試験で確かめてある。
+
+**モックでは出なかった。** 退避へ逃がしたあと倉庫へ戻す往復を、
+ロットを丸ごと逃がした状態で試していなかったため。部分的に逃がすと
+倉庫側に残りがあるので `before >= 1` になり、この経路を踏まない。
