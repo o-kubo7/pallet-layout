@@ -527,7 +527,6 @@
   <div id="tab-edit" class="tabpanel" style="display:none">
     <div class="card" id="editCard">
       <h2>配置編集
-        <button id="moveBtn" class="btn btn-ghost" style="margin-left:auto" onclick="toggleMove()">ロットを移動</button>
       </h2>
       <div id="moveHint" class="hint" style="display:none;margin-bottom:8px">✋ 移動モード：同じロットのマスをタップして選び、選んだマスをドラッグして別の列へ運びます。
         退避スペースへも運べます。<span id="selCount"></span>
@@ -2010,11 +2009,9 @@ function switchTab(name){
   });
   document.getElementById("actionBar").style.display = (name==="input")?"":"none";
   window.scrollTo(0,0);
-  // 移動モードは配置編集タブでしか操作できない。
-  // 他のタブへ移ったら解除する。残すと、戻ってきたとき「なぜかマスが選べる」状態になる
-  if(name!=="edit" && moveMode){
-    setMoveMode(false);
-  }
+  // 選択は配置編集タブの中だけの状態。他のタブへ移ったら捨てる。
+  // 残すと、戻ってきたとき「なぜか選ばれている」状態になる
+  if(name!=="edit") clearSel();
   // 表は表示されて初めて幅が測れるので、タブに来たタイミングで再描画・倍率決定する
   // （結果があるときは renderSheet() が末尾で applySheetZoom() も呼ぶ）
   if(name==="sheet"){
@@ -2191,32 +2188,14 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
 }
 
 /* ---------- 通路編集 / ロット移動（モードと選択） ---------- */
-let moveMode=false;
+// 配置編集タブは開いた時点で編集できる。切り替えるボタンは無い。
+// 変数を残すのは、これを見ている箇所(pointerdown / click ハンドラ)を
+// 書き換えずに済ませるため。定数なので、いまはどれも素通りする。
+const moveMode=true;
 let sel={lotId:null, cells:new Set()};
 // ドラッグの直後に飛んでくる click を無視するための印。Task 5 で立てる。
 let dragMoved=false;
 
-function setMoveMode(on){
-  moveMode=on;
-  const b=document.getElementById("moveBtn");
-  b.className = "btn "+(on?"btn-on":"btn-ghost");
-  b.textContent = on?"移動を終了":"ロットを移動";
-  document.getElementById("moveHint").style.display = on?"block":"none";
-  if(!on) clearSel();
-  updateFlag();
-}
-// 移動モードの出入りでは配置し直さない。ただし editable クラスが DOM に焼き込まれているので
-// 描き直して落とす。
-function toggleMove(){
-  setMoveMode(!moveMode);
-  // 配置表タブから押されると掴めるマスが1つも無いので、配置編集タブへ寄せる。
-  // ただし switchTab() は無条件で scrollTo(0,0) するので、既に配置編集タブが
-  // 出ているときに呼ぶとページ先頭へ飛ぶだけの空振りになる。表示中は呼ばない。
-  if(moveMode && document.getElementById("tab-edit").style.display==="none"){
-    switchTab('edit');
-  }
-  redraw();
-}
 function clearSel(){
   sel.lotId=null; sel.cells.clear();
   document.querySelectorAll(".cell.sel").forEach(c=>c.classList.remove("sel"));
@@ -2692,7 +2671,7 @@ function updateFlag(){
   t.textContent=msg;
   const ub=document.getElementById("sweepUndoBtn");
   const undoOn = ub && ub.style.display!=="none";
-  f.style.display=(moveMode && (msg||undoOn))?"flex":"none";
+  f.style.display=(msg||undoOn)?"flex":"none";
   f.classList.toggle("hasSel", n>0);
 }
 function showSweepUndo(){
