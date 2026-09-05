@@ -118,8 +118,6 @@
   .hrow{display:flex;gap:2px;border:2px solid #111;padding:3px;border-radius:4px;background:#fafafa}
   .colwrap.aisle .col,.colwrap.aisle .hrow{border:2px dashed #9ca3af;background:#f1f2f4}
   .colwrap.blockgap{margin-left:16px}
-  .colwrap.editable{cursor:pointer}
-  .colwrap.editable:hover .col,.colwrap.editable:hover .hrow{outline:2px solid var(--accent)}
   /* 文字はロット番号（1〜）。コードより短いので大きくできる */
   .cell{width:var(--cell);height:var(--cell);border:1px solid #cbd5e1;border-radius:2px;background:#fff;overflow:hidden;
         display:flex;align-items:center;justify-content:center;font-weight:800;color:#1f2937;
@@ -542,9 +540,7 @@
     <div class="card" id="editCard">
       <h2>配置編集
         <button id="moveBtn" class="btn btn-ghost" style="margin-left:auto" onclick="toggleMove()">ロットを移動</button>
-        <button id="editBtn" class="btn btn-ghost" style="margin-left:8px" onclick="toggleEdit()">通路を編集</button>
       </h2>
-      <div id="editHint" class="hint" style="display:none;margin-bottom:8px">✏ 編集モード：マスをタップするとその列が「通路（灰・破線）」⇔「通常」に切り替わります。</div>
       <div id="moveHint" class="hint" style="display:none;margin-bottom:8px">✋ 移動モード：同じロットのマスをタップして選び、選んだマスをドラッグして別の列へ運びます。
         退避スペースへも運べます。<span id="selCount"></span>
         <button class="btn-mini" onclick="clearSel()">選択解除</button></div>
@@ -861,7 +857,6 @@ const PALETTE=["#ffadb1","#71d69e","#ffdbcc","#47ffed","#ffaf7a","#c8efef",
 
 let SPACES = clone(DEFAULT_SPACES);
 let MASTER = [];
-let editMode=false;
 let lastLots=null, lastColor=null, lastSp=null;
 let hasResult=false;
 let fracMode=false;   // true なら「満載数P 半」表記
@@ -1981,10 +1976,9 @@ function drawZone(elId, spaces, colorOf){
       });
       const inner = horizontal ? `<div class="hrow">${cells}</div>` : `<div class="col${topAlign?' top':''}">${cells}</div>`;
       const cap = `<div class="colcap">${used(col)}/${col.h}${col.aisle?' 通':''}</div>`;
-      const editCls = editMode? " editable":"";
       const gapCls = blockStart? " blockgap":"";
       const style = place ? ` style="${place}"` : "";
-      return `<div class="colwrap${col.aisle?' aisle':''}${editCls}${gapCls}"`
+      return `<div class="colwrap${col.aisle?' aisle':''}${gapCls}"`
            + ` data-space="${sp.name}" data-col="${ci}"${style}>${inner}${cap}</div>`;
     };
     let lines="";
@@ -2035,11 +2029,10 @@ function switchTab(name){
   });
   document.getElementById("actionBar").style.display = (name==="input")?"":"none";
   window.scrollTo(0,0);
-  // 移動モードと通路編集モードは配置編集タブでしか操作できない。
+  // 移動モードは配置編集タブでしか操作できない。
   // 他のタブへ移ったら解除する。残すと、戻ってきたとき「なぜかマスが選べる」状態になる
-  if(name!=="edit" && (moveMode || editMode)){
-    setMoveMode(false); setEditMode(false);
-    redraw();   // editable クラスは DOM に焼き込まれているので描き直して落とす
+  if(name!=="edit" && moveMode){
+    setMoveMode(false);
   }
   // 表は表示されて初めて幅が測れるので、タブに来たタイミングで再描画・倍率決定する
   // （結果があるときは renderSheet() が末尾で applySheetZoom() も呼ぶ）
@@ -2222,13 +2215,6 @@ let sel={lotId:null, cells:new Set()};
 // ドラッグの直後に飛んでくる click を無視するための印。Task 5 で立てる。
 let dragMoved=false;
 
-function setEditMode(on){
-  editMode=on;
-  const b=document.getElementById("editBtn");
-  b.className = "btn "+(on?"btn-on":"btn-ghost");
-  b.textContent = on?"編集を終了":"通路を編集";
-  document.getElementById("editHint").style.display = on?"block":"none";
-}
 function setMoveMode(on){
   moveMode=on;
   const b=document.getElementById("moveBtn");
@@ -2240,15 +2226,6 @@ function setMoveMode(on){
   if(!on){ clearSel(); setTool("scroll"); }
   updateFlag();
 }
-// 2つのモードは排他。通路編集は前提そのものを変えるので、従来どおり配置し直す。
-function toggleEdit(){
-  // 入るだけで配置し直すので、手動調整があるなら先に確認する
-  if(!editMode && hasManual() &&
-     !confirm("通路の編集に入ると自動配置し直すため、手動調整は破棄されます。よろしいですか？")) return;
-  setEditMode(!editMode);
-  if(editMode) setMoveMode(false);
-  if(lastLots) run(false);
-}
 // 移動モードの出入りでは配置し直さない。ただし editable クラスが DOM に焼き込まれているので
 // 描き直して落とす。
 function toggleMove(){
@@ -2256,9 +2233,8 @@ function toggleMove(){
   // 配置表タブから押されると掴めるマスが1つも無いので、配置編集タブへ寄せる。
   // ただし switchTab() は無条件で scrollTo(0,0) するので、既に配置編集タブが
   // 出ているときに呼ぶとページ先頭へ飛ぶだけの空振りになる。表示中は呼ばない。
-  if(moveMode){
-    setEditMode(false);
-    if(document.getElementById("tab-edit").style.display==="none") switchTab('edit');
+  if(moveMode && document.getElementById("tab-edit").style.display==="none"){
+    switchTab('edit');
   }
   redraw();
 }
@@ -2287,15 +2263,6 @@ function toggleCell(cellEl){
   hideSweepUndo();          // タップで選び直したら、なぞりの取り消しは出さない
 }
 
-document.addEventListener("click",e=>{
-  if(moveMode) return;
-  if(!editMode)return;
-  const w=e.target.closest(".colwrap"); if(!w)return;
-  const sp=SPACES.find(s=>s.name===w.dataset.space); if(!sp)return;
-  sp.cols[parseInt(w.dataset.col)].aisle=!sp.cols[parseInt(w.dataset.col)].aisle;
-  document.getElementById("cfgText").value=spacesToText();
-  showCapacity(); run(false);
-});
 document.addEventListener("click",e=>{
   if(!moveMode) return;
   if(dragMoved){ dragMoved=false; return; }     // ドラッグ直後の click は選択を動かさない
