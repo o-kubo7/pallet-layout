@@ -176,16 +176,6 @@
      ブラウザが先にパンを始めて pointercancel で中断する。だからサブモードの
      あいだは全マスにあらかじめ付けておく（マウスにはこの制約が無い）。 */
   #mapBody.sweep .cell[data-lot]{touch-action:none;cursor:crosshair}
-  /* 指のときだけ「画面を動かす／なぞる」の2択。判定そのものはPCと同じなので、
-     覚えることは増やさない。ボタン自体に何が起きるかを書く。 */
-  .toolctl{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;margin-bottom:10px}
-  .toolctl .lbl{font-size:12px;color:var(--muted);align-self:center;margin-right:2px}
-  .toolbtn{border:2px solid var(--line);background:#fff;border-radius:10px;padding:7px 14px;min-height:54px;
-           cursor:pointer;color:#374151;display:flex;flex-direction:column;align-items:center;justify-content:center;
-           gap:1px;font-size:13px;font-weight:700;line-height:1.3;min-width:118px}
-  .toolbtn i{font-style:normal;font-size:11px;font-weight:400;color:var(--muted)}
-  .toolbtn.on{border-color:var(--accent);background:#eff6ff;color:#1d4ed8}
-  .toolbtn.on i{color:#3b82f6}
   /* 盤の上端に貼りつく状態表示。長い盤をたどっても、いまの状態が視界から消えない */
   /* 取り消しは帯の中に入れる。盤をたどっている最中でも指の近くに残る */
   .toolflag{position:sticky;top:0;z-index:30;display:none;padding:9px 12px;border-radius:8px;
@@ -195,12 +185,10 @@
             font-weight:700;font-size:12px;cursor:pointer;min-height:38px}
   .toolflag{background:#334155}
   .toolflag.hasSel{background:#2563eb}
-  #mapBody.sweep{outline:3px solid #2563eb;outline-offset:8px;border-radius:6px}
   /* 運んでいる間は、選んだマスを薄くして「いま持ち上げている」ことを示す。
      指の下の吹き出しだけだと、マスの上に重ねるまで移動中だと分からない。 */
   #mapBody.moving .cell.sel{opacity:.4}
 
-  #mapBody.sweep .scroller{background-image:none}
   /* 退避スペース。盤のすぐそばに置きたいので、既定は画面の隅に浮かせる。
      position:sticky＋float なので #mapBody の中だけに居る。タブやヘッダを覆わない。
      役目は3つで、状態で入れ替わる。
@@ -544,13 +532,6 @@
       <div id="moveHint" class="hint" style="display:none;margin-bottom:8px">✋ 移動モード：同じロットのマスをタップして選び、選んだマスをドラッグして別の列へ運びます。
         退避スペースへも運べます。<span id="selCount"></span>
         <button class="btn-mini" onclick="clearSel()">選択解除</button></div>
-      <div class="toolctl" id="toolCtl" style="display:none">
-        <span class="lbl">指の使い方</span>
-        <button class="toolbtn on" id="toolScrollBtn" onclick="setTool('scroll')">👆 画面を動かす<i>タップで1マスずつ</i></button>
-        <button class="toolbtn" id="toolSweepBtn" onclick="setTool('sweep')">🖐 なぞる<i>まとめて選ぶ・外す</i></button>
-      </div>
-
-
       <div class="sizectl" id="dockCtl">
         <span class="lbl">案内</span>
         <button class="sizebtn on" id="navOnBtn" onclick="setNav(true)">表示</button>
@@ -2221,9 +2202,7 @@ function setMoveMode(on){
   b.className = "btn "+(on?"btn-on":"btn-ghost");
   b.textContent = on?"移動を終了":"ロットを移動";
   document.getElementById("moveHint").style.display = on?"block":"none";
-  // [試作] 指の2択は移動モードの中だけ。マウスだけの端末には出さない
-  document.getElementById("toolCtl").style.display = (on && isTouchDevice())?"flex":"none";
-  if(!on){ clearSel(); setTool("scroll"); }
+  if(!on) clearSel();
   updateFlag();
 }
 // 移動モードの出入りでは配置し直さない。ただし editable クラスが DOM に焼き込まれているので
@@ -2683,24 +2662,19 @@ function drawStashBar(sp, lots){
    外し始めたあとで外へ出た場合は、外した分を戻してから運びに切り替える
    （下の受け皿まで指を引くと、途中で自分の選択の上を通るため）。
 
-   違うのは指だけ。指はマスに触れた瞬間にブラウザがスクロールを始めてしまい、
-   触れたあとから touch-action:none にはできない。だから指のときだけ
-   「画面を動かす／なぞる」の2択を出す。マウスにこの制約は無いので出さない。 */
-let tool="scroll";               // 指のときだけ意味を持つ： "scroll" | "sweep"
+   なぞるは既定でオン。指がマスに触れた瞬間にブラウザがスクロールを始めてしまい、
+   触れたあとから touch-action:none にはできないので、起動時に setTool("sweep") を
+   呼んで先に付けておく。盤のスクロールは列の隙間・余白・盤の外で行う
+   （2026-09-06 に Pixel 9a で問題なしと確認済み）。
+   画面の2択は廃止したが、tool と setTool() は残してある。配置不可エリアの設定が
+   「いま何を選んでいるのか」の切り替えを必要とするため。 */
+let tool="sweep";                // "sweep" が既定。将来ここに別の選び方が増える
 let sweep=null;                  // {id,x0,y0,started,target,mode,erased,lotId0}
 let sweepUndo=null;              // ひとなぞり前の選択（取り消し用）
 
-function isTouchDevice(){
-  try{ return window.matchMedia("(any-pointer: coarse)").matches; }
-  catch(e){ return "ontouchstart" in window; }
-}
 function setTool(t){
   tool=t;
   document.getElementById("mapBody").classList.toggle("sweep", t==="sweep");
-  [["toolScrollBtn","scroll"],["toolSweepBtn","sweep"]].forEach(function(x){
-    const b=document.getElementById(x[0]);
-    if(b) b.classList.toggle("on", t===x[1]);
-  });
   updateFlag();
 }
 // 盤の上端に貼りつく帯。いまの状態と、直前のなぞりの取り消しを出す。
@@ -2714,7 +2688,6 @@ function updateFlag(){
   if(moving)               msg="✋ "+n+"マスを運んでいます ／ 置きたい列の上で指を離してください";
   else if(n>0)             msg="✋ "+n+"マス選択中 ／ そのまま外へドラッグで運ぶ・選択の中をなぞると外れる";
   else if(tool==="sweep")  msg="🖐 マスをなぞると、同じロットをまとめて選べます";
-  else if(moveMode)        msg="👆 マスをタップすると選べます";
   if(!navShow) msg="";
   t.textContent=msg;
   const ub=document.getElementById("sweepUndoBtn");
@@ -2918,11 +2891,13 @@ document.addEventListener("pointerup",e=>{ if(sweep && e.pointerId===sweep.id) e
 document.addEventListener("pointercancel",e=>{ if(sweep && e.pointerId===sweep.id) endSweep(); });
 document.addEventListener("lostpointercapture",e=>{ if(sweep && e.pointerId===sweep.id) endSweep(); });
 
-// [試作] 保存してある「案内」と「退避の位置」を反映する
+// [試作] 保存してある「案内」と「退避の位置」を反映する。
+// なぞるは既定でオン。クラスは HTML に焼かず setTool() を通す（設計書 §4-1-1）
 (function initDockPrefs(){
   const n=loadData("palletApp.navShow");
   setNav(n===null||n===undefined ? true : !!n);
   setDockPos(loadData("palletApp.stashPos") || "tr");
+  setTool("sweep");
 })();
 
 /* ---------- スペース設定 ---------- */
