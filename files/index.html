@@ -182,7 +182,11 @@
             font-size:13px;font-weight:700;color:#fff;text-align:center;margin-bottom:8px;
             gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
   .flagundo{border:0;border-radius:6px;padding:7px 12px;background:#fff;color:#1f2937;
-            font-weight:700;font-size:12px;cursor:pointer;min-height:38px}
+            font-weight:700;font-size:12px;cursor:pointer;min-height:44px}
+  /* 選択数は説明文と区別が付くように白抜きにする。案内を切っても残る要素 */
+  .flagcount{background:rgba(255,255,255,.22);border-radius:6px;padding:3px 9px;
+             font-size:13px;font-weight:800;white-space:nowrap}
+  .flagcount:empty{display:none}
   .toolflag{background:#334155}
   .toolflag.hasSel{background:#2563eb}
   /* 運んでいる間は、選んだマスを薄くして「いま持ち上げている」ことを示す。
@@ -528,9 +532,6 @@
     <div class="card" id="editCard">
       <h2>配置編集
       </h2>
-      <div id="moveHint" class="hint" style="display:none;margin-bottom:8px">✋ 移動モード：同じロットのマスをタップして選び、選んだマスをドラッグして別の列へ運びます。
-        退避スペースへも運べます。<span id="selCount"></span>
-        <button class="btn-mini" onclick="clearSel()">選択解除</button></div>
       <div class="sizectl" id="dockCtl">
         <span class="lbl">案内</span>
         <button class="sizebtn on" id="navOnBtn" onclick="setNav(true)">表示</button>
@@ -561,8 +562,13 @@
             <div class="sb-empty" id="sbEmpty">ここへ<br>ドラッグ</div></div>
           <button class="sb-back" id="sbBackBtn" onclick="returnSelToWarehouse()">◀ 倉庫へ戻す</button>
         </div>
+        <!-- 帯の中身は3つ。案内（navShow）で消えるのは説明文だけで、
+             選択数と2つのボタンは案内を切っても出す。 -->
         <div class="toolflag" id="toolFlag">
+          <span id="toolFlagCount" class="flagcount"></span>
           <span id="toolFlagText"></span>
+          <button class="flagundo" id="flagClearBtn" style="display:none"
+                  onclick="clearSel()">選択解除</button>
           <button class="flagundo" id="sweepUndoBtn" style="display:none"
                   onclick="undoSweep()">↩ いまのなぞりを取り消す</button>
         </div>
@@ -2663,15 +2669,27 @@ function updateFlag(){
   if(!f||!t) return;
   const n=sel.cells.size;
   const moving=document.getElementById("mapBody").classList.contains("moving");
-  let msg="";
-  if(moving)               msg="✋ "+n+"マスを運んでいます ／ 置きたい列の上で指を離してください";
-  else if(n>0)             msg="✋ "+n+"マス選択中 ／ そのまま外へドラッグで運ぶ・選択の中をなぞると外れる";
-  else if(tool==="sweep")  msg="🖐 マスをなぞると、同じロットをまとめて選べます";
-  if(!navShow) msg="";
-  t.textContent=msg;
+  const c=document.getElementById("toolFlagCount");
+  const cb=document.getElementById("flagClearBtn");
   const ub=document.getElementById("sweepUndoBtn");
   const undoOn = ub && ub.style.display!=="none";
-  f.style.display=(msg||undoOn)?"flex":"none";
+  // 待機中は帯ごと消す。出しっぱなしにすると、盤の上に常設の帯が居座って
+  // 「画面の情報を削る」という目的に逆行する
+  if(n===0 && !undoOn){
+    t.textContent=""; if(c) c.textContent=""; if(cb) cb.style.display="none";
+    f.style.display="none"; f.classList.remove("hasSel");
+    return;
+  }
+  // 説明文。慣れた人には邪魔なので、案内を切ると消える
+  let msg = moving ? "置きたい列の上で指を離してください"
+          : (n>0  ? "そのまま外へドラッグで運ぶ・選択の中をなぞると外れる" : "");
+  if(!navShow) msg="";
+  t.textContent=msg;
+  // 選択数。案内を切っても出す。説明文に埋め込むと案内と一緒に消えてしまう
+  if(c) c.textContent = n ? (moving ? "✋ "+n+"マスを運搬中" : "✋ "+n+"マス選択中") : "";
+  // 選択解除。案内を切っても出す。運んでいる最中は押させない
+  if(cb) cb.style.display = (n>0 && !moving) ? "" : "none";
+  f.style.display="flex";
   f.classList.toggle("hasSel", n>0);
 }
 function showSweepUndo(){
@@ -2700,9 +2718,8 @@ function repaintSel(){
   showSelCount();
 }
 function afterSelChange(){ showSelCount(); updateFlag(); drawStashDock(lastSp, lastLots); }
+// 選択数は updateFlag() が帯へ書く。ここは退避スペースまわりの追随だけを持つ
 function showSelCount(){
-  const el=document.getElementById("selCount");
-  if(el) el.textContent = sel.cells.size ? "（"+sel.cells.size+"マス選択中）" : "";
   if(typeof updateFlag==="function") updateFlag();
   // タップで選んだときもここを通るので、退避スペースの表示も合わせる
   if(typeof drawStashDock==="function") drawStashDock(lastSp, lastLots);
