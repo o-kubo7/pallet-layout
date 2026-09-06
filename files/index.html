@@ -138,8 +138,44 @@
   .cell.segline{border-top:2px dashed #374151}
   .cell.segline-h{border-left:2px dashed #374151}
   .colcap{font-size:10px;color:#9ca3af;text-align:center;margin-top:2px}
-  /* 配置編集タブの ⚙。盤より上に常に出るのはこのボタンだけ */
-  .editctl{display:flex;justify-content:flex-end;margin-bottom:8px}
+  /* 配置編集タブの ⚙ と、選択の帯（#toolFlag）の行。
+     #editCtl ごと盤の上端（.tabs や #stashDock と同じ --docktop 基準）に
+     貼り付ける。スクロールで盤をたどっても選択数・選択解除・なぞりの取消が
+     画面外へ流れないようにするため。.tabs（z-index:30）と #stashDock（60）
+     より前に出す。背景をカードと同じ色にして、貼り付いた下から流れてくる
+     盤の内容が透けないようにする。
+     スマホ幅は帯とボタンが横に並びきらないので折り返す（帯が独立した行になる）。
+     PC 幅（@media min-width:700px 側）は折り返さず横並びにする。 */
+  /* .editctl 自体の高さは帯の有無で変わってはいけない（変わると盤が押し出される）。
+     スマホ幅は帯の中身（バッジ・説明文・2つのボタン）が338px（カード内幅）に
+     収まりきらず、帯自身が複数行に折り返す（.toolflag の既定 flex-wrap:wrap の
+     まま。PC 幅だけ下の @media 側で1行固定にする）。412px幅・案内表示ありで
+     実測した折り返し後の帯の高さは129.59px。⚙ボタン(44)+gap(6)+帯(129.59)を
+     少し余裕を見て182pxとして確保しておく（案内オフだと帯はもっと低くなるので、
+     この182pxが実質の最大値＝安全側）。
+       PC 幅（帯と⚙が同じ行・1段・帯は1行固定）: 62px（下の @media 側で上書き）
+     #stashDock の top（後述）もこの高さ＋margin-bottom(8px)ぶんだけ
+     --docktop からさらに下げてある。 */
+  .editctl{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:flex-start;
+           gap:6px;margin-bottom:8px;min-height:182px;
+           position:sticky;top:var(--docktop,56px);z-index:61;background:var(--card)}
+  /* 帯はスマホ幅では常に自分の行いっぱいを使う（⚙ ボタンと並びきらないため）。
+     PC 幅は下の @media 側で flex:1 1 auto に上書きし、⚙ と同じ行に並べる。 */
+  #toolFlag{flex:1 1 100%}
+  /* 選択数バッジと2つのボタンは navShow を切っても出る「常に見える」要素。
+     絶対に縮めない・省略しない（flex アイテムは既定でも min-width:auto な
+     ので中身より縮まないはずだが、明示して事故を防ぐ）。 */
+  #toolFlag .flagcount,#toolFlag #flagClearBtn,#toolFlag #sweepUndoBtn{flex:none}
+  /* 説明文だけが可変長。PC 幅（1行固定）では狭い幅で末尾を省略して1行に収める。
+     スマホ幅は帯自体が複数行に折り返すので、このルールがあっても
+     white-space:nowrap のぶん説明文だけは1行のまま（折り返した行の中で
+     省略が掛かることがある）。
+     flex アイテムは min-width:0 を与えないと、内容量より縮まずに
+     兄弟を押し出して折り返しの原因になる点に注意。 */
+  #toolFlagText{flex:1 1 auto;min-width:0;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  /* ⚙ ボタンは帯がどれだけ伸びても縮めない・押し潰されない */
+  #cfgToggleBtn{flex:none}
   .editcfg{border:1px solid var(--line);border-radius:10px;padding:10px 12px;
            margin-bottom:10px;background:#fcfcfd}
   /* .editcfg に display を書かない。書くと hidden より強くなって閉じられなくなる */
@@ -183,10 +219,12 @@
      ブラウザが先にパンを始めて pointercancel で中断する。だからいまは常に
      全マスにあらかじめ付けておく（マウスにはこの制約が無い）。 */
   #mapBody.sweep .cell[data-lot]{touch-action:none;cursor:crosshair}
-  /* 盤の上端に貼りつく状態表示。長い盤をたどっても、いまの状態が視界から消えない */
-  /* 取り消しは帯の中に入れる。盤をたどっている最中でも指の近くに残る */
-  .toolflag{position:sticky;top:0;z-index:30;display:none;padding:9px 12px;border-radius:8px;
-            font-size:13px;font-weight:700;color:#fff;text-align:center;margin-bottom:8px;
+  /* 選択の帯。以前は #mapBody の子として単独で sticky top:0 だったが、
+     いまは親の #editCtl（sticky）の子になったので、帯自身の sticky/top/z-index
+     は不要（親と一緒に貼り付く）。行間は親の .editctl{gap:6px} に任せるので
+     margin-bottom も持たない。 */
+  .toolflag{display:none;padding:9px 12px;border-radius:8px;
+            font-size:13px;font-weight:700;color:#fff;text-align:center;
             gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
   .flagundo{border:0;border-radius:6px;padding:7px 12px;background:#fff;color:#1f2937;
             font-weight:700;font-size:12px;cursor:pointer;min-height:44px}
@@ -210,8 +248,13 @@
              padding:5px 6px;box-shadow:0 6px 20px rgba(0,0,0,.16);
              display:flex;flex-direction:column;gap:3px;overflow:hidden;--cell:16px}
   /* タブ列が sticky なので、その高さぶん下げないとタブを覆ってしまう。
-     高さは JS が測って --docktop に入れる（端末で変わるため）。 */
-  .stashdock.pos-tr,.stashdock.pos-tl{position:sticky;top:var(--docktop,56px);
+     高さは JS が測って --docktop に入れる（端末で変わるため）。
+     さらに #editCtl も sticky で同じ --docktop 基準に貼り付くようになったため、
+     #editCtl の高さ＋margin-bottom(8px)ぶんだけ、その下へさらにずらす。
+     #editCtl の高さはスマホ幅で182px（帯とボタンが2段、帯は複数行に折り返す）・
+     PC幅で62px（1段、帯は1行固定。下の @media 側で上書き）に固定してあるので、
+     値も固定でよい。 */
+  .stashdock.pos-tr,.stashdock.pos-tl{position:sticky;top:calc(var(--docktop,56px) + 190px);
              width:33vw;height:33vw;min-width:118px;min-height:118px;max-width:190px;max-height:190px}
   .stashdock.pos-tr{float:right;margin:0 0 6px 8px}
   .stashdock.pos-tl{float:left;margin:0 8px 6px 0}
@@ -220,48 +263,29 @@
   /* PC は盤が広いので、隅に置いても邪魔にならない大きさにする */
   @media (min-width:700px){
     .stashdock.pos-tr,.stashdock.pos-tl{width:240px;height:210px;max-width:none;max-height:none;--cell:18px}
-    /* PC 幅だけ、選択の帯を ⚙ の行の左空きへ重ねて出す。
-       帯の出現で行の高さが変わらないようにし、選択のたびに盤が下へ
-       押し出されるのを防ぐ（スマホ幅は盤の上端に貼りつく sticky のまま、
-       このブロックの外なので影響しない）。
-       #toolFlag は #editCtl の子ではなく #mapBody の子なので、
-       #editCtl ではなく #editCard を絶対配置の基準にする。 */
-    #editCard{position:relative}
-    #toolFlag{position:absolute;
-      /* #editCard の padding は 14px 16px（.card, 23行目）。
-         top:5px は ⚙ ボタン（高さ44px）と帯（実測62px＝padding9px×2＋
-         「選択解除」ボタンの高さ44px。1行に収まる幅なので折返しではない）の
-         縦中心をそろえた値: 14 - (62-44)/2 = 5。左は padding と同じ16px */
-      top:5px;left:16px;
-      /* ⚙ ボタン（実測 幅約100px）に重ならないよう右を空ける。
-         134px = 右 padding16px + ボタン幅100px(実測) + 隙間18px */
-      right:134px;
-      margin-bottom:0;justify-content:flex-start;text-align:left;
-      /* レビュー指摘: なぞり操作後は選択数バッジ・説明文・「選択解除」・
-         「↩ いまのなぞりを取り消す」の4要素が並び、700〜950px 幅では
-         折り返して2行（実測116px）になり、下の #messages / #legend に
-         重なっていた（position:absolute は要素を押し出さない代わりに
-         そのまま下へ重なる）。PC 幅では折り返しを禁止し、常に1行に
-         収める。長い説明文は #toolFlagText 側で省略する。 */
-      flex-wrap:nowrap}
-    /* 選択数バッジと2つのボタンは navShow を切っても出る「常に見える」要素。
-       絶対に縮めない・省略しない（flex アイテムは既定でも min-width:auto な
-       ので中身より縮まないはずだが、明示して事故を防ぐ）。 */
-    #toolFlag .flagcount,#toolFlag #flagClearBtn,#toolFlag #sweepUndoBtn{flex:none}
-    /* 説明文だけが可変長。狭い幅では末尾を省略して1行に収める。
-       flex アイテムは min-width:0 を与えないと、内容量より縮まずに
-       兄弟を押し出して折り返しの原因になる点に注意。 */
-    #toolFlagText{flex:1 1 auto;min-width:0;overflow:hidden;
-      text-overflow:ellipsis;white-space:nowrap}
-    /* 帯（1行固定・実測62px）が下の設定パネルや案内文に重ならないよう、
-       ⚙ の行にあらかじめ高さを確保しておく（帯の有無で行の高さ自体は
-       変えない＝押し出しを消す本体）。値は上のコメントの実測62pxから
-       逆算: 14(padding-top)+46(この値)+8(margin-bottom)≒帯の下端(67px) */
-    .editctl{min-height:46px;
-      /* .editctl は align-items 未指定（既定 stretch）だったため、
-         min-height を足したことで #cfgToggleBtn（.btn{min-height:44px}）
-         が46pxへ伸びていた（レビュー指摘）。中央揃えにして解消する。 */
+    /* PC 幅は帯と ⚙ を同じ行に横並びで出す（帯が左・⚙が右）。
+       #editCtl 自体が sticky（グローバル）なので、帯（#toolFlag）は普通の
+       flex アイテムとして中に居るだけでよく、position:absolute は不要。
+       スマホ幅の「帯だけで1行いっぱい（flex:1 1 100%）」をやめて、
+       残りの横幅ぶんだけ ⚙ の左に伸びる（flex-basis:auto、shrink可）ようにする。
+       PC 幅は横幅に余裕があるので、帯の中身（バッジ・説明文・2つのボタン）を
+       1行に固定できる（flex-wrap:nowrap）。スマホ幅は入りきらず複数行に
+       折り返すのでこの指定はしない（グローバル側は既定の flex-wrap:wrap のまま）。
+       長い説明文は #toolFlagText 側で省略する。 */
+    #toolFlag{flex:1 1 auto;min-width:0;overflow:hidden;
+      justify-content:flex-start;text-align:left;flex-wrap:nowrap}
+    /* 帯（1行固定・62px）と ⚙ ボタン（44px）が同じ行になるので、
+       .editctl は折り返さない・帯の高さぶんそのまま行の高さになる。
+       スマホ幅の182pxの予約は不要なので62pxへ縮める
+       （帯の有無で高さが変わらない＝押し出しを消す本体）。
+       #stashDock の top（下方）もこの高さを踏まえてずらしてある。 */
+    .editctl{flex-wrap:nowrap;min-height:62px;
+      /* .editctl は align-items 未指定（既定 stretch）だとボタンが
+         min-height ぶん伸びてしまうため、中央揃えにする。 */
       align-items:center}
+    /* #editCtl がスマホ幅の2段（182px）から1段（62px）になるので、
+       #stashDock の下げ幅もそのぶん62+8=70pxへ縮める。 */
+    .stashdock.pos-tr,.stashdock.pos-tl{top:calc(var(--docktop,56px) + 70px)}
   }
   .stashdock.big.pos-tr,.stashdock.big.pos-tl{width:72vw;height:56vh;max-width:520px;max-height:560px;--cell:20px}
   .sb-head{display:flex;align-items:center;gap:4px;flex:none}
@@ -285,8 +309,6 @@
                       pointer-events:none}
   .stashdock.dropping.hit{border-color:#312e81;background:#c7d2fe;
                           box-shadow:0 0 0 5px #6366f1,0 8px 24px rgba(0,0,0,.25)}
-  /* 帯もタブの下に貼りつける（退避スペースと同じ基準にそろえる） */
-  .toolflag{top:var(--docktop,56px)}
   /* 退避スペースは float なので、帯の文字は自動でその手前で折り返す。
      padding を足すと二重に狭まって1行が数文字になるので、足さない。 */
   /* 下に置いたときだけ、バーのぶんの余白を作る */
@@ -582,6 +604,18 @@
       <!-- タブ名と二重になるので見出しは置かない。設定は既定でたたんでおく。
            盤より上に常に出ているのはこのボタン1つだけにする。 -->
       <div class="editctl" id="editCtl">
+        <!-- 帯の中身は3つ。案内（navShow）で消えるのは説明文だけで、
+             選択数と2つのボタンは案内を切っても出す。
+             #editCtl 自体を sticky にして貼り付けるため、帯もその子にして
+             一緒に貼り付くようにする（帯単独の sticky は不要になる）。 -->
+        <div class="toolflag" id="toolFlag">
+          <span id="toolFlagCount" class="flagcount"></span>
+          <span id="toolFlagText"></span>
+          <button class="flagundo" id="flagClearBtn" style="display:none"
+                  onclick="clearSel()">選択解除</button>
+          <button class="flagundo" id="sweepUndoBtn" style="display:none"
+                  onclick="undoSweep()">↩ いまのなぞりを取り消す</button>
+        </div>
         <button class="btn btn-ghost" id="cfgToggleBtn" aria-expanded="false"
                 aria-controls="editCfg" onclick="toggleEditCfg()">⚙ 表示設定</button>
       </div>
@@ -616,16 +650,6 @@
           <div class="sb-body"><div class="spaces" id="zone-stash-mini"></div>
             <div class="sb-empty" id="sbEmpty">ここへ<br>ドラッグ</div></div>
           <button class="sb-back" id="sbBackBtn" onclick="returnSelToWarehouse()">◀ 倉庫へ戻す</button>
-        </div>
-        <!-- 帯の中身は3つ。案内（navShow）で消えるのは説明文だけで、
-             選択数と2つのボタンは案内を切っても出す。 -->
-        <div class="toolflag" id="toolFlag">
-          <span id="toolFlagCount" class="flagcount"></span>
-          <span id="toolFlagText"></span>
-          <button class="flagundo" id="flagClearBtn" style="display:none"
-                  onclick="clearSel()">選択解除</button>
-          <button class="flagundo" id="sweepUndoBtn" style="display:none"
-                  onclick="undoSweep()">↩ いまのなぞりを取り消す</button>
         </div>
         <div id="legend" class="legend"></div>
 
