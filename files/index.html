@@ -2697,6 +2697,23 @@ window.addEventListener("resize",syncDockTop);
    （task-10: タブ列直下の #stashDock は position:sticky;top:var(--docktop) で、
    スクロールすると帯と同じビューポート位置に「貼りつく」ため、帯を退避
    スペースが乗る側だけ避ける旧実装ではスクロール後に重なった。） */
+/* 帯（#toolFlag）の縦位置だけを更新する軽量版。.tabs は sticky で、
+   スクロール中にビューポート上の下端が動く（最上部は <header> のぶん下、
+   貼りついた後はタブ列の高さで頭打ち）。fixed の帯をその直下に保つには、
+   スクロールのたびに実測し直す必要がある。左右幅の計算（#editCard や
+   #stashDock の測定）は重いので、こちらには含めない。 */
+function syncFlagTop(){
+  const tabsEl=document.querySelector(".tabs");
+  const tabsBottom = tabsEl ? tabsEl.getBoundingClientRect().bottom : 48;
+  document.documentElement.style.setProperty("--flagtop", Math.round(tabsBottom+8)+"px");
+}
+// スクロール中は縦位置だけを追う。rAF でまとめて、1フレームに1回に抑える。
+let flagTopTick=false;
+window.addEventListener("scroll", function(){
+  if(flagTopTick) return;
+  flagTopTick=true;
+  requestAnimationFrame(function(){ flagTopTick=false; syncFlagTop(); });
+}, {passive:true});
 function syncFlagRect(){
   const card=document.getElementById("editCard");
   const ctl=document.getElementById("editCtl");
@@ -2755,11 +2772,16 @@ function syncFlagRect(){
   // （実測: tabs.bottom=119.69 に対し --docktop はわずか58）。fixed は
   // sticky と違って「まだ貼りついていない」状態を考慮しないため、
   // --docktop をそのまま使うと帯がタブ列に重なってしまう。
-  // そのため、ここは .tabs を直接実測し、#editCtl と同じ「絶対Y座標へ変換
-  // してから使う」やり方でタブ列のすぐ下（8px）に置く。
-  const tabsEl=document.querySelector(".tabs");
-  const tabsBottom = tabsEl ? tabsEl.getBoundingClientRect().bottom : 48;
-  document.documentElement.style.setProperty("--flagtop", Math.round(tabsBottom+window.scrollY+8)+"px");
+  // そのため、ここは .tabs を直接実測してタブ列のすぐ下（8px）に置く。
+  //
+  // ここで scrollY を足してはいけない（実測で発見）。.tabs は sticky なので、
+  // ビューポート上の位置がスクロールで変わる（実測: 最上部では bottom=119.69、
+  // 貼りついた後は 49.5 で頭打ち）。つまり .tabs では「rect.top + scrollY が
+  // 一定」という関係が成り立たない。絶対Y座標にして固定してしまうと、タブ列が
+  // 上に詰まったぶんだけ帯との間に隙間が開く（実測: 8.31px → 78.5px）。
+  // fixed の top はビューポート基準なので、ビューポート座標のまま入れ、
+  // スクロールのたびに syncFlagTop() で追い直す。
+  syncFlagTop();
   // スマホ幅: ⚙ の下（gap 8px。.editctl の margin-bottom と同じ値）。
   // fixed の top はビューポート基準なので、現在のスクロール量を足して
   // 「ページ上での絶対Y座標」に変換しておく。そうすれば、いつ・どこまで
