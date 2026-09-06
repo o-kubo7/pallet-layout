@@ -258,13 +258,14 @@
          .big ルールで「退避スペース展開中だけ」nowrap を上書きして良い。 */
       flex-wrap:nowrap}
     /* 退避スペース（#stashDock）を展開(.big)すると PC 幅でも最大520px を
-       占め、700px 幅では帯に残る幅が196px 程度しかなく、3要素（実測
-       約362px）が物理的に入らない（task-10 fix report 参照）。nowrap の
-       ままだと3要素が #toolFlag の箱からあふれて退避スペースへ視覚的に
-       重なるため、展開中だけ折り返しを許して2行以上にする（スマホ幅では
-       元々折り返しを許容しており、高さが伸びるだけで破綻しない）。
-       #stashDock → #toolFlag → #legend の DOM 順（兄弟）を利用した
-       後続兄弟セレクタで、非展開時は対象外＝nowrap のまま。 */
+       占め、700px 幅では帯に残る幅が約123px（実測：sweepUndoBtn.right
+       から gap=16 の分だけ左）、3要素（実測約362px）が物理的に入らない
+       （task-10 fix report 参照）。nowrap のままだと3要素が #toolFlag
+       の箱からあふれて退避スペースへ視覚的に重なるため、展開中だけ折り返し
+       を許して2行以上にする（スマホ幅では元々折り返しを許容しており、高さが
+       伸びるだけで破綻しない）。#stashDock → #toolFlag → #legend の
+       DOM 順（兄弟）を利用した後続兄弟セレクタで、非展開時は対象外
+       ＝nowrap のまま。 */
     #stashDock.big ~ #toolFlag{flex-wrap:wrap}
     /* 選択数バッジと2つのボタンは navShow を切っても出る「常に見える」要素。
        絶対に縮めない・省略しない（flex アイテムは既定でも min-width:auto な
@@ -2720,7 +2721,7 @@ function syncFlagRect(){
   // 効くようにしたこと（このガードの欠落こそが元の不具合の原因だった）。
   if(dockPos!=="bottom"){
     const dock=document.getElementById("stashDock");
-    const gap=8; // 帯と退避スペースの隙間（旧実装からの踏襲値）
+    const gap=16; // 帯と退避スペースの隙間（サブピクセル差やフォント描画差で重なる実装上のリスク排除）
     if(dock){
       const dr=dock.getBoundingClientRect();
       // 展開(.big)時は実寸が大きくなるが、getBoundingClientRect()が
