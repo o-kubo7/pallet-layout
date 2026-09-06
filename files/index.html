@@ -180,8 +180,8 @@
   .stashbar b{color:#3730a3}
   /* ===== [試作] なぞって選ぶ ===== */
   /* touch-action は指が触れた瞬間に評価される。なぞり始めてから付けても遅く、
-     ブラウザが先にパンを始めて pointercancel で中断する。だからサブモードの
-     あいだは全マスにあらかじめ付けておく（マウスにはこの制約が無い）。 */
+     ブラウザが先にパンを始めて pointercancel で中断する。だからいまは常に
+     全マスにあらかじめ付けておく（マウスにはこの制約が無い）。 */
   #mapBody.sweep .cell[data-lot]{touch-action:none;cursor:crosshair}
   /* 盤の上端に貼りつく状態表示。長い盤をたどっても、いまの状態が視界から消えない */
   /* 取り消しは帯の中に入れる。盤をたどっている最中でも指の近くに残る */
@@ -534,7 +534,7 @@
     </div>
   </div>
 
-  <!-- ===== 配置編集タブ（ブロック図：移動と通路編集はここでだけできる） ===== -->
+  <!-- ===== 配置編集タブ（ブロック図：ロットの移動と退避ができる。モードの切り替えは無い） ===== -->
   <div id="tab-edit" class="tabpanel" style="display:none">
     <div class="card" id="editCard">
       <!-- タブ名と二重になるので見出しは置かない。設定は既定でたたんでおく。
@@ -2224,9 +2224,9 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
   return {ok:true, needConfirm: after>before, before, after, next};
 }
 
-/* ---------- 通路編集 / ロット移動（モードと選択） ---------- */
+/* ---------- ロット移動（moveMode の宣言と選択） ---------- */
 // 配置編集タブは開いた時点で編集できる。切り替えるボタンは無い。
-// 変数を残すのは、これを見ている箇所(pointerdown / click ハンドラ)を
+// 変数を残すのは、これを見ている箇所（pointerdown / click ハンドラ）を
 // 書き換えずに済ませるため。定数なので、いまはどれも素通りする。
 const moveMode=true;
 let sel={lotId:null, cells:new Set()};
@@ -2681,7 +2681,7 @@ function drawStashBar(sp, lots){
    なぞるは既定でオン。指がマスに触れた瞬間にブラウザがスクロールを始めてしまい、
    触れたあとから touch-action:none にはできないので、起動時に setTool("sweep") を
    呼んで先に付けておく。盤のスクロールは列の隙間・余白・盤の外で行う
-   （2026-09-06 に Pixel 9a で問題なしと確認済み）。
+   （Pixel 9a での確認は Task 7 で行う）。
    画面の2択は廃止したが、tool と setTool() は残してある。配置不可エリアの設定が
    「いま何を選んでいるのか」の切り替えを必要とするため。 */
 let tool="sweep";                // "sweep" が既定。将来ここに別の選び方が増える
@@ -2856,7 +2856,8 @@ document.addEventListener("pointerdown",e=>{
   const c=e.target.closest(".cell"); if(!c||!c.closest("#mapBody")) return;
   if(c.dataset.lot==null) return;                 // 空マスからは始めない
   const onSel=c.classList.contains("sel");
-  // 指のとき：なぞるを選んでいないなら、未選択のマスからは始めない（画面を動かせる）。
+  // 指のとき：tool はいまは常に "sweep" なので、この判定は素通りする。第2弾で配置不可
+  // エリアの設定が入り、別の選び方が増えたときに効かせるための条件である。
   // 選択済みのマスには元から touch-action:none が付いているので、運ぶのはいつでもできる。
   if(e.pointerType!=="mouse" && tool!=="sweep" && !onSel) return;
   sweep={id:e.pointerId, x0:e.clientX, y0:e.clientY, started:false, target:c,
