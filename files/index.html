@@ -250,8 +250,22 @@
       /* なぞり操作後は選択数バッジ・説明文・「選択解除」・「↩ いまのなぞりを
          取り消す」の4要素が並ぶ。折り返すと2行になり下のメッセージへ重なる
          （task-8 fix で判明済み）ため、PC 幅では常に1行に収める。
-         長い説明文は #toolFlagText 側で省略する。 */
+         長い説明文は #toolFlagText 側で省略する。
+         ↑この nowrap は帯が position:absolute だった頃、2行になると
+         下の #messages を覆ってしまう問題への対策として入れた。今は帯が
+         position:fixed で常に盤の上に浮いており、2行になっても何かを
+         押し出したり、盤以外の要素を覆ったりはしない。そのため、下の
+         .big ルールで「退避スペース展開中だけ」nowrap を上書きして良い。 */
       flex-wrap:nowrap}
+    /* 退避スペース（#stashDock）を展開(.big)すると PC 幅でも最大520px を
+       占め、700px 幅では帯に残る幅が196px 程度しかなく、3要素（実測
+       約362px）が物理的に入らない（task-10 fix report 参照）。nowrap の
+       ままだと3要素が #toolFlag の箱からあふれて退避スペースへ視覚的に
+       重なるため、展開中だけ折り返しを許して2行以上にする（スマホ幅では
+       元々折り返しを許容しており、高さが伸びるだけで破綻しない）。
+       #stashDock → #toolFlag → #legend の DOM 順（兄弟）を利用した
+       後続兄弟セレクタで、非展開時は対象外＝nowrap のまま。 */
+    #stashDock.big ~ #toolFlag{flex-wrap:wrap}
     /* 選択数バッジと2つのボタンは navShow を切っても出る「常に見える」要素。
        絶対に縮めない・省略しない（flex アイテムは既定でも min-width:auto な
        ので中身より縮まないはずだが、明示して事故を防ぐ）。 */
@@ -2695,87 +2709,33 @@ function syncFlagRect(){
   // 退避スペース（#stashDock）は設定で「右上」「左上」を切り替えられる。
   // 帯（fixed）はスクロール後に #stashDock（sticky）と同じビューポート位置に
   // 貼りつくため、上下では避けられない（実測で確認：スクロール後は両者の
-  // top/bottom が重なる）。#stashDock は左右どちらかの隅に固定なので、
-  // 位置設定に関わらず重ならないよう、帯は最初から左右【両側】に退避スペース
-  // ぶんの余白を空けておく（右上・左上を切り替えた瞬間に帯の形が変わって
-  // 選び直しになるのを防ぐのが目的。コントローラ指示）。
-  // pos-tr と pos-tl は幅ルールが同じ（33vw等/240px、展開時は72vw等）ので、
-  // 現在の実測幅をそのまま両側の予約に使い回せる。
+  // top/bottom が重なる）。#stashDock は左右どちらか【今実際に乗っている
+  // 側】だけに固定なので、そちら側だけを実測幅ぶん避ければ重ならない。
+  // （前ラウンドで「左右両側に予約」する実装を入れたが、これは誤りだった。
+  // 旧不具合の実体は「PC幅では左右除外を一切していなかった」ことであり、
+  // 両側予約は過剰な対処だった。両側予約は412px幅で帯が76px×392pxまで
+  // 潰れる劣化・700px幅で3要素があふれる破綻を招いたため撤回し、片側除外
+  // （旧実装と同じ考え方）に戻す。旧実装との違いは、旧実装が
+  // `window.innerWidth<700` でスマホ幅限定にしていた点をやめ、PC幅でも
+  // 効くようにしたこと（このガードの欠落こそが元の不具合の原因だった）。
   if(dockPos!=="bottom"){
     const dock=document.getElementById("stashDock");
     const gap=8; // 帯と退避スペースの隙間（旧実装からの踏襲値）
-    // 非展開時の基準幅。.stashdock.pos-tr/.pos-tl の CSS 値と同じ式
-    // （33vw、118〜190pxにクランプ／PC幅は240px固定）。#stashDock が
-    // 展開中(.big)で実寸が大きくなっていても、「今は乗っていない側」は
-    // この基準幅だけ空けておけば通常の左右切り替えでは重ならない。
-    const baseW = window.innerWidth<700
-      ? Math.min(Math.max(window.innerWidth*0.33,118),190)
-      : 240;
-    let leftReserve=baseW+gap, rightReserve=baseW+gap;
-    // スマホ幅で退避スペースが展開(.big)中は、実寸（72vw前後）に加えて
-    // 反対側の基準予約(33vw前後)まで両方確保しようとすると
-    // 72vw+33vw>100vw で画面幅を超え、帯の幅が0以下に潰れて中身が
-    // #toolFlag の外へあふれる破綻が実測で見つかった。展開中は「実際に
-    // 乗っている側」の実寸だけを避け、反対側の基準予約はしない
-    // （反対側は今なにも表示されていないので実害がなく、setDockPos()で
-    // 位置を変えれば syncDockTop()→本関数が呼び直されて正しく再計算
-    // される）。PC幅は展開時でも72vw等が240pxの基準予約と両立できる幅が
-    // あるため対象外（実測でも重なりゼロを確認済み）。
-    const isBigMobile = window.innerWidth<700 && dock && dock.classList.contains("big");
-    if(isBigMobile){ leftReserve=0; rightReserve=0; }
     if(dock){
       const dr=dock.getBoundingClientRect();
+      // 展開(.big)時は実寸が大きくなるが、getBoundingClientRect()が
+      // その時点の実際の見た目の幅を返すので、展開・非展開を区別する
+      // 分岐は不要（実測値をそのまま使えば良い）。
       if(dr.width>0){
-        // 実際に今乗っている側は、展開(.big)時の実寸まで正しく避ける
-        // （基準幅だけでは展開時に狭すぎて重なるため。実寸が基準幅以下
-        // なら max() で基準幅のまま変わらない）。
-        const activeReserve=dr.width+gap;
-        if(dockPos==="tr") rightReserve=Math.max(rightReserve, activeReserve);
-        else if(dockPos==="tl") leftReserve=Math.max(leftReserve, activeReserve);
+        if(dockPos==="tr"){
+          width=Math.min(width, dr.left-gap-left);
+        }else if(dockPos==="tl"){
+          const newLeft=dr.right+gap;
+          width=Math.min(width,(left+width)-newLeft);
+          left=newLeft;
+        }
       }
     }
-    // 選択数バッジ・選択解除・なぞり取消の3要素は navShow を切っても出る
-    // 「常に見える」要素で、PC幅（@media (min-width:700px)）では flex:none
-    // ＋ flex-wrap:nowrap のため縮まず・折り返さない。そのPC幅で両側の
-    // 余白をそのまま引くと、この3要素が入りきらず #toolFlag の外へ
-    // あふれる破綻が実測で見つかった（3要素の完全表示を退避スペースぶんの
-    // 余白確保より優先する、との指示に反する）。そこで、PC幅に限り、
-    // 3要素が収まる幅を下回りそうな場合は、退避スペースの余白を「実際に
-    // 乗っている側」を優先しつつ削る（乗っていない側から先に削り、それでも
-    // 足りなければ乗っている側も削る＝この場合だけ実際に重なりうるが、
-    // 3要素表示を優先した結果として許容する）。
-    // スマホ幅（<700px）は既定の flex-wrap:wrap のまま（flex:none 指定が
-    // 無い）なので、幅が足りなければ折り返して高さが伸びるだけで、
-    // #toolFlag の外へあふれることはない。よってこの補正は不要。
-    if(window.innerWidth>=700){
-      // 3要素の実測幅を毎回ここで測るのではなく固定値を使う。理由:
-      // syncFlagRect() が呼ばれるタイミング（resize・タブ切替・退避位置変更・
-      // 展開/折りたたみ）は、選択操作（toggleCell()等）や updateFlag()の
-      // 表示切り替えとは連動していない。選択前は3要素がまだ display:none で
-      // 実測0になり、選択直後の実際の幅を過小評価してしまう
-      // （実測で発見：選択前に測った0のまま帯が縮んだ状態になった）。
-      // updateFlag()側に呼び出しを足すことは変更禁止範囲のため、ここでは
-      // 実測値（1280px幅で109.59/72/171.34px、2026-09-06計測）を丸めた
-      // 固定値を使う。文言や文字サイズを変えたら要再計測。
-      const contentW=110+72+172;
-      // 隙間(gap:10px、3要素+説明文で最大3箇所)と左右padding(12px×2)の見積り。
-      const chrome=3*10+24;
-      // CSS側でさらに134px（⚙ ボタン分）引かれる（calc(var(--flagwidth) - 134px)）
-      // ので、その分もここで見込んでおく。
-      const minFlagW = contentW+chrome+134;
-      if(width-leftReserve-rightReserve < minFlagW){
-        const budget=Math.max(width-minFlagW,0);
-        const activeIsRight = dockPos==="tr";
-        let primary = activeIsRight?rightReserve:leftReserve;
-        let secondary = activeIsRight?leftReserve:rightReserve;
-        if(budget>=primary){ secondary=budget-primary; }
-        else { secondary=0; primary=budget; }
-        leftReserve = activeIsRight?secondary:primary;
-        rightReserve = activeIsRight?primary:secondary;
-      }
-    }
-    left+=leftReserve;
-    width-=leftReserve+rightReserve;
   }
   // pos-bottom は画面下に fixed で全幅表示になるので、帯（画面上部）とは
   // 縦方向でそもそも重ならない。左右の余白は不要（除外しない）。
