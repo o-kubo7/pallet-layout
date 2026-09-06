@@ -2651,6 +2651,12 @@ function toggleStashPanel(){
   const d=document.getElementById("stashDock");
   d.classList.toggle("big");
   document.getElementById("sbExpBtn").textContent=d.classList.contains("big")?"⤡":"⤢";
+  // syncFlagRect() は #stashDock の class（big の付け外し）が確定した後に呼ぶ。
+  // 先に呼ぶと、帯の左右除外（スマホ幅）が展開前の大きさを見てしまい古いまま
+  // になる（setDockPos() と同じ理由、実測で発見）。ここでは syncDockTop() は
+  // 使わない。syncDockTop() が測る .tabs の高さは #stashDock の展開有無で
+  // 変わらないため、その再計算は不要で、syncFlagRect() を直接呼べば足りる。
+  syncFlagRect();
 }
 
 /* 退避スペースの位置。右利きは右上、左利きは左上。下は従来の帯。
@@ -2709,6 +2715,8 @@ function syncFlagRect(){
   // fixed の top はビューポート基準なので、現在のスクロール量を足して
   // 「ページ上での絶対Y座標」に変換しておく。そうすれば、いつ・どこまで
   // スクロールされた状態で測っても、変数の値は動かない。
+  // （rect.top は「絶対Y − scrollY」なので、rect.top + scrollY は常に
+  // 絶対Yに戻り、スクロール位置に依存しない不変量になる。）
   const ctlRect=ctl.getBoundingClientRect();
   // PC 幅: ⚙ ボタン（高さ44px）と帯（1行固定・実測62px）の縦中心をそろえる。
   // (62-44)/2=9 だけ ⚙ の行の上端より上に出す（旧 top:5px 実装と同じ考え方）。
