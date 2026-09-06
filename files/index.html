@@ -236,12 +236,32 @@
       /* ⚙ ボタン（実測 幅約100px）に重ならないよう右を空ける。
          134px = 右 padding16px + ボタン幅100px(実測) + 隙間18px */
       right:134px;
-      margin-bottom:0;justify-content:flex-start;text-align:left}
-    /* 帯（実測62px）が下の設定パネルや案内文に重ならないよう、
+      margin-bottom:0;justify-content:flex-start;text-align:left;
+      /* レビュー指摘: なぞり操作後は選択数バッジ・説明文・「選択解除」・
+         「↩ いまのなぞりを取り消す」の4要素が並び、700〜950px 幅では
+         折り返して2行（実測116px）になり、下の #messages / #legend に
+         重なっていた（position:absolute は要素を押し出さない代わりに
+         そのまま下へ重なる）。PC 幅では折り返しを禁止し、常に1行に
+         収める。長い説明文は #toolFlagText 側で省略する。 */
+      flex-wrap:nowrap}
+    /* 選択数バッジと2つのボタンは navShow を切っても出る「常に見える」要素。
+       絶対に縮めない・省略しない（flex アイテムは既定でも min-width:auto な
+       ので中身より縮まないはずだが、明示して事故を防ぐ）。 */
+    #toolFlag .flagcount,#toolFlag #flagClearBtn,#toolFlag #sweepUndoBtn{flex:none}
+    /* 説明文だけが可変長。狭い幅では末尾を省略して1行に収める。
+       flex アイテムは min-width:0 を与えないと、内容量より縮まずに
+       兄弟を押し出して折り返しの原因になる点に注意。 */
+    #toolFlagText{flex:1 1 auto;min-width:0;overflow:hidden;
+      text-overflow:ellipsis;white-space:nowrap}
+    /* 帯（1行固定・実測62px）が下の設定パネルや案内文に重ならないよう、
        ⚙ の行にあらかじめ高さを確保しておく（帯の有無で行の高さ自体は
        変えない＝押し出しを消す本体）。値は上のコメントの実測62pxから
        逆算: 14(padding-top)+46(この値)+8(margin-bottom)≒帯の下端(67px) */
-    .editctl{min-height:46px}
+    .editctl{min-height:46px;
+      /* .editctl は align-items 未指定（既定 stretch）だったため、
+         min-height を足したことで #cfgToggleBtn（.btn{min-height:44px}）
+         が46pxへ伸びていた（レビュー指摘）。中央揃えにして解消する。 */
+      align-items:center}
   }
   .stashdock.big.pos-tr,.stashdock.big.pos-tl{width:72vw;height:56vh;max-width:520px;max-height:560px;--cell:20px}
   .sb-head{display:flex;align-items:center;gap:4px;flex:none}
