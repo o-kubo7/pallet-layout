@@ -220,6 +220,28 @@
   /* PC は盤が広いので、隅に置いても邪魔にならない大きさにする */
   @media (min-width:700px){
     .stashdock.pos-tr,.stashdock.pos-tl{width:240px;height:210px;max-width:none;max-height:none;--cell:18px}
+    /* PC 幅だけ、選択の帯を ⚙ の行の左空きへ重ねて出す。
+       帯の出現で行の高さが変わらないようにし、選択のたびに盤が下へ
+       押し出されるのを防ぐ（スマホ幅は盤の上端に貼りつく sticky のまま、
+       このブロックの外なので影響しない）。
+       #toolFlag は #editCtl の子ではなく #mapBody の子なので、
+       #editCtl ではなく #editCard を絶対配置の基準にする。 */
+    #editCard{position:relative}
+    #toolFlag{position:absolute;
+      /* #editCard の padding は 14px 16px（.card, 23行目）。
+         top:5px は ⚙ ボタン（高さ44px）と帯（実測62px＝padding9px×2＋
+         「選択解除」ボタンの高さ44px。1行に収まる幅なので折返しではない）の
+         縦中心をそろえた値: 14 - (62-44)/2 = 5。左は padding と同じ16px */
+      top:5px;left:16px;
+      /* ⚙ ボタン（実測 幅約100px）に重ならないよう右を空ける。
+         134px = 右 padding16px + ボタン幅100px(実測) + 隙間18px */
+      right:134px;
+      margin-bottom:0;justify-content:flex-start;text-align:left}
+    /* 帯（実測62px）が下の設定パネルや案内文に重ならないよう、
+       ⚙ の行にあらかじめ高さを確保しておく（帯の有無で行の高さ自体は
+       変えない＝押し出しを消す本体）。値は上のコメントの実測62pxから
+       逆算: 14(padding-top)+46(この値)+8(margin-bottom)≒帯の下端(67px) */
+    .editctl{min-height:46px}
   }
   .stashdock.big.pos-tr,.stashdock.big.pos-tl{width:72vw;height:56vh;max-width:520px;max-height:560px;--cell:20px}
   .sb-head{display:flex;align-items:center;gap:4px;flex:none}
