@@ -183,10 +183,23 @@
      ブラウザが先にパンを始めて pointercancel で中断する。だからいまは常に
      全マスにあらかじめ付けておく（マウスにはこの制約が無い）。 */
   #mapBody.sweep .cell[data-lot]{touch-action:none;cursor:crosshair}
-  /* 盤の上端に貼りつく状態表示。長い盤をたどっても、いまの状態が視界から消えない */
+  /* 画面上端に貼りつく状態表示。sticky は高さ予約が要るため使わず、position:fixed にする
+     （fixed は高さを占めない＝押し出しゼロ、スクロールに追従する＝貼り付き、
+     高さ予約が不要＝未選択時の空白ゼロ、の3条件を同時に満たせる）。
+     DOM は #mapBody の子のまま動かしていない。
+     left/width/top は syncFlagRect()（#editCtl の下の syncDockTop() 内）が
+     #editCard・#editCtl を実測して CSS 変数へ入れる。#editCard は配置編集タブが
+     表示されているときしか幅を持たないため、変数のフォールバック値は
+     「タブに来る前に一瞬だけ見える可能性がある値」程度の意味しかない。
+     ⚙ ボタン（#editCtl）は貼り付け対象から外すとの指示のため、⚙ 自身は
+     この帯とは無関係にふつうに流れる。 */
   /* 取り消しは帯の中に入れる。盤をたどっている最中でも指の近くに残る */
-  .toolflag{position:sticky;top:0;z-index:30;display:none;padding:9px 12px;border-radius:8px;
-            font-size:13px;font-weight:700;color:#fff;text-align:center;margin-bottom:8px;
+  .toolflag{position:fixed;z-index:65;display:none;padding:9px 12px;border-radius:8px;
+            font-size:13px;font-weight:700;color:#fff;text-align:center;
+            left:var(--flagleft,16px);width:var(--flagwidth,calc(100% - 32px));
+            /* 既定（スマホ幅）は ⚙ の下。PC 幅は @media (min-width:700px) で
+               ⚙ と同じ高さへ上書きする */
+            top:var(--flagtopm,110px);
             gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
   .flagundo{border:0;border-radius:6px;padding:7px 12px;background:#fff;color:#1f2937;
             font-weight:700;font-size:12px;cursor:pointer;min-height:44px}
@@ -220,29 +233,21 @@
   /* PC は盤が広いので、隅に置いても邪魔にならない大きさにする */
   @media (min-width:700px){
     .stashdock.pos-tr,.stashdock.pos-tl{width:240px;height:210px;max-width:none;max-height:none;--cell:18px}
-    /* PC 幅だけ、選択の帯を ⚙ の行の左空きへ重ねて出す。
-       帯の出現で行の高さが変わらないようにし、選択のたびに盤が下へ
-       押し出されるのを防ぐ（スマホ幅は盤の上端に貼りつく sticky のまま、
-       このブロックの外なので影響しない）。
-       #toolFlag は #editCtl の子ではなく #mapBody の子なので、
-       #editCtl ではなく #editCard を絶対配置の基準にする。 */
-    #editCard{position:relative}
-    #toolFlag{position:absolute;
-      /* #editCard の padding は 14px 16px（.card, 23行目）。
-         top:5px は ⚙ ボタン（高さ44px）と帯（実測62px＝padding9px×2＋
-         「選択解除」ボタンの高さ44px。1行に収まる幅なので折返しではない）の
-         縦中心をそろえた値: 14 - (62-44)/2 = 5。左は padding と同じ16px */
-      top:5px;left:16px;
-      /* ⚙ ボタン（実測 幅約100px）に重ならないよう右を空ける。
-         134px = 右 padding16px + ボタン幅100px(実測) + 隙間18px */
-      right:134px;
-      margin-bottom:0;justify-content:flex-start;text-align:left;
-      /* レビュー指摘: なぞり操作後は選択数バッジ・説明文・「選択解除」・
-         「↩ いまのなぞりを取り消す」の4要素が並び、700〜950px 幅では
-         折り返して2行（実測116px）になり、下の #messages / #legend に
-         重なっていた（position:absolute は要素を押し出さない代わりに
-         そのまま下へ重なる）。PC 幅では折り返しを禁止し、常に1行に
-         収める。長い説明文は #toolFlagText 側で省略する。 */
+    /* PC 幅は帯を ⚙ と同じ高さ（syncFlagRect() が測った --flagtop）へ出す。
+       ⚙（#editCtl）自体は貼り付け対象から外すとの指示のため、⚙ 側には一切
+       手を入れない（min-height 予約も不要になった。position:fixed は高さを
+       占めないので、そもそも ⚙ の行の高さを確保する必要が無い）。 */
+    #toolFlag{top:var(--flagtop,56px);
+      /* --flagwidth は #editCard の内側いっぱいの幅。⚙ ボタンに重ならないよう
+         右側だけ固定値で空ける。134px = 右 padding16px + ボタン幅100px(実測) +
+         隙間18px（task-8 で実測した値をそのまま踏襲。#cfgToggleBtn の文言は
+         変わらないので実測値のずれは想定していない）。 */
+      width:calc(var(--flagwidth,600px) - 134px);
+      justify-content:flex-start;text-align:left;
+      /* なぞり操作後は選択数バッジ・説明文・「選択解除」・「↩ いまのなぞりを
+         取り消す」の4要素が並ぶ。折り返すと2行になり下のメッセージへ重なる
+         （task-8 fix で判明済み）ため、PC 幅では常に1行に収める。
+         長い説明文は #toolFlagText 側で省略する。 */
       flex-wrap:nowrap}
     /* 選択数バッジと2つのボタンは navShow を切っても出る「常に見える」要素。
        絶対に縮めない・省略しない（flex アイテムは既定でも min-width:auto な
@@ -253,15 +258,6 @@
        兄弟を押し出して折り返しの原因になる点に注意。 */
     #toolFlagText{flex:1 1 auto;min-width:0;overflow:hidden;
       text-overflow:ellipsis;white-space:nowrap}
-    /* 帯（1行固定・実測62px）が下の設定パネルや案内文に重ならないよう、
-       ⚙ の行にあらかじめ高さを確保しておく（帯の有無で行の高さ自体は
-       変えない＝押し出しを消す本体）。値は上のコメントの実測62pxから
-       逆算: 14(padding-top)+46(この値)+8(margin-bottom)≒帯の下端(67px) */
-    .editctl{min-height:46px;
-      /* .editctl は align-items 未指定（既定 stretch）だったため、
-         min-height を足したことで #cfgToggleBtn（.btn{min-height:44px}）
-         が46pxへ伸びていた（レビュー指摘）。中央揃えにして解消する。 */
-      align-items:center}
   }
   .stashdock.big.pos-tr,.stashdock.big.pos-tl{width:72vw;height:56vh;max-width:520px;max-height:560px;--cell:20px}
   .sb-head{display:flex;align-items:center;gap:4px;flex:none}
@@ -285,10 +281,6 @@
                       pointer-events:none}
   .stashdock.dropping.hit{border-color:#312e81;background:#c7d2fe;
                           box-shadow:0 0 0 5px #6366f1,0 8px 24px rgba(0,0,0,.25)}
-  /* 帯もタブの下に貼りつける（退避スペースと同じ基準にそろえる） */
-  .toolflag{top:var(--docktop,56px)}
-  /* 退避スペースは float なので、帯の文字は自動でその手前で折り返す。
-     padding を足すと二重に狭まって1行が数文字になるので、足さない。 */
   /* 下に置いたときだけ、バーのぶんの余白を作る */
   #mapBody.dock-bottom{padding-bottom:130px}
 
@@ -2072,6 +2064,10 @@ function switchTab(name){
   });
   document.getElementById("actionBar").style.display = (name==="input")?"":"none";
   window.scrollTo(0,0);
+  // 配置編集タブに来た直後は #editCard がいま初めて幅を持つ（他タブでは
+  // display:none で幅0だったため）。選択の帯（position:fixed）の左端・幅・
+  // 縦位置はここで実測し直さないと前回の値のまま古くなる。
+  if(name==="edit") syncFlagRect();
   // 選択は配置編集タブの中だけの状態。他のタブへ移ったら捨てる。
   // 残すと、戻ってきたとき「なぜか選ばれている」状態になる
   if(name!=="edit") clearSel();
@@ -2665,10 +2661,62 @@ function syncDockTop(){
   const t=document.querySelector(".tabs");
   const h=t?Math.round(t.getBoundingClientRect().height):48;
   document.documentElement.style.setProperty("--docktop",(h+8)+"px");
+  syncFlagRect();
 }
 window.addEventListener("resize",syncDockTop);
+/* 選択の帯（#toolFlag）は position:fixed。ビューポート基準の座標が要るので、
+   #editCard（左端・幅）と #editCtl＝⚙ の行（縦位置の基準）を実測して
+   CSS 変数へ入れる。100vw は使わない（スクロールバー幅を含みずれるため）。
+   #editCard は配置編集タブが表示されているときしか幅を持たない
+   （他タブでは #tab-edit が display:none で幅0になる）ので、そのときは
+   何もせず既存の値を保持する（帯自体も display:none なので実害はない）。 */
+function syncFlagRect(){
+  const card=document.getElementById("editCard");
+  const ctl=document.getElementById("editCtl");
+  if(!card || !ctl) return;
+  const cr=card.getBoundingClientRect();
+  if(cr.width<=0) return;
+  const cs=getComputedStyle(card);
+  const padL=parseFloat(cs.paddingLeft)||0;
+  const padR=parseFloat(cs.paddingRight)||0;
+  let left=cr.left+padL, width=cr.width-padL-padR;
+  // スマホ幅では帯（fixed）が複数行に伸びて #stashDock（右上/左上に浮く退避
+  // スペース、sticky）の縦位置と被ることがある。#toolFlag は #mapBody の外
+  // （position:fixed）に出たため、float によるテキストの自動よけが効かなく
+  // なった。帯の高さは選択状態で変わり続けるため「上下」で避けるのは
+  // 際限がなく（過去に +190px で破綻した轍を踏む）、退避スペースは左右
+  // どちらかの隅に固定なので「左右」で避ける方が実測1回で済み安定する。
+  // PC 幅は帯が ⚙ の行に収まる高さ62px 固定で、退避スペースは常にそれより
+  // 下（#messages より後）に居るため、この除外は不要（狭めない）。
+  if(window.innerWidth<700){
+    const dock=document.getElementById("stashDock");
+    if(dock){
+      const dr=dock.getBoundingClientRect();
+      if(dr.width>0 && dock.classList.contains("pos-tr")){
+        width=Math.min(width, dr.left-8-left);
+      }else if(dr.width>0 && dock.classList.contains("pos-tl")){
+        const newLeft=dr.right+8;
+        width=Math.min(width,(left+width)-newLeft);
+        left=newLeft;
+      }
+      // pos-bottom は画面下に固定される退避スペースなので、帯（画面上部）とは
+      // 重ならない。除外しない。
+    }
+  }
+  width=Math.max(width,0);
+  document.documentElement.style.setProperty("--flagleft",left+"px");
+  document.documentElement.style.setProperty("--flagwidth",width+"px");
+  // fixed の top はビューポート基準なので、現在のスクロール量を足して
+  // 「ページ上での絶対Y座標」に変換しておく。そうすれば、いつ・どこまで
+  // スクロールされた状態で測っても、変数の値は動かない。
+  const ctlRect=ctl.getBoundingClientRect();
+  // PC 幅: ⚙ ボタン（高さ44px）と帯（1行固定・実測62px）の縦中心をそろえる。
+  // (62-44)/2=9 だけ ⚙ の行の上端より上に出す（旧 top:5px 実装と同じ考え方）。
+  document.documentElement.style.setProperty("--flagtop", Math.round(ctlRect.top+window.scrollY-9)+"px");
+  // スマホ幅: ⚙ の行の下（gap 8px。.editctl の margin-bottom と同じ値）
+  document.documentElement.style.setProperty("--flagtopm", Math.round(ctlRect.bottom+window.scrollY+8)+"px");
+}
 function setDockPos(v){
-  syncDockTop();
   dockPos=(v==="tl"||v==="bottom")?v:"tr";
   const d=document.getElementById("stashDock"), m=document.getElementById("mapBody");
   if(d) d.className="stashdock pos-"+dockPos+(d.classList.contains("big")?" big":"");
@@ -2679,6 +2727,10 @@ function setDockPos(v){
   });
   saveData("palletApp.stashPos", dockPos);
   drawStashDock(lastSp, lastLots);
+  // syncDockTop()（→ syncFlagRect()）は #stashDock の class が確定した後に呼ぶ。
+  // 先に呼ぶと、帯の左右除外（スマホ幅）が変更前の位置（pos-tr/pos-tl）を
+  // 見てしまい古いままになる（実測で発見）。
+  syncDockTop();
 }
 /* 案内（盤の上の帯）の表示・非表示。慣れた人には邪魔になるため。
    ただし「いまのなぞりを取り消す」だけは、非表示でも出す。取り消せないと困る。 */
