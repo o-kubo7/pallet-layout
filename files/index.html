@@ -901,7 +901,7 @@ let scheduleLoadWarning=[];
 let spacesWereReset=false;
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", display:"palletApp.display", merge:"palletApp.merge", schedule:"palletApp.schedule"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", schedule:"palletApp.schedule"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
 const SPACES_SAVE_VERSION = 3;   // [試作] 退避スペースを足したので上げる
@@ -4153,12 +4153,16 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","
 /* ---------- init ---------- */
 // スペース設定：保存があれば復元。壊れていたら捨てて初期値に戻し、その旨を設定タブに出す。
 (function initSpaces(){
+  // spaces を消した直後に schedule 保存だけが失敗しても、次回起動で旧 manual を
+  // 新しい既定配置の指紋へ付け替えてはいけない。schedule を確定するまで印を残す。
+  if(loadData(STORE_KEY.spacesResetPending)) spacesWereReset=true;
   const d=loadData(STORE_KEY.spaces);
   if(!d) return;
   // バージョン不一致は「壊れていた」のではなく、こちらが既定値を更新した合図。
   // 同じ文言にすると利用者は自分の設定が壊れたと読む。手動調整も
   // restoreManual() が指紋不一致で無言に捨てるので、ここで一緒に知らせる
   if(d.v!==SPACES_SAVE_VERSION){
+    saveData(STORE_KEY.spacesResetPending, true);
     saveData(STORE_KEY.spaces, null);
     spacesWereReset=true;
     showCfgNote("配置マスを現場の実測に合わせて更新したので、スペース設定と手動調整を初期値に戻しました。");
@@ -4201,7 +4205,7 @@ updateSaveStatus();
   renderTimingSwitches();
   renderSlips(activeShift().slips);
   let migrationWarning="";
-  if(loaded.legacyManual){
+  if(loaded.legacyManual && !spacesWereReset){
     const lots=readLots().lots;
     if(legacyManualCompatible(loaded.legacyManual.lots,lots)){
       const fp=fingerprintFor(activeShift().slips);
@@ -4231,7 +4235,10 @@ updateSaveStatus();
   },loaded.wasMigrated);
   // 旧キーは移行に失敗した場合の再試行用に残す。互換判定・再配置・警告を
   // 完了してからだけ新形式を保存するので、保存失敗でも旧形式から復元できる。
-  if(bootOK && (loaded.wasMigrated || loaded.warnings.length || spacesWereReset)) saveSchedule();
+  if(bootOK && (loaded.wasMigrated || loaded.warnings.length || spacesWereReset)){
+    const saved=saveSchedule();
+    if(saved && spacesWereReset) removeData(STORE_KEY.spacesResetPending);
+  }
 })();
 
 // マスの大きさ：保存があれば復元
