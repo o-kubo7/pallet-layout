@@ -317,37 +317,29 @@
   .savestat.warn{color:#b45309}
   .empty{padding:26px 10px;text-align:center;color:var(--muted);font-size:13px}
 
-  /* ---- 入力カード（スマホ） ---- */
-  .fld2{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
-  .fld2 label{width:62px;flex:none;font-size:12px;color:var(--muted);font-weight:700}
-  .fld2 input[type=date]{border:1px solid var(--line);border-radius:8px;padding:9px 10px;
-                         font-size:16px;min-height:44px;background:#fff;color:#1f2937}
-  .lotcards{display:none}
-  .lotcard{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:#fff}
-  .lotcard .top{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:1}
-  .seg button{flex:1;border:0;background:#fff;padding:10px 4px;font-size:14px;color:#374151;
-              cursor:pointer;min-height:44px}
-  .seg button.on{background:var(--accent);color:#fff;font-weight:700}
-  .fld{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-  .fld label{width:52px;flex:none;font-size:12px;color:var(--muted);font-weight:700}
-  .fld input{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:10px;
-             font-size:16px;min-height:44px;background:#fff}
-  .fld select{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:10px;
-              font-size:16px;min-height:44px;background:#fff;color:#1f2937}
-  .hyph{border:1px solid var(--line);background:#f8fafc;border-radius:8px;min-width:46px;min-height:44px;
-        font-size:18px;font-weight:700;color:#374151;cursor:pointer;flex:none}
-  .nextbtn{border:1px dashed var(--accent);background:#eff6ff;color:#1d4ed8;border-radius:8px;
-           width:100%;min-height:44px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px}
-  .lotcard .foot{display:flex;justify-content:flex-end;align-items:baseline;gap:6px;
-                 border-top:1px dashed var(--line);margin-top:10px;padding-top:8px}
-  .lotcard .foot .val{font-size:22px;font-weight:800}
-  .lotcard .foot .val.warn{color:#b45309;font-size:15px}
+  /* ---- 伝票単位の入力 ---- */
+  .input-head{padding-bottom:10px}
+  .date-row{display:flex;justify-content:space-between;min-width:0;gap:12px;align-items:flex-start}
+  .date-field{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
+  .date-field label{font-size:12px;color:var(--muted);font-weight:700}
+  .date-field input[type=date]{border:1px solid var(--line);border-radius:8px;padding:9px 10px;
+                               font-size:16px;min-height:44px;background:#fff;color:#1f2937}
+  .clear-input{flex:none}
+  .timing-switch{margin-top:10px}
+  .slip-count{margin-top:8px;font-size:12px;color:var(--muted);font-weight:700}
+  .slip{border:1px solid var(--line);border-radius:10px;background:#fff;margin-bottom:14px;overflow:hidden}
+  .slip-head{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f8fafc;border-bottom:1px solid var(--line)}
+  .slip-head .item-count{font-size:12px;color:var(--muted)}
+  .slip-head .unreceived{font-size:11px;background:#fef3c7;color:#92400e;border-radius:99px;padding:2px 8px;font-weight:700}
+  .slip-table{table-layout:fixed}
+  .slip-table .c-type{width:86px}.slip-table .c-snp,.slip-table .c-qty{width:92px}
+  .slip-table .c-pal{width:86px}.slip-table .c-del{width:56px}
+  .slip-actions{display:flex;gap:8px;align-items:center;padding:10px 12px;flex-wrap:wrap}
+  .slip-action-spacer{margin-left:auto}
+  .input-add-actions{margin-bottom:10px}
 
   /* ---- 入力の不備 ---- */
-  /* background の !important が効くのはカード側。.fld input{...;background:#fff} は
-     詳細度 (0,1,1) で .err の (0,1,0) より高く、border だけ !important にすると白背景のまま。
-     テーブルの td input,td select は (0,0,2) なので素で勝つが、面ごとに書き分けない */
+  /* 入力欄の通常背景より確実に優先する。 */
   .err{border-color:#dc2626 !important;background:#fef2f2 !important}
   /* 不完全な行までスクロールすると見出し直下の帯は画面外へ流れるので sticky にする。
      top は .tabs の実測高を updateErrBanner() が入れる（.tabs 自身が sticky top:0 z-index:30 で、
@@ -359,8 +351,6 @@
   @media (max-width:600px){
     .wrap{padding:12px 12px calc(96px + var(--safe))}
     .card{padding:12px;border-radius:12px}
-    #lotTableWrap{display:none}
-    .lotcards{display:block}
     .actionbar{display:block}
     #runBtnInline{display:none}
     .note{gap:8px}
@@ -528,47 +518,23 @@
     <div id="regInfo" class="regcount"></div>
     <div id="saveStatus" class="savestat"></div>
 
-    <div class="card">
-      <h2>搬入日と納品タイミング <span class="badge">配置図の表に反映</span></h2>
-      <div class="fld2">
-        <label>搬入日</label>
-        <input type="date" id="dateInput" onchange="onHeadChange()">
-        <span class="hint" id="dowHint"></span>
+    <div class="card input-head">
+      <div class="date-row">
+        <div class="date-field"><label for="dateInput">搬入日</label><input type="date" id="dateInput" onchange="onHeadChange()"><span id="dowHint"></span></div>
+        <button class="btn-mini clear-input" onclick="clearLots()">入力をクリア</button>
       </div>
-      <div class="fld2">
-        <label>納品</label>
-        <div class="seg" style="max-width:240px">
-          <button id="tmAM" onclick="setTiming('あさ')">あさ</button>
-          <button id="tmPM" onclick="setTiming('ひる')">ひる</button>
-        </div>
-      </div>
+      <div class="timing-switch" data-timing-switch></div>
+      <div class="slip-count" id="slipCount"></div>
     </div>
-
+    <div id="inputErr" class="inputerr" style="display:none"></div>
+    <div id="slipList"></div>
+    <div class="row-actions input-add-actions">
+      <button class="btn btn-ghost" onclick="addSlip('fax')">＋ FAX伝票を追加</button>
+      <button class="btn btn-ghost" onclick="addSlip('provisional')">＋ 仮伝票を追加</button>
+      <label class="chk"><input type="checkbox" id="mixChk" checked> 満杯時に混載を許可</label>
+      <button class="btn btn-primary" id="runBtnInline" onclick="runFromButton()">▶ 自動配置を作成</button>
+    </div>
     <div class="card">
-      <h2>荷物の入力 <span class="badge">個数 ÷ SNP → パレット数</span></h2>
-
-      <div id="inputErr" class="inputerr" style="display:none"></div>
-
-      <!-- スマホ: カード -->
-      <div class="lotcards" id="lotCards"></div>
-
-      <!-- PC: テーブル -->
-      <div id="lotTableWrap">
-        <table id="lotTable">
-          <thead>
-            <tr><th style="width:86px">種別</th><th>品名</th><th>ロット</th>
-                <th style="width:92px">SNP</th><th style="width:92px">個数</th>
-                <th style="width:86px">パレット数</th><th style="width:56px"></th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="row-actions">
-        <button class="btn btn-ghost" onclick="addRow();syncCards();saveLots()">＋ 行を追加</button>
-        <button class="btn btn-ghost" onclick="clearLots()">入力をクリア</button>
-        <label class="chk"><input type="checkbox" id="mixChk" checked> 満杯時に混載を許可</label>
-        <button class="btn btn-primary" id="runBtnInline" onclick="runFromButton()">▶ 自動配置を作成</button>
-      </div>
       <div class="row-actions">
         <button class="btn btn-ghost" onclick="loadSample('basic')">基本サンプル</button>
         <button class="btn btn-ghost" onclick="loadSample('mix')">混載デモ</button>
@@ -978,7 +944,6 @@ function updateSaveStatus(){
   if(badge) badge.textContent = storageOK ? "この端末に保存" : "この環境では保存されません";
 }
 function saveMaster(){ saveData(STORE_KEY.master, MASTER); }
-function saveLots(){ saveData(STORE_KEY.lots, readRowData()); }
 
 function newStableId(prefix){
   stableSeq++;
@@ -1127,11 +1092,13 @@ function updateRegCount(){
   info.className="regcount"+(names.size===0?" warn":"");
 }
 
-/* ---------- 入力（PCテーブル） ---------- */
-function addRow(d){
-  d=d||{type:"仕掛品",name:"",lot:"",snp:"",qty:""};
-  const tb=document.querySelector("#lotTable tbody");
+/* ---------- 伝票単位の入力 ---------- */
+function activeShift(){ return schedule.shifts[activeTiming]; }
+
+function createItemRow(item){
+  const d=normalizeItem(item||{});
   const tr=document.createElement("tr");
+  tr.dataset.itemId=d.id;
   tr.innerHTML=`
     <td><select onchange="rowChanged(this)">
       <option ${d.type==="仕掛品"?"selected":""}>仕掛品</option>
@@ -1143,15 +1110,144 @@ function addRow(d){
                oninput="rowChanged(this)" onkeydown="enterKey(event,this)"></td>
     <td><input type="number" inputmode="numeric" min="1" enterkeyhint="next" value="${esc(d.snp)}" placeholder="SNP"
                oninput="rowChanged(this)" onkeydown="enterKey(event,this)"></td>
-    <td><input type="number" inputmode="numeric" min="1" enterkeyhint="done" value="${esc(d.qty)}" placeholder="個数" oninput="rowChanged(this)"
-               onkeydown="if(event.isComposing||event.keyCode===229)return;if(event.key==='Enter'){event.preventDefault();addNextRow(rowIndexOf(this));}"></td>
+    <td><input type="number" inputmode="numeric" min="1" enterkeyhint="done" value="${esc(d.qty)}" placeholder="個数"
+               oninput="rowChanged(this)" onkeydown="enterKey(event,this)"></td>
     <td class="pallet-cell">-</td>
-    <td><button class="btn-mini" onclick="removeRow(this)">削除</button></td>`;
-  tb.appendChild(tr);
+    <td><button class="btn-mini" onclick="removeItemRow(this)">削除</button></td>`;
   recalcRow(tr);
+  return tr;
 }
-function removeRow(btn){ btn.closest("tr").remove(); syncCards(); saveLots(); }
-function rowChanged(el){ const tr=el.closest("tr"); recalcRow(tr); syncCards(); saveLots(); }
+
+function renderSlips(slips){
+  const host=document.getElementById("slipList");
+  host.innerHTML="";
+  const serial={fax:0,provisional:0};
+  (Array.isArray(slips)?slips:[]).map(normalizeSlip).forEach(slip=>{
+    serial[slip.status]++;
+    const provisional=slip.status==="provisional";
+    const title=provisional ? `仮伝票 ${serial.provisional}` : `伝票 ${serial.fax}`;
+    const section=document.createElement("section");
+    section.className="slip";
+    section.dataset.slipId=slip.id;
+    section.dataset.status=slip.status;
+    section.innerHTML=`
+      <div class="slip-head"><b>${title}</b>${provisional?'<span class="unreceived">FAX未着</span>':""}<span class="item-count"></span></div>
+      <table class="slip-table">
+        <colgroup><col class="c-type"><col class="c-name"><col class="c-lot"><col class="c-snp"><col class="c-qty"><col class="c-pal"><col class="c-del"></colgroup>
+        <thead><tr><th>種別</th><th>品名</th><th>ロット</th><th>SNP</th><th>個数</th><th>パレット数</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="slip-actions">
+        <button class="btn btn-ghost" onclick="addItemRow(this)">＋ 品目を追加</button>
+        ${provisional?'<button class="btn btn-ghost" data-receive onclick="receiveSlip(this)">FAX受領済みにする</button>':""}
+        <span class="slip-action-spacer"></span>
+        <button class="btn-mini" onclick="removeSlip(this)">伝票を削除</button>
+      </div>`;
+    const tbody=section.querySelector("tbody");
+    slip.items.forEach(item=>tbody.appendChild(createItemRow(item)));
+    host.appendChild(section);
+    updateItemCount(section);
+  });
+  updateSlipCounts();
+  updateErrBanner();
+  syncCompactLabels();
+}
+
+function addSlip(status,data){
+  saveActiveSlips();
+  const raw=Object.assign({}, data||{}, {status:status==="provisional"?"provisional":"fax"});
+  if(!Array.isArray(raw.items) || !raw.items.length) raw.items=[normalizeItem({type:"仕掛品"})];
+  activeShift().slips.push(normalizeSlip(raw));
+  saveSchedule();
+  renderSlips(activeShift().slips);
+}
+
+function slipElement(slipOrId){
+  if(slipOrId && slipOrId.matches && slipOrId.matches(".slip")) return slipOrId;
+  if(slipOrId && slipOrId.closest){ const el=slipOrId.closest(".slip"); if(el) return el; }
+  return [...document.querySelectorAll("#slipList .slip")]
+    .find(el=>el.dataset.slipId===String(slipOrId))||null;
+}
+
+function addItemRow(slipOrId,item){
+  const slip=slipElement(slipOrId); if(!slip)return null;
+  const tr=createItemRow(item||{type:"仕掛品"});
+  slip.querySelector("tbody").appendChild(tr);
+  updateItemCount(slip);
+  saveActiveSlips();
+  const name=tr.querySelectorAll("select,input")[1];
+  if(name) name.focus();
+  return tr;
+}
+
+function removeItemRow(button){
+  const tr=button.closest("tr"), slip=button.closest(".slip");
+  if(!tr||!slip)return;
+  if(acInput && tr.contains(acInput)) acClose();
+  tr.remove();
+  if(!slip.querySelector("tbody tr")) slip.querySelector("tbody").appendChild(createItemRow({type:"仕掛品"}));
+  updateItemCount(slip);
+  saveActiveSlips();
+  updateErrBanner();
+}
+
+function removeSlip(button){
+  const slip=button.closest(".slip"); if(!slip)return;
+  const name=slip.querySelector(".slip-head b").textContent;
+  if(!confirm(`${TIMING_LABEL[activeTiming]}の${name}を削除します。よろしいですか？`))return;
+  saveActiveSlips();
+  activeShift().slips=activeShift().slips.filter(item=>item.id!==slip.dataset.slipId);
+  saveSchedule();
+  renderSlips(activeShift().slips);
+}
+
+function receiveSlip(button){
+  const slip=button.closest(".slip"); if(!slip)return;
+  saveActiveSlips();
+  const found=activeShift().slips.find(item=>item.id===slip.dataset.slipId);
+  if(found) found.status="fax";
+  saveSchedule();
+  renderSlips(activeShift().slips);
+}
+
+function readSlips(){
+  return [...document.querySelectorAll("#slipList .slip")].map(slip=>({
+    id:slip.dataset.slipId,
+    status:slip.dataset.status==="provisional"?"provisional":"fax",
+    items:[...slip.querySelectorAll("tbody tr")].map(tr=>{
+      const c=tr.querySelectorAll("select,input");
+      return {id:tr.dataset.itemId,type:c[0].value,name:c[1].value,lot:c[2].value,snp:c[3].value,qty:c[4].value};
+    }),
+  }));
+}
+
+function saveActiveSlips(){
+  if(!schedule)return;
+  activeShift().slips=readSlips();
+  saveSchedule();
+}
+
+function updateItemCount(slip){
+  const count=slip.querySelectorAll("tbody tr").length;
+  const el=slip.querySelector(".item-count");
+  if(el) el.textContent=`品目 ${count}件`;
+}
+
+function updateSlipCounts(){
+  const slips=[...document.querySelectorAll("#slipList .slip")];
+  const fax=slips.filter(s=>s.dataset.status==="fax").length;
+  const provisional=slips.filter(s=>s.dataset.status==="provisional").length;
+  document.getElementById("slipCount").textContent=`FAX伝票 ${fax}枚 ／ 仮 ${provisional}件`;
+}
+
+function syncCompactLabels(){}
+
+function rowChanged(el){
+  const tr=el.closest("tr");
+  recalcRow(tr); saveActiveSlips();
+  if(typeof refreshFreshness==="function") refreshFreshness();
+  refreshRowErr(tr); updateErrBanner();
+}
 // 品名を変えたとき、SNPが空 or 旧候補のままなら自動で入れる
 function nameChanged(el){
   const tr=el.closest("tr");
@@ -1203,19 +1299,17 @@ function recalcRow(tr){
   cell.className="pallet-cell"+(p.warn?" warn-cell":"");
 }
 function recalcAllRows(){
-  document.querySelectorAll("#lotTable tbody tr").forEach(recalcRow);
-  syncCards();
+  document.querySelectorAll("#slipList tbody tr").forEach(recalcRow);
 }
 function readRowData(){
-  return [...document.querySelectorAll("#lotTable tbody tr")].map(tr=>{
-    const c=tr.querySelectorAll("select,input");
-    return {type:c[0].value, name:c[1].value, lot:c[2].value, snp:c[3].value, qty:c[4].value};
-  });
+  return readSlips().flatMap(slip=>slip.items.map(item=>({
+    type:item.type,name:item.name,lot:item.lot,snp:item.snp,qty:item.qty,
+  })));
 }
 // 分納（同一品名・同一ロットが複数行）は1つの荷物としてまとめる。
 // パレット数は伝票（行）ごとに切り上げてから合計する。
 function readLots(){
-  const rows=[...document.querySelectorAll("#lotTable tbody tr")];
+  const rows=[...document.querySelectorAll("#slipList tbody tr")];
   const lots=[], unknown=[], byKey={}, typeMix=[];
   rows.forEach((tr,i)=>{
     const v=rowValues(tr);
@@ -1239,191 +1333,17 @@ function readLots(){
 }
 function clearLots(){
   if(!confirm("荷物の入力をすべてクリアします。よろしいですか？（品目マスタは残ります）"))return;
-  document.querySelector("#lotTable tbody").innerHTML="";
-  addRow(); syncCards(); saveLots();
+  activeShift().slips=[normalizeSlip({status:"fax",items:[normalizeItem({type:"仕掛品"})]})];
+  saveSchedule(); renderSlips(activeShift().slips);
   hasResult=false; lastLots=null; showMapState();
 }
 function loadSample(which){
   // 入力を全置換するので、置換の前に確認する。
   // run(true) を runFromButton() に替えるだけでは、断っても入力が戻らない。
   if(hasManual() && !confirm("手動調整を破棄してサンプルを読み込みます。よろしいですか？")) return;
-  document.querySelector("#lotTable tbody").innerHTML="";
-  SAMPLES[which].forEach(addRow);
-  syncCards(); saveLots(); run(true);
+  activeShift().slips=[normalizeSlip({status:"fax",items:SAMPLES[which].map(normalizeItem)})];
+  saveSchedule(); renderSlips(activeShift().slips); run(true);
 }
-
-/* ---------- 入力（スマホカード：テーブルと同期） ---------- */
-function syncCards(){
-  // カードを作り直すと、カード側から開いている候補の参照先が DOM から消える。
-  // テーブル側の欄は作り直されないので、そのままにする
-  // （テーブルの品名入力は rowChanged() 経由でここを毎回通る）
-  if(acInput && acInput.dataset.card!=null) acClose();
-  const host=document.getElementById("lotCards");
-  const rows=[...document.querySelectorAll("#lotTable tbody tr")];
-  host.innerHTML = rows.map((tr,i)=>{
-    const v=rowValues(tr);
-    const list=snpsOf(v.name);
-    const p=palletText(v.qty,v.snp);
-    const warn = p.warn ? " warn" : "";
-    // 候補が2つ以上あり、かつ「追加入力中」でなければプルダウン
-    const custom = tr.dataset.snpCustom==="1";
-    const useSelect = list.length>=2 && !custom;
-    let snpField;
-    if(useSelect){
-      const opts=list.map(s=>`<option value="${s}" ${s===v.snp?"selected":""}>${s}</option>`).join("");
-      const cur = list.includes(v.snp) ? "" : `<option value="${v.snp}" selected>${v.snp}</option>`;
-      snpField=`<select data-card="${i}" onchange="cardSnpSelect(${i},this.value)"
-                        onkeydown="enterKey(event,this)">${cur}${opts}</select>`;
-    }else{
-      snpField=`<input type="number" inputmode="numeric" min="1" enterkeyhint="next" data-card="${i}"
-                       value="${v.snp||""}" placeholder="SNP"
-                       oninput="cardEdit(${i},3,this.value)" onchange="snpEntered(${i})"
-                       onkeydown="enterKey(event,this)">`;
-    }
-    // SNP欄の右のボタン：追加入力中は取り消し、それ以外は「＋（SNPを追加）」
-    const snpBtn = custom
-      ? `<button class="hyph" onclick="snpCancel(${i})" title="追加をやめる">↩</button>`
-      : `<button class="hyph" onclick="snpAdd(${i})" title="SNPを追加">＋</button>`;
-    return `<div class="lotcard" data-i="${i}">
-      <div class="top">
-        <div class="seg">
-          <button class="${v.type==="仕掛品"?"on":""}" onclick="cardType(${i},'仕掛品')">仕掛品</button>
-          <button class="${v.type==="商品"?"on":""}" onclick="cardType(${i},'商品')">商品</button>
-        </div>
-        <button class="btn-mini" onclick="cardDelete(${i})">削除</button>
-      </div>
-      <div class="fld" data-f="name"><label>品名</label>
-        <input enterkeyhint="next" data-card="${i}" value="${esc(v.name)}" placeholder="品名"
-               oninput="cardEdit(${i},1,this.value);acTyped(this)" onfocus="acOpen(this)"
-               onkeydown="acKey(event,this)"></div>
-      <div class="fld" data-f="lot"><label>ロット</label>
-        <input inputmode="tel" enterkeyhint="next" data-card="${i}" value="${esc(v.lot)}" placeholder="ロット"
-               oninput="cardEdit(${i},2,this.value)" onkeydown="enterKey(event,this)">
-        <button class="hyph" onclick="addHyphen(${i})" title="ハイフンを入力">−</button></div>
-      <div class="fld" data-f="snp"><label>SNP</label>${snpField}${snpBtn}</div>
-      <div class="fld" data-f="qty"><label>個数</label>
-        <input type="number" inputmode="numeric" min="1" enterkeyhint="done" data-card="${i}"
-               value="${v.qty||""}" placeholder="個数"
-               oninput="cardEdit(${i},4,this.value)"
-               onkeydown="if(event.isComposing||event.keyCode===229)return;if(event.key==='Enter'){event.preventDefault();addNextRow(${i});}"></div>
-      <div class="foot"><span class="hint">パレット数</span><span class="val${warn}">${p.text}</span></div>
-      <button class="nextbtn" onclick="addNextRow(${i})">＋ 次の荷物</button>
-    </div>`;
-  }).join("");
-  rows.forEach((tr,i)=>refreshRowErr(tr,i));   // カードを作り直したので赤枠を貼り直す
-  updateErrBanner();
-}
-// SNPプルダウンの選択
-function cardSnpSelect(i,val){
-  const tr=trAt(i); if(!tr)return;
-  tr.querySelectorAll("select,input")[3].value=val;
-  delete tr.dataset.snpCustom;
-  recalcRow(tr); saveLots(); syncCards();
-}
-// 「＋」= 新しいSNPを入力する状態にする
-function snpAdd(i){
-  const tr=trAt(i); if(!tr)return;
-  const c=tr.querySelectorAll("select,input");
-  tr.dataset.snpPrev=c[3].value;   // 取り消し用に元の値を控える
-  tr.dataset.snpCustom="1";
-  c[3].value="";
-  recalcRow(tr); syncCards();
-  focusField(i,"snp");
-}
-// 「↩」= 追加をやめて元の値に戻す
-function snpCancel(i){
-  const tr=trAt(i); if(!tr)return;
-  const c=tr.querySelectorAll("select,input");
-  c[3].value = tr.dataset.snpPrev || "";
-  delete tr.dataset.snpCustom; delete tr.dataset.snpPrev;
-  recalcRow(tr); saveLots(); syncCards();
-}
-function focusField(i,f){
-  // SNP欄は候補が2つ以上あると <select> になるので、input だけを探すと当たらない
-  const sel=`.lotcard[data-i="${i}"] .fld[data-f="${f}"] input,.lotcard[data-i="${i}"] .fld[data-f="${f}"] select`;
-  const inp=document.querySelector(sel);
-  if(inp){ inp.focus(); try{ inp.setSelectionRange(inp.value.length,inp.value.length); }catch(e){} }
-  return inp;
-}
-// 追加入力したSNPを品目マスタへ登録
-function snpEntered(i){
-  const tr=trAt(i); if(!tr)return;
-  const v=rowValues(tr);
-  if(v.snp<=0){ snpCancel(i); return; }   // 空のまま確定したら元に戻す
-  if(v.name && !snpsOf(v.name).includes(v.snp)){
-    addMasterRow({name:v.name, snp:v.snp});
-    onMasterChange(); // マスタ保存・候補更新・再描画
-  }
-  delete tr.dataset.snpCustom; delete tr.dataset.snpPrev;
-  saveLots(); syncCards();
-}
-// ロット欄にハイフンを追加（iOSのテンキー対策）
-function addHyphen(i){
-  const tr=trAt(i); if(!tr)return;
-  const c=tr.querySelectorAll("select,input");
-  c[2].value = c[2].value + "-";
-  saveLots(); syncCards();
-  focusField(i,"lot");
-}
-// 個数のEnter / 「次の荷物」ボタン → 行を追加して品名へ
-function rowIndexOf(el){
-  return [...document.querySelectorAll("#lotTable tbody tr")].indexOf(el.closest("tr"));
-}
-function addNextRow(i){
-  const rows=document.querySelectorAll("#lotTable tbody tr");
-  const last=rows[rows.length-1];
-  // 末尾が空行ならそこへ移動、そうでなければ追加
-  if(!last || rowValues(last).qty>0 || rowValues(last).name){ addRow(); }
-  syncCards(); saveLots();
-  // PC はカードが display:none なので、カード側だけを見ていると何も起きない。
-  // 表示されているほうの品名欄へ送る
-  const cards=document.querySelectorAll(".lotcard");
-  const target=cards[cards.length-1];
-  if(target && target.offsetParent!==null){
-    target.scrollIntoView({behavior:"smooth", block:"center"});
-    const inp=target.querySelector('.fld[data-f="name"] input');
-    if(inp) inp.focus();
-    return;
-  }
-  const trs=document.querySelectorAll("#lotTable tbody tr");
-  const tr=trs[trs.length-1];
-  if(tr){
-    tr.scrollIntoView({behavior:"smooth", block:"center"});
-    const inp=tr.querySelectorAll("select,input")[1];   // [0]=種別, [1]=品名
-    if(inp) inp.focus();
-  }
-}
-function trAt(i){ return document.querySelectorAll("#lotTable tbody tr")[i]; }
-function cardEdit(i,idx,val){
-  const tr=trAt(i); if(!tr)return;
-  const c=tr.querySelectorAll("select,input");
-  c[idx].value=val;
-  if(idx===1){ // 品名変更 → SNP自動補完
-    const list=snpsOf(val); const cur=c[3].value.trim();
-    if(list.length && (cur==="" || !list.includes(parseInt(cur)))){
-      if(list.length===1 || cur==="") c[3].value=list[0];
-    }
-  }
-  recalcRow(tr); saveLots(); updateCardFoot(i);
-  refreshRowErr(tr,i); updateErrBanner();   // syncCards() を通らない唯一の入力経路
-}
-function updateCardFoot(i){ // 入力中のフォーカスを保つため、必要箇所だけ更新
-  const tr=trAt(i), card=document.querySelector(`.lotcard[data-i="${i}"]`);
-  if(!tr||!card)return;
-  const v=rowValues(tr);
-  const el=card.querySelector(".foot .val");
-  el.textContent = v.snp>0 && v.qty>0 ? Math.ceil(v.qty/v.snp)+"P" : (v.snp<=0?"SNP未入力":"—");
-  el.className = "val"+(v.snp<=0?" warn":"");
-  // .fld input の3番目では、SNPが <select> のカードで個数欄を指してしまう
-  const snpInput=card.querySelector('.fld[data-f="snp"] input');
-  if(snpInput && document.activeElement!==snpInput) snpInput.value=v.snp||"";
-}
-function cardType(i,t){
-  const tr=trAt(i); if(!tr)return;
-  tr.querySelector("select").value=t;
-  recalcRow(tr); saveLots(); syncCards();
-}
-function cardDelete(i){ const tr=trAt(i); if(!tr)return; tr.remove(); syncCards(); saveLots(); }
 
 /* ---------- 入力のバリデーション ----------
    「▶ 自動配置を作成」を押したときだけ赤枠を出す。押す前は何も光らせない。
@@ -1449,35 +1369,31 @@ function missingFields(tr){
 }
 
 function validateLots(){
-  return [...document.querySelectorAll("#lotTable tbody tr")]
+  return [...document.querySelectorAll("#slipList tbody tr")]
     .map((tr,i)=>({tr:tr, i:i, fields:missingFields(tr)}))
     .filter(r=>r.fields.length>0);
 }
 
-// dataset.err どおりにクラスを貼り直す。テーブルとカードの両方に同じ内容を貼る
-function applyRowErr(tr,i){
+// dataset.err どおりにクラスを貼り直す
+function applyRowErr(tr){
   const on=(tr.dataset.err||"").split(",").filter(Boolean);
   const c=tr.querySelectorAll("select,input");
-  const card=document.querySelector(`.lotcard[data-i="${i}"]`);
   ERR_FIELDS.forEach(f=>{
     const cell=c[ERR_CELL[f]];
     if(cell) cell.classList.toggle("err", on.includes(f));
-    // SNP欄は候補が2つ以上あると <select> になるので、input だけを探すと当たらない
-    const fld=card && card.querySelector(`.fld[data-f="${f}"] input,.fld[data-f="${f}"] select`);
-    if(fld) fld.classList.toggle("err", on.includes(f));
   });
 }
 
 // 赤枠の付いている行だけを取り直す。付いていない行は触らない（押す前は静かなまま）
-function refreshRowErr(tr,i){
+function refreshRowErr(tr){
   if(tr.dataset.err==null) return;
   const m=missingFields(tr);
   if(m.length) tr.dataset.err=m.join(","); else delete tr.dataset.err;
-  applyRowErr(tr,i);
+  applyRowErr(tr);
 }
 
 function updateErrBanner(){
-  const n=document.querySelectorAll("#lotTable tbody tr[data-err]").length;
+  const n=document.querySelectorAll("#slipList tbody tr[data-err]").length;
   const el=document.getElementById("inputErr");
   el.style.display = n ? "block" : "none";
   if(!n) return;
@@ -1489,21 +1405,17 @@ function updateErrBanner(){
 
 // ボタンを押して不完全な行が見つかったとき
 function showLotErrors(bad){
-  document.querySelectorAll("#lotTable tbody tr").forEach(tr=>{ delete tr.dataset.err; });
+  document.querySelectorAll("#slipList tbody tr").forEach(tr=>{ delete tr.dataset.err; });
   bad.forEach(r=>{ r.tr.dataset.err=r.fields.join(","); });
-  syncCards();   // カードを作り直す。末尾で applyRowErr() と updateErrBanner() が走る
+  bad.forEach(r=>applyRowErr(r.tr));
+  updateErrBanner();
   focusFirstErr(bad[0]);
 }
 
 // 最初の欠け欄へ連れていく。
-// テーブルとカードは幅で排他表示されるので、非表示側に focus() しても効かない。可視な側を選ぶ
 function focusFirstErr(r){
   const f=r.fields[0];
-  const tableVisible=document.getElementById("lotTableWrap").offsetParent!==null;
-  const el = tableVisible
-    ? r.tr.querySelectorAll("select,input")[ERR_CELL[f]]
-    : document.querySelector(`.lotcard[data-i="${r.i}"] .fld[data-f="${f}"] input,`
-                            +`.lotcard[data-i="${r.i}"] .fld[data-f="${f}"] select`);
+  const el=r.tr.querySelectorAll("select,input")[ERR_CELL[f]];
   if(!el) return;
   // focus() の既定スクロールに任せると位置が中途半端になるので、止めてから自分で寄せる。
   // behavior:"smooth" は使わない。非同期なので、下の追随が途中の座標を読んで競合する
@@ -1546,8 +1458,7 @@ function keepErrVisible(el){
 /* ---------- 品名のオートコンプリート ----------
    <datalist> は Android 11 以降、IME がキーボード上の候補ストリップに
    インライン表示してしまい、ドロップダウンにならない。ブラウザ側の制御手段が無いので自前で描く。
-   リストは body 直下に1つだけ置き、position:fixed で対象の欄に合わせる。
-   カードの入力欄は syncCards() で作り直されるため、リストを欄の親に入れると入力中に消える。 */
+   リストは body 直下に1つだけ置き、position:fixed で対象の欄に合わせる。 */
 let acInput=null;   // いま候補を出している入力欄。null なら閉じている
 let acIndex=-1;     // ↑↓ で選択中の項目。-1 は未選択
 
@@ -1621,20 +1532,12 @@ function acClose(){ acInput=null; acIndex=-1; acBox().hidden=true; }
 function acPick(name){
   const inp=acInput;
   if(!inp) return;
-  const card=inp.dataset.card;
   acClose();
   inp.value=name;
-  if(card!=null){
-    // カード側：テーブルへ書き戻し、SNP欄がプルダウンに変わることがあるので作り直す
-    cardEdit(parseInt(card),1,name);
-    syncCards();
-    focusField(parseInt(card),"lot");
-  }else{
-    nameChanged(inp);
-    const c=[...inp.closest("tr").querySelectorAll("select,input")];
-    const lot=c[2];
-    if(lot){ lot.focus(); try{ lot.setSelectionRange(lot.value.length,lot.value.length); }catch(e){} }
-  }
+  nameChanged(inp);
+  const c=[...inp.closest("tr").querySelectorAll("select,input")];
+  const lot=c[2];
+  if(lot){ lot.focus(); try{ lot.setSelectionRange(lot.value.length,lot.value.length); }catch(e){} }
 }
 
 /* 品名欄の keydown。候補が開いていれば ↑↓ Enter Esc を候補の操作に使う。
@@ -1740,34 +1643,15 @@ if(window.visualViewport){
 }
 
 /* ---------- 入力欄の Enter 遷移 ----------
-   品名 → ロット → SNP → 個数 → 次の行の品名 の順に送る。種別はボタンなので飛ばす。
-   カードとテーブルのどちらから呼ばれても動くよう、data-card の有無で見分ける。 */
+   品名 → ロット → SNP → 個数 → 同じ伝票の次の品目の順に送る。 */
 const FIELD_ORDER=["name","lot","snp","qty"];
 
 function nextField(el){
-  const card=el.dataset.card;
-  if(card!=null){
-    const i=parseInt(card);
-    const cur=el.closest(".fld");
-    const f=cur?cur.dataset.f:null;
-    const k=FIELD_ORDER.indexOf(f);
-    // el.blur() はどの欄からの遷移でも無条件に呼んでいる。どの欄の onchange も
-    // #lotCards を丸ごと作り直しうるため。focusField() を先に呼ぶと、その focus で発生する
-    // 同期的な blur で change が発火し、掴んだばかりの次欄が syncCards() の作り直しで DOM から
-    // 消えてフォーカスが body に落ちる。先に blur() で change を確定させてから focusField() する。
-    // 今それが実際に起きるのは SNP欄(onchange="snpEntered()")と SNP の select
-    // (onchange="cardSnpSelect()")。name/lot には onchange が無いので今は空振りだが、
-    // 足したときに壊れないようこの順序を保つ。
-    if(k>=0 && k<FIELD_ORDER.length-1){ el.blur(); focusField(i, FIELD_ORDER[k+1]); return; }
-    addNextRow(i);   // 個数まで来たら次の行へ
-    return;
-  }
-  // テーブル側。c は [種別select, 品名, ロット, SNP, 個数] の5つ
   const c=[...el.closest("tr").querySelectorAll("select,input")];
   const k=c.indexOf(el);
   const nx=c[k+1];
   if(nx){ nx.focus(); try{ nx.setSelectionRange(nx.value.length,nx.value.length); }catch(e){} return; }
-  addNextRow(rowIndexOf(el));
+  addItemRow(el.closest(".slip"));
 }
 
 // ロット欄と SNP 欄の keydown。候補は出ないので Enter だけ見る
@@ -2471,7 +2355,7 @@ function restoreManual(){
    seen で重ねているのは、同じ品名＋SNPが2行あるときに2件と数えないため。 */
 function unknownItems(){
   const out=[], seen={};
-  [...document.querySelectorAll("#lotTable tbody tr")].forEach(tr=>{
+  [...document.querySelectorAll("#slipList tbody tr")].forEach(tr=>{
     const v=rowValues(tr);
     if(!v.name || v.snp<=0) return;
     if(snpsOf(v.name).includes(v.snp)) return;
@@ -3394,14 +3278,8 @@ function onHeadChange(){
   headDate=document.getElementById("dateInput").value;
   const d=headDate?new Date(headDate+"T00:00:00"):null;
   document.getElementById("dowHint").textContent = d?`（${DOW[d.getDay()]}曜日）`:"";
-  saveData(STORE_KEY.head,{date:headDate,timing:headTiming});
-  if(hasResult) renderSheet();
-}
-function setTiming(t){
-  headTiming=t;
-  document.getElementById("tmAM").classList.toggle("on",t==="あさ");
-  document.getElementById("tmPM").classList.toggle("on",t==="ひる");
-  saveData(STORE_KEY.head,{date:headDate,timing:headTiming});
+  schedule.date=headDate;
+  saveSchedule();
   if(hasResult) renderSheet();
 }
 // 印刷は表だけを出す（印刷CSSが #tab-edit を隠す）。
@@ -4150,42 +4028,27 @@ updateSaveStatus();
   }
 })();
 
-// 荷物入力：前回の入力を復元。SNPが無い旧データはマスタから補完
-(function initLots(){
-  const saved=loadData(STORE_KEY.lots);
-  document.querySelector("#lotTable tbody").innerHTML="";
-  if(Array.isArray(saved) && saved.length){
-    saved.forEach(r=>{
-      let snp=r.snp;
-      if(snp==null || snp===""){ const l=snpsOf(r.name); snp = l.length?l[0]:""; }
-      addRow({type:r.type, name:r.name, lot:r.lot, snp:snp, qty:r.qty});
-    });
-    syncCards(); saveLots();
-    // 入力と列構成が保存時と同じなら、手動調整した配置をそのまま出す
-    bootDraw(()=>{ if(!restoreManual()) run(false); });
-  }else{
-    SAMPLES.basic.forEach(addRow);
-    syncCards(); saveLots(); bootDraw(()=>run(false));
-  }
+// 伝票入力：scheduleを復元し、旧形式の保存はTask 1の移行処理を通す
+(function initSchedule(){
+  const loaded=loadOrMigrateSchedule();
+  schedule=loaded.value;
+  activeTiming=schedule.activeTiming;
+  headDate=schedule.date||defaultHeadDate();
+  schedule.date=headDate;
+  headTiming=TIMING_LABEL[activeTiming];
+  document.getElementById("dateInput").value=headDate;
+  const d=new Date(headDate+"T00:00:00");
+  document.getElementById("dowHint").textContent=`（${DOW[d.getDay()]}曜日）`;
+  renderSlips(activeShift().slips);
+  saveSchedule();
+  // 入力と列構成が保存時と同じなら、手動調整した配置をそのまま出す
+  bootDraw(()=>{ if(!restoreManual()) run(false); });
 })();
 
 // マスの大きさ：保存があれば復元
 (function initCell(){
   const px=loadData(STORE_KEY.cell);
   if(px) setCellSize(px);
-})();
-
-// 搬入日・納品タイミング：保存があれば復元。無ければ翌日を既定に
-(function initHead(){
-  const s=loadData(STORE_KEY.head)||{};
-  if(s.date){ headDate=s.date; }
-  else{ const t=new Date(); t.setDate(t.getDate()+1); headDate=t.toISOString().slice(0,10); }
-  headTiming = s.timing || "あさ";
-  document.getElementById("dateInput").value=headDate;
-  const d=new Date(headDate+"T00:00:00");
-  document.getElementById("dowHint").textContent=`（${DOW[d.getDay()]}曜日）`;
-  document.getElementById("tmAM").classList.toggle("on",headTiming==="あさ");
-  document.getElementById("tmPM").classList.toggle("on",headTiming==="ひる");
 })();
 
 // 配置図の表の表示倍率：保存があれば復元
