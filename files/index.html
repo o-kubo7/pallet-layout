@@ -488,10 +488,11 @@
 
   @media print{
     @page{size:A4 landscape;margin:8mm}
-    header,.tabs,.actionbar,#updateBar,.sizectl,#messages,#sheetMsg,#regInfo,#saveStatus,.note,.hint{display:none !important}
+    header,.tabs,.actionbar,#updateBar,.sizectl,.timing-switch,#messages,#sheetMsg,#regInfo,#saveStatus,.note,.hint{display:none !important}
     /* どのタブを開いていても、紙には配置表だけを出す */
     .tabpanel{display:none !important}
     #tab-sheet{display:block !important}
+    body.print-blocked #tab-sheet{display:none !important}
     .wrap{padding:0;max-width:none}
     .card{border:0;padding:0;margin:0}
     .card h2{display:none}
@@ -569,8 +570,9 @@
   <!-- ===== 配置編集タブ（ブロック図：ロットの移動と退避ができる。モードの切り替えは無い） ===== -->
   <div id="tab-edit" class="tabpanel" style="display:none">
     <div class="card" id="editCard">
-      <!-- タブ名と二重になるので見出しは置かない。設定は既定でたたんでおく。
-           盤より上に常に出ているのはこのボタン1つだけにする。 -->
+      <div class="timing-switch" data-timing-switch></div>
+      <div class="empty" id="editEmpty"></div>
+      <!-- 表示設定は既定でたたんでおく。 -->
       <div class="editctl" id="editCtl">
         <button class="btn btn-ghost" id="cfgToggleBtn" aria-expanded="false"
                 aria-controls="editCfg" onclick="toggleEditCfg()">⚙ 表示設定</button>
@@ -648,15 +650,15 @@
         </div>
         <div class="summary" id="summary"></div>
       </div>
-      <div class="empty" id="editEmpty">「入力」タブで荷物を入れて<br>「自動配置を作成」を押してください</div>
     </div>
   </div>
 
   <!-- ===== 配置表タブ（印刷はこちら。印刷CSSが配置編集タブを隠す） ===== -->
   <div id="tab-sheet" class="tabpanel" style="display:none">
     <div class="card" id="sheetCard">
+      <div class="timing-switch" data-timing-switch></div>
       <h2>配置表
-        <button class="btn btn-ghost" style="margin-left:auto" onclick="printSheet()">🖨 印刷</button>
+        <button class="btn btn-ghost" id="printBtn" style="margin-left:auto" onclick="printSheet()" disabled>🖨 印刷</button>
       </h2>
 
       <div class="sizectl" id="zoomCtl">
@@ -1179,6 +1181,7 @@ function addSlip(status,data){
   activeShift().slips.push(normalizeSlip(raw));
   saveSchedule();
   renderSlips(activeShift().slips);
+  refreshFreshness();
 }
 
 function slipElement(slipOrId){
@@ -1218,6 +1221,7 @@ function removeSlip(button){
   activeShift().slips=activeShift().slips.filter(item=>item.id!==slip.dataset.slipId);
   saveSchedule();
   renderSlips(activeShift().slips);
+  refreshFreshness();
 }
 
 function receiveSlip(button){
@@ -1244,6 +1248,7 @@ function saveActiveSlips(){
   if(!schedule)return;
   activeShift().slips=readSlips();
   saveSchedule();
+  refreshFreshness();
 }
 
 function updateItemCount(slip){
@@ -1272,7 +1277,6 @@ else compactInputMq.addListener(syncCompactLabels);
 function rowChanged(el){
   const tr=el.closest("tr");
   recalcRow(tr); saveActiveSlips();
-  if(typeof refreshFreshness==="function") refreshFreshness();
   refreshRowErr(tr); refreshSlipErr(tr.closest(".slip")); updateErrBanner();
 }
 // 品名を変えたとき、SNPが空 or 旧候補のままなら自動で入れる
@@ -1369,7 +1373,7 @@ function clearLots(){
   if(!confirm("荷物の入力をすべてクリアします。よろしいですか？（品目マスタは残ります）"))return;
   activeShift().slips=[normalizeSlip({status:"fax",items:[normalizeItem({type:"仕掛品"})]})];
   saveSchedule(); renderSlips(activeShift().slips);
-  hasResult=false; lastLots=null; showMapState();
+  refreshFreshness();
 }
 function loadSample(which){
   // 入力を全置換するので、置換の前に確認する。
@@ -1980,7 +1984,7 @@ function renderResult(lots, unknown, typeMix){
 
 // 今ある結果でそのまま描き直す。手動移動の後やモード切替から呼ぶ。
 function redraw(){
-  if(!hasResult || !lastLots) return;
+  if(!isActiveFresh() || !lastLots){ refreshFreshness(); return; }
   const {unknown, typeMix}=readLots();
   renderResult(lastLots, unknown, typeMix);
 }
@@ -2019,8 +2023,12 @@ function run(goMap){
   // 倉庫へ置く分だけを place() に渡したので、退避分をここで積み戻し、
   // 合計表示のためにパレット数も元に戻す。
   lots.forEach(l=>{ if(l.stashed){ putToStash(lastSp,l.id,l.stashed); l.pallets+=l.stashed; } });
-  lastFp=inputFingerprint();   // この配置を作った時点の入力と列構成
-  clearManual();               // 配置し直したので手動調整は捨てる
+  lastFp=inputFingerprint();
+  activeShift().slips=readSlips();
+  activeShift().result={fp:lastFp,lots:clone(lastLots),sp:clone(lastSp)};
+  activeShift().manual=null;
+  activeShift().resultFingerprint=lastFp;
+  saveSchedule();
 
   renderResult(lots, unknown, typeMix);
   if(goMap) switchTab('edit');
@@ -2127,6 +2135,7 @@ function drawZone(elId, spaces, colorOf){
 
 /* ---------- タブ / 表示状態 ---------- */
 function switchTab(name){
+  refreshFreshness();
   ["input","edit","sheet","settings"].forEach(t=>{
     document.getElementById("tab-"+t).style.display = (t===name)?"":"none";
     document.getElementById("tabbtn-"+t).classList.toggle("active", t===name);
@@ -2175,18 +2184,27 @@ function closeEditCfg(){
   if(p && !p.hidden) toggleEditCfg();
 }
 function showMapState(){
+  const fresh=isActiveFresh();
+  const saved=schedule && (activeShift().result || activeShift().manual);
+  const label=TIMING_LABEL[activeTiming];
+  const message=saved ? `入力が変更されています。${label}の自動配置を作成し直してください`
+    : `${label}の配置はまだ作成されていません`;
+  document.getElementById("editEmpty").textContent=message;
+  document.getElementById("sheetEmpty").textContent=message;
+  document.getElementById("printBtn").disabled=!fresh;
+  document.body.classList.toggle("print-blocked",!fresh);
   // 配置編集タブと配置表タブは独立しているので、それぞれの空表示を出し分ける
-  document.getElementById("editEmpty").style.display  = hasResult?"none":"block";
-  document.getElementById("sheetEmpty").style.display = hasResult?"none":"block";
-  document.getElementById("mapBody").style.display    = hasResult?"block":"none";
+  document.getElementById("editEmpty").style.display  = fresh?"none":"block";
+  document.getElementById("sheetEmpty").style.display = fresh?"none":"block";
+  document.getElementById("mapBody").style.display    = fresh?"block":"none";
   // ⚙ は盤に付いている。盤が出ているときだけ出し、隠すときは中身も閉じる
-  document.getElementById("editCtl").style.display    = hasResult?"flex":"none";
-  if(!hasResult) closeEditCfg();
-  document.getElementById("zoomCtl").style.display    = hasResult?"flex":"none";
+  document.getElementById("editCtl").style.display    = fresh?"flex":"none";
+  if(!fresh) closeEditCfg();
+  document.getElementById("zoomCtl").style.display    = fresh?"flex":"none";
   // 表を描くのは配置表タブを開いたときだけにする。
   // ここは renderResult() から呼ばれ、renderResult() は redraw() 経由で
   // ロットを1マス動かすたびに走る。見ていない表を毎回組み直すのは無駄
-  if(hasResult){
+  if(fresh){
     if(document.getElementById("tab-sheet").style.display!=="none") renderSheet();
   }else{
     document.getElementById("sheetView").innerHTML="";
@@ -2401,28 +2419,84 @@ function fingerprintFor(slips){
   return JSON.stringify({items:items,spaces:spacesToText(false)});
 }
 function inputFingerprint(){ return fingerprintFor(readSlips()); }
-function saveManual(){
-  if(lastFp==null) return;
-  saveData(STORE_KEY.manual, {fp:lastFp, sp:lastSp, lots:lastLots});
+function renderTimingSwitches(){
+  document.querySelectorAll("[data-timing-switch]").forEach(host=>{
+    host.innerHTML=TIMING_KEYS.map(key=>`<button class="sizebtn${key===activeTiming?' on':''}" aria-pressed="${key===activeTiming}" onclick="setActiveTiming('${key}')">${TIMING_LABEL[key]}</button>`).join("");
+  });
 }
-function clearManual(){ saveData(STORE_KEY.manual, null); }
-function hasManual(){ return !!loadData(STORE_KEY.manual); }
+function captureActiveShift(){
+  activeShift().slips=readSlips();
+  if(hasResult && activeShift().manual && activeShift().manual.fp===lastFp) saveManual();
+  saveSchedule();
+}
+function setActiveTiming(key){
+  if(!TIMING_KEYS.includes(key)) return;
+  if(key!==activeTiming){
+    acClose();
+    clearSel();
+    captureActiveShift();
+    activeTiming=key;
+    schedule.activeTiming=key;
+    saveSchedule();
+    renderSlips(activeShift().slips);
+    restoreActiveShift(false);
+  }else{
+    refreshFreshness();
+  }
+  renderTimingSwitches();
+  updateSlipCounts();
+  showMapState();
+  const visible=["input","edit","sheet","settings"].find(name=>document.getElementById("tab-"+name).style.display!=="none");
+  if(visible) switchTab(visible);
+}
+function activePlacementSnapshot(){
+  if(!schedule) return null;
+  const fp=inputFingerprint(), shift=activeShift();
+  return [shift.manual,shift.result].find(snapshot=>snapshot && snapshot.fp===fp &&
+    Array.isArray(snapshot.lots) && Array.isArray(snapshot.sp)) || null;
+}
+function isActiveFresh(){
+  return !!(hasResult && lastLots && lastSp && lastFp===inputFingerprint() && activePlacementSnapshot());
+}
+function restoreActiveShift(renderInput=true){
+  if(renderInput) renderSlips(activeShift().slips);
+  const snapshot=activePlacementSnapshot();
+  lastLots=snapshot ? clone(snapshot.lots) : null;
+  lastSp=snapshot ? clone(snapshot.sp) : null;
+  lastFp=snapshot ? snapshot.fp : null;
+  hasResult=!!snapshot;
+  renderTimingSwitches();
+  if(snapshot) redraw();
+  else showMapState();
+  return hasResult;
+}
+function refreshFreshness(){
+  if(!schedule) return;
+  if(activePlacementSnapshot()){
+    if(!isActiveFresh()) restoreActiveShift(false);
+    else showMapState();
+  }else{
+    clearSel();
+    lastLots=null; lastSp=null; lastFp=null; hasResult=false;
+    document.getElementById("messages").innerHTML="";
+    showMapState();
+  }
+}
+function saveManual(){
+  if(!isActiveFresh()) return;
+  activeShift().manual={fp:lastFp,sp:clone(lastSp),lots:clone(lastLots)};
+  saveSchedule();
+}
+function clearManual(){
+  if(!schedule) return;
+  activeShift().manual=null;
+  saveSchedule();
+}
+function hasManual(){ return !!(schedule && activeShift().manual); }
 // 保存済みの手動調整を復元する。復元したら true。place() は呼ばない。
 function restoreManual(){
-  const d=loadData(STORE_KEY.manual);
-  // 形を見る。壊れた保存を読むと renderResult() で例外が飛び、単一 script なので
-  // そこから下（Service Worker の登録を含む）が丸ごと実行されなくなる。
-  if(!d || !Array.isArray(d.sp) || !Array.isArray(d.lots)) return false;
-  if(d.fp!==inputFingerprint()){ clearManual(); return false; }
-  try{
-    lastSp=d.sp; lastLots=d.lots; hasResult=true; lastFp=d.fp;
-    redraw();
-    return true;
-  }catch(e){
-    // 復元に失敗したら保存を捨てて自動配置に落ちる
-    clearManual(); lastSp=null; lastLots=null; hasResult=false; lastFp=null;
-    return false;
-  }
+  if(!hasManual() || activePlacementSnapshot()!==activeShift().manual) return false;
+  return restoreActiveShift(false);
 }
 /* 入力にあってマスタに無い「品名＋SNP」を集める。ここではマスタを変更しない。
    seen で重ねているのは、同じ品名＋SNPが2行あるときに2件と数えないため。 */
@@ -2533,6 +2607,7 @@ function endDrag(){
 }
 // 検証して lastSp を更新する。動くマスが無い場合と容量不足は黙って中止する。
 function applyMove(spaceName, colIndex){
+  if(!isActiveFresh()){ refreshFreshness(); return; }
   const counts=selCounts(sel.cells);
   // [試作] 退避スペースは倉庫に実在しないので、列の高さは制約ではない。
   // 落とす枚数が入るところまで伸ばす（倉庫のエリアには何もしない）。
@@ -3344,7 +3419,7 @@ function showCapacity(){
    配置図の表（手書き用紙と同じレイアウト）
    ========================================================== */
 const DOW=["日","月","火","水","木","金","土"];
-let headDate="", headTiming="あさ";
+let headDate="";
 
 function onHeadChange(){
   headDate=document.getElementById("dateInput").value;
@@ -3357,6 +3432,7 @@ function onHeadChange(){
 // 印刷は表だけを出す（印刷CSSが #tab-edit を隠す）。
 // 表は表示されて初めて幅が測れるので、印刷の前に配置表タブへ寄せて描き直す。
 function printSheet(){
+  if(!isActiveFresh()){ refreshFreshness(); return; }
   switchTab('sheet');
   window.print();
 }
@@ -3365,7 +3441,8 @@ function printSheet(){
 // switchTab('sheet') は中で renderSheet() を呼ぶので、ここで先に表を埋めておく。
 // printSheet() 経由の場合は switchTab('sheet') が二重に走るが、同じタブへの切替なので無害。
 window.addEventListener('beforeprint', ()=>{
-  if(hasResult) switchTab('sheet');
+  if(!isActiveFresh()){ refreshFreshness(); return; }
+  switchTab('sheet');
 });
 
 /* ---------- 引き出し線の矢頭 ---------- */
@@ -3697,7 +3774,7 @@ function fitSheetText(pl){
 }
 function renderSheet(){
   const host=document.getElementById("sheetView");
-  if(!hasResult || !lastSp){ host.innerHTML=""; return; }
+  if(!isActiveFresh() || !lastSp){ host.innerHTML=""; return; }
 
   // 上段・下段に出すエリアは掲載先の属性から引く。下段の先頭エリアは注釈を付けない基準にする。
   // 上段も下段と同じ流儀で、先頭のエリアが基準になる。上段が軒下だけだったころは
@@ -3731,8 +3808,8 @@ function renderSheet(){
   //      左ブロックは用紙どおり行4まで（2行ぶん）ぶち抜き
   rows+=`<tr class="r2"><td class="hd" colspan="3" rowspan="2"><div class="fldrow c3">`
       + `<span>${totalP}</span><span>P</span></div></td>`
-      + `<td class="dow" rowspan="2">${ring("あさ",headTiming==="あさ")}</td>`
-      + `<td class="dow" rowspan="2">${ring("ひる",headTiming==="ひる")}</td>${E}`
+      + `<td class="dow" rowspan="2">${ring("あさ",TIMING_LABEL[activeTiming]==="あさ")}</td>`
+      + `<td class="dow" rowspan="2">${ring("ひる",TIMING_LABEL[activeTiming]==="ひる")}</td>${E}`
       + `${slotCells(top,lay.top,"lot")}</tr>`;
 
   // 行4：上段のパレット数（左5列は上の行の rowspan で埋まっている）
@@ -4107,14 +4184,13 @@ updateSaveStatus();
   activeTiming=schedule.activeTiming;
   headDate=schedule.date||defaultHeadDate();
   schedule.date=headDate;
-  headTiming=TIMING_LABEL[activeTiming];
   document.getElementById("dateInput").value=headDate;
   const d=new Date(headDate+"T00:00:00");
   document.getElementById("dowHint").textContent=`（${DOW[d.getDay()]}曜日）`;
   renderSlips(activeShift().slips);
   saveSchedule();
-  // 入力と列構成が保存時と同じなら、手動調整した配置をそのまま出す
-  bootDraw(()=>{ if(!restoreManual()) run(false); });
+  // 現在の時間帯で入力と一致する保存結果だけを復元する。
+  bootDraw(()=>restoreActiveShift(false));
 })();
 
 // マスの大きさ：保存があれば復元
