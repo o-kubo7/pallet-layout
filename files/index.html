@@ -911,9 +911,14 @@ let MASTER = [];
 let lastLots=null, lastColor=null, lastSp=null;
 let hasResult=false;
 let fracMode=false;   // true なら「満載数P 半」表記
+const TIMING_KEYS=["am","pm"];
+const TIMING_LABEL={am:"あさ",pm:"ひる"};
+const SCHEDULE_VERSION=1;
+let activeTiming="am", schedule=null, stableSeq=0;
+let scheduleLoadWarning=[];
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", display:"palletApp.display", merge:"palletApp.merge"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", display:"palletApp.display", merge:"palletApp.merge", schedule:"palletApp.schedule"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
 const SPACES_SAVE_VERSION = 3;   // [試作] 退避スペースを足したので上げる
@@ -974,6 +979,101 @@ function updateSaveStatus(){
 }
 function saveMaster(){ saveData(STORE_KEY.master, MASTER); }
 function saveLots(){ saveData(STORE_KEY.lots, readRowData()); }
+
+function newStableId(prefix){
+  stableSeq++;
+  return prefix+"-"+Date.now().toString(36)+"-"+stableSeq.toString(36);
+}
+function emptyShift(){
+  return {slips:[],result:null,manual:null,resultFingerprint:null};
+}
+function emptySchedule(date){
+  return {version:SCHEDULE_VERSION,date:date||"",activeTiming:"am",
+    shifts:{am:emptyShift(),pm:emptyShift()}};
+}
+function normalizeItem(raw){
+  const out=Object.assign({}, raw && typeof raw==="object" ? raw : {});
+  out.id=out.id==null || out.id==="" ? newStableId("i") : String(out.id);
+  ["type","name","lot","snp","qty"].forEach(key=>{ out[key]=out[key]==null ? "" : String(out[key]); });
+  return out;
+}
+function normalizeSlip(raw){
+  const out=Object.assign({}, raw && typeof raw==="object" ? raw : {});
+  out.id=out.id==null || out.id==="" ? newStableId("s") : String(out.id);
+  out.status=out.status==="provisional" ? "provisional" : "fax";
+  out.items=Array.isArray(out.items) ? out.items.map(normalizeItem) : [];
+  return out;
+}
+function normalizeSnapshot(raw){
+  if(!raw || typeof raw!=="object" || Array.isArray(raw) || typeof raw.fp!=="string" ||
+     !Array.isArray(raw.lots) || !Array.isArray(raw.sp)) return null;
+  return Object.assign({}, raw, {fp:raw.fp, lots:raw.lots, sp:raw.sp});
+}
+function normalizeShift(raw){
+  try{
+    const src=raw && typeof raw==="object" && !Array.isArray(raw) ? raw : {};
+    return {
+      slips:Array.isArray(src.slips) ? src.slips.map(normalizeSlip) : [],
+      result:normalizeSnapshot(src.result),
+      manual:normalizeSnapshot(src.manual),
+      resultFingerprint:typeof src.resultFingerprint==="string" ? src.resultFingerprint : null,
+    };
+  }catch(e){
+    return emptyShift();
+  }
+}
+function defaultHeadDate(){
+  const date=new Date();
+  date.setDate(date.getDate()+1);
+  const pad=n=>String(n).padStart(2,"0");
+  return date.getFullYear()+"-"+pad(date.getMonth()+1)+"-"+pad(date.getDate());
+}
+function migrateLegacySchedule(rows,head,manual){
+  const date=head && head.date ? head.date : defaultHeadDate();
+  const out=emptySchedule(date);
+  const key=head && head.timing==="ひる" ? "pm" : "am";
+  out.activeTiming=key;
+  if(Array.isArray(rows)) out.shifts[key].slips=rows.map(row=>({
+    id:newStableId("s"),status:"fax",items:[normalizeItem(row)]
+  }));
+  const legacyManual=manual && Array.isArray(manual.sp) && Array.isArray(manual.lots)
+    ? clone(manual) : null;
+  return {value:out,legacyManual:legacyManual};
+}
+function legacyManualCompatible(manualLots,newLots){
+  const fields=["type","name","lot","qty","snp","pallets"];
+  if(!Array.isArray(manualLots) || !Array.isArray(newLots) || manualLots.length!==newLots.length) return false;
+  return manualLots.every((lot,index)=>{
+    const next=newLots[index];
+    return lot && next && fields.every(field=>String(lot[field]??"")===String(next[field]??""));
+  });
+}
+function loadOrMigrateSchedule(){
+  const saved=loadData(STORE_KEY.schedule);
+  const warnings=[];
+  if(saved && saved.version===SCHEDULE_VERSION){
+    const shifts={};
+    TIMING_KEYS.forEach(key=>{
+      const raw=saved.shifts && saved.shifts[key];
+      if(!raw || typeof raw!=="object" || Array.isArray(raw)) warnings.push(TIMING_LABEL[key]);
+      shifts[key]=normalizeShift(raw);
+    });
+    scheduleLoadWarning=warnings;
+    return {value:{version:SCHEDULE_VERSION,date:typeof saved.date==="string" ? saved.date : "",
+      activeTiming:saved.activeTiming==="pm" ? "pm" : "am",shifts:shifts},
+      wasMigrated:false,legacyManual:null,warnings:warnings};
+  }
+  const lots=loadData(STORE_KEY.lots);
+  const head=loadData(STORE_KEY.head);
+  const manual=loadData(STORE_KEY.manual);
+  const rows=Array.isArray(lots) ? lots : SAMPLES.basic;
+  const migrated=migrateLegacySchedule(rows,head,manual);
+  scheduleLoadWarning=warnings;
+  return {value:migrated.value,wasMigrated:true,legacyManual:migrated.legacyManual,warnings:warnings};
+}
+function saveSchedule(){
+  return saveData(STORE_KEY.schedule,schedule);
+}
 
 /* ---------- 品目マスタ ---------- */
 function addMasterRow(d){
