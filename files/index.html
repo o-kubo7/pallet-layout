@@ -992,10 +992,54 @@ function normalizeSlip(raw){
   out.items=Array.isArray(out.items) ? out.items.map(normalizeItem) : [];
   return out;
 }
+function isPlainObject(value){
+  return !!value && typeof value==="object" && !Array.isArray(value);
+}
+function validSnapshotLots(lots){
+  if(!Array.isArray(lots)) return false;
+  const ids=new Set();
+  return lots.every(lot=>{
+    if(!isPlainObject(lot) || !Number.isSafeInteger(lot.id) || lot.id<0 || ids.has(lot.id)) return false;
+    ids.add(lot.id);
+    if(!["type","name","lot","code"].every(key=>typeof lot[key]==="string")) return false;
+    if(lot.sourceKey!==undefined && typeof lot.sourceKey!=="string") return false;
+    return ["qty","snp","pallets","parts","half","rem"].every(key=>
+      Number.isSafeInteger(lot[key]) && lot[key]>=0
+    ) && lot.snp>0 && lot.parts>0;
+  });
+}
+function validSnapshotSpaces(sp,lots){
+  if(!Array.isArray(sp) || !sp.length || sp.length>SPACES_MAX_AREAS) return false;
+  const lotIds=new Set(lots.map(lot=>lot.id));
+  const names=new Set();
+  return sp.every(space=>{
+    if(!isPlainObject(space) || typeof space.name!=="string" || !space.name || names.has(space.name) ||
+       !["near","far","stash"].includes(space.zone) || !["v","h"].includes(space.orient) ||
+       !Number.isSafeInteger(space.block) || space.block<=0 || !["top","bottom"].includes(space.align) ||
+       !Array.isArray(space.cols) || !space.cols.length || space.cols.length>SPACES_MAX_COLS) return false;
+    names.add(space.name);
+    return space.cols.every(col=>{
+      if(!isPlainObject(col) || !Number.isSafeInteger(col.h) || col.h<=0 || col.h>SPACES_MAX_COL_H ||
+         typeof col.aisle!=="boolean" || !Array.isArray(col.fills) ||
+         (col.row!==undefined && (!Number.isSafeInteger(col.row) || col.row<0 || col.row>SPACES_MAX_ROW)) ||
+         (col.off!==undefined && (!Number.isSafeInteger(col.off) || col.off<0 || col.off>SPACES_MAX_OFF))) return false;
+      let used=0;
+      const fillsOK=col.fills.every(fill=>{
+        if(!isPlainObject(fill) || !Number.isSafeInteger(fill.id) || !lotIds.has(fill.id) ||
+           !Number.isSafeInteger(fill.count) || fill.count<=0 ||
+           (fill.mix!==undefined && typeof fill.mix!=="boolean") ||
+           (fill.ov!==undefined && typeof fill.ov!=="boolean")) return false;
+        used+=fill.count;
+        return used<=col.h;
+      });
+      return fillsOK;
+    });
+  });
+}
 function normalizeSnapshot(raw){
   if(!raw || typeof raw!=="object" || Array.isArray(raw) || typeof raw.fp!=="string" ||
-     !Array.isArray(raw.lots) || !Array.isArray(raw.sp)) return null;
-  return Object.assign({}, raw, {fp:raw.fp, lots:raw.lots, sp:raw.sp});
+     !validSnapshotLots(raw.lots) || !validSnapshotSpaces(raw.sp,raw.lots)) return null;
+  return Object.assign({}, raw, {fp:raw.fp, lots:clone(raw.lots), sp:clone(raw.sp)});
 }
 function normalizeShift(raw){
   try{
@@ -1016,20 +1060,40 @@ function defaultHeadDate(){
   const pad=n=>String(n).padStart(2,"0");
   return date.getFullYear()+"-"+pad(date.getMonth()+1)+"-"+pad(date.getDate());
 }
+function normalizeLegacyItem(raw){
+  const item=normalizeItem(raw);
+  if(item.snp===""){
+    const candidates=snpsOf(item.name);
+    if(candidates.length) item.snp=String(candidates[0]);
+  }
+  return item;
+}
+function legacyFingerprintForRows(rows){
+  if(!Array.isArray(rows) || !rows.every(isPlainObject)) return null;
+  const legacyRows=rows.map(raw=>{
+    const item=normalizeLegacyItem(raw);
+    return {
+      type:item.type==="商品" ? "商品" : "仕掛品",
+      name:item.name,lot:item.lot,snp:item.snp,qty:item.qty,
+    };
+  });
+  try{ return JSON.stringify(legacyRows)+"|#|"+spacesToText(false); }
+  catch(e){ return null; }
+}
 function migrateLegacySchedule(rows,head,manual){
   const date=head && head.date ? head.date : defaultHeadDate();
   const out=emptySchedule(date);
   const key=head && head.timing==="ひる" ? "pm" : "am";
   out.activeTiming=key;
   if(Array.isArray(rows)) out.shifts[key].slips=rows.map(row=>({
-    id:newStableId("s"),status:"fax",items:[normalizeItem(row)]
+    id:newStableId("s"),status:"fax",items:[normalizeLegacyItem(row)]
   }));
   const legacyManual=manual && Array.isArray(manual.sp) && Array.isArray(manual.lots)
     ? clone(manual) : null;
-  return {value:out,legacyManual:legacyManual};
+  return {value:out,legacyManual:legacyManual,legacyFingerprint:legacyFingerprintForRows(rows)};
 }
 function legacyManualCompatible(manualLots,newLots){
-  const fields=["type","name","lot","qty","snp","pallets"];
+  const fields=["type","name","lot","qty","snp","pallets","half","parts"];
   if(!Array.isArray(manualLots) || !Array.isArray(newLots) || manualLots.length!==newLots.length) return false;
   return manualLots.every((lot,index)=>{
     const next=newLots[index];
@@ -1045,11 +1109,14 @@ function loadOrMigrateSchedule(){
       const raw=saved.shifts && saved.shifts[key];
       if(!raw || typeof raw!=="object" || Array.isArray(raw)) warnings.push(TIMING_LABEL[key]);
       shifts[key]=normalizeShift(raw);
+      if(isPlainObject(raw) &&
+         ((raw.result!=null && !shifts[key].result) || (raw.manual!=null && !shifts[key].manual)) &&
+         !warnings.includes(TIMING_LABEL[key])) warnings.push(TIMING_LABEL[key]);
     });
     scheduleLoadWarning=warnings;
     return {value:{version:SCHEDULE_VERSION,date:typeof saved.date==="string" ? saved.date : "",
       activeTiming:saved.activeTiming==="pm" ? "pm" : "am",shifts:shifts},
-      wasMigrated:false,legacyManual:null,warnings:warnings};
+      wasMigrated:false,legacyManual:null,legacyFingerprint:null,warnings:warnings};
   }
   const lots=loadData(STORE_KEY.lots);
   const head=loadData(STORE_KEY.head);
@@ -1057,10 +1124,21 @@ function loadOrMigrateSchedule(){
   const rows=Array.isArray(lots) ? lots : SAMPLES.basic;
   const migrated=migrateLegacySchedule(rows,head,manual);
   scheduleLoadWarning=warnings;
-  return {value:migrated.value,wasMigrated:true,legacyManual:migrated.legacyManual,warnings:warnings};
+  return {value:migrated.value,wasMigrated:true,legacyManual:migrated.legacyManual,
+    legacyFingerprint:Array.isArray(lots)?migrated.legacyFingerprint:null,warnings:warnings};
 }
 function saveSchedule(){
   return saveData(STORE_KEY.schedule,schedule);
+}
+function addScheduleLoadWarning(timing){
+  const label=TIMING_LABEL[timing]||timing;
+  if(label && !scheduleLoadWarning.includes(label)) scheduleLoadWarning.push(label);
+}
+function appendScheduleLoadWarning(){
+  if(!scheduleLoadWarning.length) return;
+  const labels=scheduleLoadWarning.map(esc).join("・");
+  document.getElementById("messages").innerHTML+=
+    `<div class="msg warn">⚠ ${labels}の保存済みデータの一部を読み込めなかったため、安全な状態に戻しました。</div>`;
 }
 
 /* ---------- 品目マスタ ---------- */
@@ -2468,17 +2546,38 @@ function activePlacementSnapshot(){
 function isActiveFresh(){
   return !!(hasResult && lastLots && lastSp && lastFp===inputFingerprint() && activePlacementSnapshot());
 }
+function clearDisplayedPlacement(){
+  lastLots=null; lastSp=null; lastFp=null; lastColor=null; hasResult=false;
+  clearSel();
+  ["legend","zone-far","zone-near","zone-stash","zone-stash-mini"]
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=""; });
+  const summary=document.getElementById("summary");
+  if(summary) summary.textContent="";
+  showMapState();
+}
 function restoreActiveShift(renderInput=true){
   if(renderInput) renderSlips(activeShift().slips);
   const snapshot=activePlacementSnapshot();
-  lastLots=snapshot ? clone(snapshot.lots) : null;
-  lastSp=snapshot ? clone(snapshot.sp) : null;
-  lastFp=snapshot ? snapshot.fp : null;
-  hasResult=!!snapshot;
   renderTimingSwitches();
-  if(snapshot) redraw();
-  else showMapState();
-  return hasResult;
+  if(!snapshot){ clearDisplayedPlacement(); return false; }
+  const candidateLots=clone(snapshot.lots), candidateSp=clone(snapshot.sp), candidateFp=snapshot.fp;
+  try{
+    // renderResult() の既存ヘルパーはglobalsを参照するため、候補を一時的に載せて描画する。
+    // 失敗時は下のcatchでsnapshotと表示状態をまとめて破棄し、混在表示を残さない。
+    lastLots=candidateLots; lastSp=candidateSp; lastFp=candidateFp; hasResult=true;
+    const {unknown,typeMix}=readLots();
+    renderResult(candidateLots,unknown,typeMix);
+    return true;
+  }catch(e){
+    const shift=activeShift();
+    if(shift.manual===snapshot) shift.manual=null;
+    if(shift.result===snapshot){ shift.result=null; shift.resultFingerprint=null; }
+    addScheduleLoadWarning(activeTiming);
+    clearDisplayedPlacement();
+    saveSchedule();
+    appendScheduleLoadWarning();
+    return false;
+  }
 }
 function refreshFreshness(){
   if(!schedule) return;
@@ -4207,12 +4306,18 @@ updateSaveStatus();
   let migrationWarning="";
   if(loaded.legacyManual && !spacesWereReset){
     const lots=readLots().lots;
-    if(legacyManualCompatible(loaded.legacyManual.lots,lots)){
+    if(loaded.legacyFingerprint && loaded.legacyManual.fp===loaded.legacyFingerprint &&
+       legacyManualCompatible(loaded.legacyManual.lots,lots)){
       const fp=fingerprintFor(activeShift().slips);
       const manualLots=loaded.legacyManual.lots.map((legacyLot,index)=>
         Object.assign({}, legacyLot, {sourceKey:lots[index].sourceKey}));
-      activeShift().manual={fp:fp,lots:manualLots,sp:clone(loaded.legacyManual.sp)};
-      activeShift().resultFingerprint=fp;
+      const candidate=normalizeSnapshot({fp:fp,lots:manualLots,sp:loaded.legacyManual.sp});
+      if(candidate){
+        activeShift().manual=candidate;
+        activeShift().resultFingerprint=fp;
+      }else{
+        migrationWarning="⚠ 保存済みの手動調整は入力内容と一致しないため破棄しました。自動配置を作成しました。";
+      }
     }else{
       migrationWarning="⚠ 保存済みの手動調整は入力内容と一致しないため破棄しました。自動配置を作成しました。";
     }
@@ -4232,6 +4337,7 @@ updateSaveStatus();
     if(migrationWarning){
       document.getElementById("messages").innerHTML+=`<div class="msg warn">${migrationWarning}</div>`;
     }
+    appendScheduleLoadWarning();
   },loaded.wasMigrated);
   // 旧キーは移行に失敗した場合の再試行用に残す。互換判定・再配置・警告を
   // 完了してからだけ新形式を保存するので、保存失敗でも旧形式から復元できる。
