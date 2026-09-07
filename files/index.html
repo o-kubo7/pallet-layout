@@ -1386,7 +1386,8 @@ function loadSample(which){
   // 入力を全置換するので、置換の前に確認する。
   // run(true) を runFromButton() に替えるだけでは、断っても入力が戻らない。
   if(isActiveFresh() && activeShift().manual && !confirm("手動調整を破棄してサンプルを読み込みます。よろしいですか？")) return;
-  activeShift().slips=[normalizeSlip({status:"fax",items:SAMPLES[which].map(normalizeItem)})];
+  activeShift().slips=SAMPLES[which].map(item=>
+    normalizeSlip({status:"fax",items:[normalizeItem(item)]}));
   renderSlips(activeShift().slips); run(true);
 }
 
@@ -3342,13 +3343,16 @@ function resetConfig(){
    単一 script なのでここから下（Service Worker の登録を含む）が全部実行されない。
    そうなると「初期値に戻す」ボタンにも届かず、SW は cache-first なので
    新しい HTML も落ちてこない。保存を捨てて、次のリロードで初期値に戻れるようにする。 */
-function bootDraw(fn){
-  try{ fn(); }
+function bootDraw(fn,preserveSchedule=false){
+  try{ fn(); return true; }
   catch(e){
     console.error("起動時の描画に失敗したので保存を捨てました", e);
     saveData(STORE_KEY.spaces, null);
-    clearManual();
+    // 旧形式の移行中は、新形式を保存すると次回に旧キーから再試行できない。
+    // この経路ではメモリ上の状態だけを残し、scheduleを書き換えない。
+    if(!preserveSchedule) clearManual();
     showCfgNote("保存されていた設定で配置図を作れませんでした。設定タブの「初期値に戻す」を押すか、画面を再読み込みしてください。");
+    return false;
   }
 }
 // 起動時に出した「読み込めなかった」の知らせを消す。設定を直したら用済みになる。
@@ -4202,7 +4206,9 @@ updateSaveStatus();
     const lots=readLots().lots;
     if(legacyManualCompatible(loaded.legacyManual.lots,lots)){
       const fp=fingerprintFor(activeShift().slips);
-      activeShift().manual={fp:fp,lots:clone(lots),sp:clone(loaded.legacyManual.sp)};
+      const manualLots=loaded.legacyManual.lots.map((legacyLot,index)=>
+        Object.assign({}, legacyLot, {sourceKey:lots[index].sourceKey}));
+      activeShift().manual={fp:fp,lots:manualLots,sp:clone(loaded.legacyManual.sp)};
       activeShift().resultFingerprint=fp;
     }else{
       migrationWarning="⚠ 保存済みの手動調整は入力内容と一致しないため破棄しました。自動配置を作成しました。";
@@ -4215,7 +4221,7 @@ updateSaveStatus();
   }
   // 現在の時間帯で入力と一致する保存結果だけを復元する。旧形式だけは、
   // 保存済み新形式の空結果と区別してここで一度だけ自動配置する。
-  bootDraw(()=>{
+  const bootOK=bootDraw(()=>{
     if(!restoreActiveShift(false) && loaded.wasMigrated &&
        activeShift().slips.some(s=>s.items.some(i=>i.name||i.lot||i.qty))){
       run(false,true);
@@ -4223,10 +4229,10 @@ updateSaveStatus();
     if(migrationWarning){
       document.getElementById("messages").innerHTML+=`<div class="msg warn">${migrationWarning}</div>`;
     }
-  });
+  },loaded.wasMigrated);
   // 旧キーは移行に失敗した場合の再試行用に残す。互換判定・再配置・警告を
   // 完了してからだけ新形式を保存するので、保存失敗でも旧形式から復元できる。
-  if(loaded.wasMigrated || loaded.warnings.length || spacesWereReset) saveSchedule();
+  if(bootOK && (loaded.wasMigrated || loaded.warnings.length || spacesWereReset)) saveSchedule();
 })();
 
 // マスの大きさ：保存があれば復元
