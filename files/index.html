@@ -344,6 +344,7 @@
   /* ---- 入力の不備 ---- */
   /* 入力欄の通常背景より確実に優先する。 */
   .err{border-color:#dc2626 !important;background:#fef2f2 !important}
+  .slip-head.err-slip{background:#fef2f2;color:#b91c1c;border-bottom-color:#fecaca}
   /* 不完全な行までスクロールすると見出し直下の帯は画面外へ流れるので sticky にする。
      top は .tabs の実測高を updateErrBanner() が入れる（.tabs 自身が sticky top:0 z-index:30 で、
      0 にすると裏に潜り込む）。.card にも .wrap にも overflow は無いので sticky は素直に効く */
@@ -1272,7 +1273,7 @@ function rowChanged(el){
   const tr=el.closest("tr");
   recalcRow(tr); saveActiveSlips();
   if(typeof refreshFreshness==="function") refreshFreshness();
-  refreshRowErr(tr); updateErrBanner();
+  refreshRowErr(tr); refreshSlipErr(tr.closest(".slip")); updateErrBanner();
 }
 // 品名を変えたとき、SNPが空 or 旧候補のままなら自動で入れる
 function nameChanged(el){
@@ -1327,24 +1328,30 @@ function recalcRow(tr){
 function recalcAllRows(){
   document.querySelectorAll("#slipList tbody tr").forEach(recalcRow);
 }
-function readRowData(){
-  return readSlips().flatMap(slip=>slip.items.map(item=>({
-    type:item.type,name:item.name,lot:item.lot,snp:item.snp,qty:item.qty,
+function placementInput(slips){
+  return (Array.isArray(slips)?slips:[]).flatMap(slip=>(Array.isArray(slip.items)?slip.items:[]).map(item=>({
+    slipId:slip.id, itemId:item.id, status:slip.status,
+    type:item.type, name:(item.name||"").trim(), lot:(item.lot||"").trim(),
+    snp:parseInt(item.snp)||0, qty:parseInt(item.qty)||0,
   })));
+}
+function readRowData(){
+  return placementInput(readSlips()).map(item=>({
+    type:item.type,name:item.name,lot:item.lot,snp:item.snp,qty:item.qty,
+  }));
 }
 // 分納（同一品名・同一ロットが複数行）は1つの荷物としてまとめる。
 // パレット数は伝票（行）ごとに切り上げてから合計する。
 function readLots(){
-  const rows=[...document.querySelectorAll("#slipList tbody tr")];
+  const rows=placementInput(readSlips());
   const lots=[], unknown=[], byKey={}, typeMix=[];
-  rows.forEach((tr,i)=>{
-    const v=rowValues(tr);
+  rows.forEach((v,i)=>{
     if(v.qty<=0) return;
     if(v.snp<=0){ unknown.push(v); return; }
     const pallets=Math.ceil(v.qty/v.snp);
     const half = (v.qty % v.snp)>0 ? 1 : 0;   // 端数のある伝票の数だけ「半」になる
-    // 品名もロットも空の行はまとめない（別々の荷物として扱う）
-    const key = (v.name||v.lot) ? (v.name+"\u0000"+v.lot) : ("__row"+i);
+    // ロット未入力は同名でも品目行ごとに別荷物。入力済みなら品名＋ロットでまとめる。
+    const key = v.lot ? (v.name+"\u0000"+v.lot) : ("__item\u0000"+v.itemId);
     if(byKey[key]!=null){
       const g=lots[byKey[key]];
       g.qty+=v.qty; g.pallets+=pallets; g.parts++; g.half+=half;
@@ -1352,7 +1359,8 @@ function readLots(){
     }else{
       byKey[key]=lots.length;
       lots.push({ id:lots.length, type:v.type, name:v.name, lot:v.lot, qty:v.qty, snp:v.snp,
-                  code:v.lot||v.name||("行"+(i+1)), pallets:pallets, parts:1, half:half });
+                  code:v.lot||v.name||("行"+(i+1)), sourceKey:key,
+                  pallets:pallets, parts:1, half:half });
     }
   });
   return {lots, unknown, typeMix};
@@ -1394,10 +1402,21 @@ function missingFields(tr){
   return m;
 }
 
-function validateLots(){
-  return [...document.querySelectorAll("#slipList tbody tr")]
-    .map((tr,i)=>({tr:tr, i:i, fields:missingFields(tr)}))
-    .filter(r=>r.fields.length>0);
+function validateSlips(){
+  const badRows=[], emptySlips=[];
+  let rowIndex=0;
+  document.querySelectorAll("#slipList .slip").forEach((slip,slipIndex)=>{
+    let completeItems=0;
+    slip.querySelectorAll("tbody tr").forEach(tr=>{
+      const fields=missingFields(tr);
+      if(fields.length) badRows.push({tr:tr,i:rowIndex,fields:fields});
+      const v=rowValues(tr);
+      if(v.name && v.snp>0 && v.qty>0) completeItems++;
+      rowIndex++;
+    });
+    if(completeItems===0) emptySlips.push({slip:slip,i:slipIndex});
+  });
+  return {badRows:badRows,emptySlips:emptySlips};
 }
 
 // dataset.err どおりにクラスを貼り直す
@@ -1418,30 +1437,52 @@ function refreshRowErr(tr){
   applyRowErr(tr);
 }
 
+function refreshSlipErr(slip){
+  if(!slip) return;
+  const head=slip.querySelector(".slip-head");
+  if(!head || !head.classList.contains("err-slip")) return;
+  const complete=[...slip.querySelectorAll("tbody tr")].some(tr=>{
+    const v=rowValues(tr);
+    return v.name && v.snp>0 && v.qty>0;
+  });
+  if(complete) head.classList.remove("err-slip");
+}
+
 function updateErrBanner(){
-  const n=document.querySelectorAll("#slipList tbody tr[data-err]").length;
+  const badN=document.querySelectorAll("#slipList tbody tr[data-err]").length;
+  const emptyN=document.querySelectorAll("#slipList .slip-head.err-slip").length;
   const el=document.getElementById("inputErr");
-  el.style.display = n ? "block" : "none";
-  if(!n) return;
-  el.textContent=`⚠ 入力が足りない荷物が ${n} 件あります（品名・個数・SNP は必須）`;
+  el.style.display = (badN||emptyN) ? "block" : "none";
+  if(!badN && !emptyN) return;
+  const messages=[];
+  if(badN) messages.push(`入力が足りない品目が ${badN}件あります`);
+  if(emptyN) messages.push(`品目が入力されていない伝票が ${emptyN}件あります`);
+  el.textContent=messages.join(" ／ ");
   // sticky の止まる位置。タブの高さは4タブぶんの min-height とフォントで決まるので毎回測る
   const tabs=document.querySelector(".tabs");
   el.style.top = (tabs ? tabs.getBoundingClientRect().height : 0)+"px";
 }
 
-// ボタンを押して不完全な行が見つかったとき
-function showLotErrors(bad){
+// ボタンを押して不完全な行または空伝票が見つかったとき
+function showLotErrors(validation){
+  const bad=validation.badRows, empty=validation.emptySlips;
   document.querySelectorAll("#slipList tbody tr").forEach(tr=>{ delete tr.dataset.err; });
+  document.querySelectorAll("#slipList .slip-head.err-slip").forEach(head=>head.classList.remove("err-slip"));
   bad.forEach(r=>{ r.tr.dataset.err=r.fields.join(","); });
   bad.forEach(r=>applyRowErr(r.tr));
+  empty.forEach(r=>r.slip.querySelector(".slip-head").classList.add("err-slip"));
   updateErrBanner();
-  focusFirstErr(bad[0]);
+  if(bad.length) focusFirstErr(bad[0]);
+  else if(empty.length) focusErrElement(empty[0].slip.querySelector(".slip-actions button"));
 }
 
 // 最初の欠け欄へ連れていく。
 function focusFirstErr(r){
   const f=r.fields[0];
   const el=r.tr.querySelectorAll("select,input")[ERR_CELL[f]];
+  focusErrElement(el);
+}
+function focusErrElement(el){
   if(!el) return;
   // focus() の既定スクロールに任せると位置が中途半端になるので、止めてから自分で寄せる。
   // behavior:"smooth" は使わない。非同期なので、下の追随が途中の座標を読んで競合する
@@ -2353,7 +2394,13 @@ let edge={x:0, y:0, raf:0};          // 端の自動スクロール
    掲載先（sheet）は含めない。紙のどこに欄を書くかであって倉庫の形ではないので、
    変えても保存済みの配置はそのまま使える。spacesToText(false) で 5 項目に落とす。 */
 let lastFp=null;
-function inputFingerprint(){ return JSON.stringify(readRowData())+"|#|"+spacesToText(false); }
+function fingerprintFor(slips){
+  const items=placementInput(slips).map(item=>({
+    itemId:item.itemId,type:item.type,name:item.name,lot:item.lot,snp:item.snp,qty:item.qty,
+  }));
+  return JSON.stringify({items:items,spaces:spacesToText(false)});
+}
+function inputFingerprint(){ return fingerprintFor(readSlips()); }
 function saveManual(){
   if(lastFp==null) return;
   saveData(STORE_KEY.manual, {fp:lastFp, sp:lastSp, lots:lastLots});
@@ -2381,8 +2428,7 @@ function restoreManual(){
    seen で重ねているのは、同じ品名＋SNPが2行あるときに2件と数えないため。 */
 function unknownItems(){
   const out=[], seen={};
-  [...document.querySelectorAll("#slipList tbody tr")].forEach(tr=>{
-    const v=rowValues(tr);
+  placementInput(readSlips()).forEach(v=>{
     if(!v.name || v.snp<=0) return;
     if(snpsOf(v.name).includes(v.snp)) return;
     const key=v.name+"\u0000"+v.snp;   // readLots() と同じ区切り方
@@ -2401,8 +2447,8 @@ function registerItems(list){
 // 「▶ 自動配置を作成」の入口。手動調整があるときだけ確認する。
 function runFromButton(){
   // 入力が不完全なら、ここで止める。手動調整の破棄を聞く前に返すので、破棄せずに直せる
-  const bad=validateLots();
-  if(bad.length){ showLotErrors(bad); return; }
+  const validation=validateSlips();
+  if(validation.badRows.length || validation.emptySlips.length){ showLotErrors(validation); return; }
 
   if(hasManual() && !confirm("手動調整を破棄して自動配置し直します。よろしいですか？")) return;
 
@@ -2562,7 +2608,7 @@ document.addEventListener("lostpointercapture",e=>{ if(drag && e.pointerId===dra
 const STASH_COL_H=4;            // 退避の1列の高さ。隅の小さな盤に収まる高さにする
 const STASH_MAX_COLS=14;        // 際限なく伸ばさない
 const STASH_COL_MAX_H=21;       // 1列に積める上限（架空の場所なので倉庫より緩い）
-function lotKey(l){ return (l.name||"")+"\u0000"+(l.lot||""); }
+function lotKey(l){ return l.sourceKey || ((l.name||"")+"\u0000"+(l.lot||"")); }
 function stashSpaces(sp){ return (sp||[]).filter(s=>s.zone==="stash"); }
 // 退避に今ある枚数を {品名\0ロット: 枚数} で返す
 function stashCounts(){
