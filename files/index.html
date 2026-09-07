@@ -2014,7 +2014,9 @@ function run(goMap){
   // [試作] 退避は自動配置し直しても残す。荷物が多い日に逃がしたものが
   // 「▶ 自動配置を作成」で倉庫へ戻ってしまうと、退避そのものが用を成さない。
   // ロットIDは入力行の順番で変わるので、readLots() と同じ 品名＋ロット で引き当てる。
-  const keepStash=stashCounts();
+  // 入力変更で表示用globalsが空でも、現在時間帯の保存配置から退避を引き継ぐ。
+  const savedPlacement=activeShift().manual || activeShift().result;
+  const keepStash=stashCounts(savedPlacement?savedPlacement.sp:null, savedPlacement?savedPlacement.lots:null);
   lots.forEach(l=>{
     const n=keepStash[lotKey(l)]||0;
     if(n>0){ l.stashed=Math.min(n,l.pallets); l.pallets-=l.stashed; }
@@ -2685,12 +2687,12 @@ const STASH_MAX_COLS=14;        // 際限なく伸ばさない
 const STASH_COL_MAX_H=21;       // 1列に積める上限（架空の場所なので倉庫より緩い）
 function lotKey(l){ return l.sourceKey || ((l.name||"")+"\u0000"+(l.lot||"")); }
 function stashSpaces(sp){ return (sp||[]).filter(s=>s.zone==="stash"); }
-// 退避に今ある枚数を {品名\0ロット: 枚数} で返す
-function stashCounts(){
+// 指定した配置の退避枚数を {ロットの識別キー: 枚数} で返す
+function stashCounts(sp=lastSp,lots=lastLots){
   const out={};
-  if(!lastSp||!lastLots) return out;
-  stashSpaces(lastSp).forEach(s=>s.cols.forEach(c=>c.fills.forEach(f=>{
-    const l=lastLots.find(x=>x.id===f.id); if(!l) return;
+  if(!sp||!lots) return out;
+  stashSpaces(sp).forEach(s=>s.cols.forEach(c=>c.fills.forEach(f=>{
+    const l=lots.find(x=>x.id===f.id); if(!l) return;
     const k=lotKey(l); out[k]=(out[k]||0)+f.count;
   })));
   return out;
