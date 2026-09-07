@@ -898,6 +898,7 @@ const TIMING_LABEL={am:"あさ",pm:"ひる"};
 const SCHEDULE_VERSION=1;
 let activeTiming="am", schedule=null, stableSeq=0;
 let scheduleLoadWarning=[];
+let spacesWereReset=false;
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
 const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", display:"palletApp.display", merge:"palletApp.merge", schedule:"palletApp.schedule"};
@@ -951,6 +952,12 @@ function loadData(key){
     const s = storageOK ? localStorage.getItem(key) : memStore[key];
     return s ? JSON.parse(s) : null;
   }catch(e){ return null; }
+}
+function removeData(key){
+  if(storageOK){
+    try{ localStorage.removeItem(key); return true; }catch(e){ storageOK=false; }
+  }
+  delete memStore[key]; updateSaveStatus(); return false;
 }
 function updateSaveStatus(){
   const el=document.getElementById("saveStatus"); if(!el)return;
@@ -1370,17 +1377,17 @@ function readLots(){
   return {lots, unknown, typeMix};
 }
 function clearLots(){
-  if(!confirm("荷物の入力をすべてクリアします。よろしいですか？（品目マスタは残ります）"))return;
-  activeShift().slips=[normalizeSlip({status:"fax",items:[normalizeItem({type:"仕掛品"})]})];
+  if(!confirm(`${TIMING_LABEL[activeTiming]}の入力をすべてクリアします。よろしいですか？（反対側と品目マスタは残ります）`))return;
+  schedule.shifts[activeTiming]=emptyShift();
   saveSchedule(); renderSlips(activeShift().slips);
   refreshFreshness();
 }
 function loadSample(which){
   // 入力を全置換するので、置換の前に確認する。
   // run(true) を runFromButton() に替えるだけでは、断っても入力が戻らない。
-  if(hasManual() && !confirm("手動調整を破棄してサンプルを読み込みます。よろしいですか？")) return;
+  if(isActiveFresh() && activeShift().manual && !confirm("手動調整を破棄してサンプルを読み込みます。よろしいですか？")) return;
   activeShift().slips=[normalizeSlip({status:"fax",items:SAMPLES[which].map(normalizeItem)})];
-  saveSchedule(); renderSlips(activeShift().slips); run(true);
+  renderSlips(activeShift().slips); run(true);
 }
 
 /* ---------- 入力のバリデーション ----------
@@ -1989,7 +1996,7 @@ function redraw(){
   renderResult(lastLots, unknown, typeMix);
 }
 
-function run(goMap){
+function run(goMap,deferSave=false){
   const {lots, unknown, typeMix}=readLots();
   if(lots.length===0 && unknown.length===0){ alert("荷物を1件以上入力してください。"); return; }
 
@@ -2030,7 +2037,7 @@ function run(goMap){
   activeShift().result={fp:lastFp,lots:clone(lastLots),sp:clone(lastSp)};
   activeShift().manual=null;
   activeShift().resultFingerprint=lastFp;
-  saveSchedule();
+  if(!deferSave) saveSchedule();
 
   renderResult(lots, unknown, typeMix);
   if(goMap) switchTab('edit');
@@ -2189,7 +2196,7 @@ function showMapState(){
   const fresh=isActiveFresh();
   const saved=schedule && (activeShift().result || activeShift().manual);
   const label=TIMING_LABEL[activeTiming];
-  const message=saved ? `入力が変更されています。${label}の自動配置を作成し直してください`
+  const message=saved ? `${label}の配置を再配置してください`
     : `${label}の配置はまだ作成されていません`;
   document.getElementById("editEmpty").textContent=message;
   document.getElementById("sheetEmpty").textContent=message;
@@ -3308,10 +3315,9 @@ function applyConfig(){
   document.getElementById("cfgText").value=spacesToText();
   clearCfgNote();
   showCapacity();
-  if(lastLots){
-    if(spacesToText(false)===geomBefore) redraw();
-    else run(false);
-  }
+  if(spacesToText(false)===geomBefore){
+    if(isActiveFresh()) redraw(); else refreshFreshness();
+  }else refreshFreshness();
   // 配置表タブは開いていないことが多く、renderSheet() は開いているときしか走らない
   // （showMapState()、files/index.html:1855）。紙が壊れる設定をした瞬間に気づけるよう、ここでも見る。
   // clearCfgNote() より後、再配置より後でないと、消されるか古い lastSp を見てしまう
@@ -3328,10 +3334,9 @@ function resetConfig(){
   clearCfgNote();
   document.getElementById("cfgText").value=spacesToText();
   showCapacity();
-  if(lastLots){
-    if(spacesToText(false)===geomBefore) redraw();
-    else run(false);
-  }
+  if(spacesToText(false)===geomBefore){
+    if(isActiveFresh()) redraw(); else refreshFreshness();
+  }else refreshFreshness();
 }
 /* 起動時の描画を包む。保存された設定が壊れていて描画に失敗すると、
    単一 script なのでここから下（Service Worker の登録を含む）が全部実行されない。
@@ -4151,7 +4156,8 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","
   // restoreManual() が指紋不一致で無言に捨てるので、ここで一緒に知らせる
   if(d.v!==SPACES_SAVE_VERSION){
     saveData(STORE_KEY.spaces, null);
-    clearManual();
+    removeData(STORE_KEY.manual);
+    spacesWereReset=true;
     showCfgNote("配置マスを現場の実測に合わせて更新したので、スペース設定と手動調整を初期値に戻しました。");
     return;
   }
@@ -4189,10 +4195,38 @@ updateSaveStatus();
   document.getElementById("dateInput").value=headDate;
   const d=new Date(headDate+"T00:00:00");
   document.getElementById("dowHint").textContent=`（${DOW[d.getDay()]}曜日）`;
+  renderTimingSwitches();
   renderSlips(activeShift().slips);
-  saveSchedule();
-  // 現在の時間帯で入力と一致する保存結果だけを復元する。
-  bootDraw(()=>restoreActiveShift(false));
+  let migrationWarning="";
+  if(loaded.legacyManual){
+    const lots=readLots().lots;
+    if(legacyManualCompatible(loaded.legacyManual.lots,lots)){
+      const fp=fingerprintFor(activeShift().slips);
+      activeShift().manual={fp:fp,lots:clone(lots),sp:clone(loaded.legacyManual.sp)};
+      activeShift().resultFingerprint=fp;
+    }else{
+      migrationWarning="⚠ 保存済みの手動調整は入力内容と一致しないため破棄しました。自動配置を作成しました。";
+    }
+  }
+  if(spacesWereReset){
+    TIMING_KEYS.forEach(key=>{ schedule.shifts[key]=Object.assign(schedule.shifts[key],{
+      result:null,manual:null,resultFingerprint:null
+    }); });
+  }
+  // 現在の時間帯で入力と一致する保存結果だけを復元する。旧形式だけは、
+  // 保存済み新形式の空結果と区別してここで一度だけ自動配置する。
+  bootDraw(()=>{
+    if(!restoreActiveShift(false) && loaded.wasMigrated &&
+       activeShift().slips.some(s=>s.items.some(i=>i.name||i.lot||i.qty))){
+      run(false,true);
+    }
+    if(migrationWarning){
+      document.getElementById("messages").innerHTML+=`<div class="msg warn">${migrationWarning}</div>`;
+    }
+  });
+  // 旧キーは移行に失敗した場合の再試行用に残す。互換判定・再配置・警告を
+  // 完了してからだけ新形式を保存するので、保存失敗でも旧形式から復元できる。
+  if(loaded.wasMigrated || loaded.warnings.length || spacesWereReset) saveSchedule();
 })();
 
 // マスの大きさ：保存があれば復元
