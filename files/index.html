@@ -4160,7 +4160,6 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","
   // restoreManual() が指紋不一致で無言に捨てるので、ここで一緒に知らせる
   if(d.v!==SPACES_SAVE_VERSION){
     saveData(STORE_KEY.spaces, null);
-    removeData(STORE_KEY.manual);
     spacesWereReset=true;
     showCfgNote("配置マスを現場の実測に合わせて更新したので、スペース設定と手動調整を初期値に戻しました。");
     return;
