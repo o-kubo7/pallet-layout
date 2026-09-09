@@ -47,6 +47,7 @@
   .btn{border:0;border-radius:8px;padding:11px 16px;font-size:14px;font-weight:600;cursor:pointer;min-height:44px}
   .btn-primary{background:var(--accent);color:#fff}
   .btn-ghost{background:#eef2f7;color:#374151}
+  .btn-slip-add{background:#eff6ff;color:#1d4ed8;border:2px solid #2563eb;padding:9px 14px}
   .btn-on{background:#fde68a;color:#7c2d12}
   .btn-mini{background:#fee2e2;color:#b91c1c;border-radius:8px;padding:8px 12px;font-size:13px;
             cursor:pointer;border:0;min-height:40px;min-width:44px}
@@ -447,6 +448,13 @@
   .sheet td.snote{display:table-cell;text-align:center;vertical-align:top;
                   font-size:var(--fs-note);font-weight:var(--fw-note);color:#333;height:16px;line-height:1.2;
                   border:0;background:transparent}
+  /* あふれブロックは wide 様式の右端2列に縦積みする。外側のセルはグリッドの行をまたぎ、
+     内側の表だけが項目ごとの罫線を持つ。 */
+  .sheet td.overflow-host{border:0;padding:0;vertical-align:top}
+  .sheet table.overflow-table{width:100%;min-width:0;max-width:none}
+  .sheet .overflow-table td{width:auto}
+  .sheet .overflow-table td.c-note{font-size:var(--fs-note);font-weight:var(--fw-note);color:#333}
+  .sheet .overflow-table tr.overflow-gap td{height:6px;min-height:6px;padding:0;border:0;line-height:0}
   /* 上段の注記行は左5列が空セル。td の既定の 26px が行を押し上げるので合わせる */
   .sheet tr.note-row td.none{height:16px}
   /* 大きな配置図が出せない／欠けているときの案内。表の中に置くので紙にも出る。
@@ -544,8 +552,8 @@
     <div id="inputErr" class="inputerr" style="display:none"></div>
     <div id="slipList"></div>
     <div class="row-actions input-add-actions">
-      <button class="btn btn-ghost" onclick="addSlip('fax')">＋ FAX伝票を追加</button>
-      <button class="btn btn-ghost" onclick="addSlip('provisional')">＋ 仮伝票を追加</button>
+      <button class="btn btn-slip-add" onclick="addSlip('fax')">＋ FAX伝票を追加</button>
+      <button class="btn btn-slip-add" onclick="addSlip('provisional')">＋ 仮伝票を追加</button>
       <label class="chk"><input type="checkbox" id="mixChk" checked> 満杯時に混載を許可</label>
       <button class="btn btn-primary" id="runBtnInline" onclick="runFromButton()">▶ 自動配置を作成</button>
     </div>
@@ -560,7 +568,7 @@
         <span>原則 1列＝1品目</span>
         <span><b>ロット単位</b>で連続した列にまとめる</span>
         <span>通路はメインが埋まってから使用</span>
-        <span>仕掛品を先に配置（メインが競合したとき仕掛品を優先）</span>
+        <span>充填品を先に配置（メインが競合したとき充填品を優先）</span>
         <span>パレット数＝<b>切り上げ</b>(個数 ÷ SNP)</span>
         <span><b>品名＋ロット</b>が違えば別物として配置</span>
       </div>
@@ -788,7 +796,7 @@ const DEFAULT_SPACES = [
      {h:3,  row:0, off:9},    // 22-24
      {h:11, row:2, off:0}]},  // 25-35　※ row1 は通路の空き行
   {name:"軒下②", zone:"far", orient:"h", block:99, sheet:"top", cols:[{h:4},{h:4}]},
-  // PC横：1-4 と 5-12 の間の row1 が通路。flip なので行の中は右起点
+  // PC横：1-4 と 5-12 の間の row1 が通路。右起点
   {name:"PC横", zone:"near", orient:"h", block:99, sheet:"bottom", cols:[
      {h:4, row:0},            // 1-4
      {h:8, row:2}]},          // 5-12　※ row1 は通路の空き行
@@ -816,7 +824,7 @@ const AREA_GROUPS = [["軒下①","軒下②"]];
 // 倉庫外と倉庫内は別コンテナ（#zone-far / #zone-near）に描くので c/r が重なってよい。
 // flip＝実際の図と同じく右寄せにする。位置指定モードのエリアでは
 // 行の中の並びが右起点になり、off も右からのオフセットとして効く。
-// EV横は実測では 1 が左端なので flip を付けない（以前の flip:true は誤りだった）。
+// PC横は実際の図と同じく右寄せ。EV横は実測どおり左起点。
 const FLOOR_POS = {
   "5棟壁際":{c:3,r:1},
   "軒下②":{c:1,r:2}, "出庫口横":{c:2,r:2}, "軒下①":{c:3,r:2},
@@ -860,23 +868,23 @@ const DEFAULT_MASTER = (function(){
 
 const SAMPLES = {
   basic:[
-    {type:"仕掛品",name:"部品C",lot:"L-103",snp:10,qty:245},
-    {type:"仕掛品",name:"部品A",lot:"L-101",snp:10,qty:120},
-    {type:"仕掛品",name:"部品B",lot:"L-102",snp:10,qty:70},
-    {type:"仕掛品",name:"部品D",lot:"L-104",snp:10,qty:140},
-    {type:"仕掛品",name:"部品E",lot:"L-105",snp:10,qty:60},
-    {type:"商品",  name:"製品X",lot:"P-201",snp:10,qty:60},
-    {type:"商品",  name:"製品Y",lot:"P-202",snp:10,qty:90},
-    {type:"商品",  name:"製品Z",lot:"P-203",snp:10,qty:110},
-    {type:"商品",  name:"製品W",lot:"P-204",snp:10,qty:80},
+    {type:"充填品",name:"部品C",lot:"L-103",snp:10,qty:245},
+    {type:"充填品",name:"部品A",lot:"L-101",snp:10,qty:120},
+    {type:"充填品",name:"部品B",lot:"L-102",snp:10,qty:70},
+    {type:"充填品",name:"部品D",lot:"L-104",snp:10,qty:140},
+    {type:"充填品",name:"部品E",lot:"L-105",snp:10,qty:60},
+    {type:"製品",  name:"製品X",lot:"P-201",snp:10,qty:60},
+    {type:"製品",  name:"製品Y",lot:"P-202",snp:10,qty:90},
+    {type:"製品",  name:"製品Z",lot:"P-203",snp:10,qty:110},
+    {type:"製品",  name:"製品W",lot:"P-204",snp:10,qty:80},
   ],
   // 大口4件が各エリアの列を使い切り、最後の小口が空き列を見つけられず混載になる構成。
   mix:[
-    {type:"仕掛品",name:"部品1",lot:"M-101",snp:10,qty:700},
-    {type:"仕掛品",name:"部品2",lot:"M-102",snp:10,qty:350},
-    {type:"仕掛品",name:"部品3",lot:"M-103",snp:10,qty:110},
-    {type:"仕掛品",name:"部品4",lot:"M-104",snp:10,qty:90},
-    {type:"仕掛品",name:"部品5",lot:"M-105",snp:10,qty:50},
+    {type:"充填品",name:"部品1",lot:"M-101",snp:10,qty:700},
+    {type:"充填品",name:"部品2",lot:"M-102",snp:10,qty:350},
+    {type:"充填品",name:"部品3",lot:"M-103",snp:10,qty:110},
+    {type:"充填品",name:"部品4",lot:"M-104",snp:10,qty:90},
+    {type:"充填品",name:"部品5",lot:"M-105",snp:10,qty:50},
   ],
 };
 
@@ -979,10 +987,12 @@ function emptySchedule(date){
   return {version:SCHEDULE_VERSION,date:date||"",activeTiming:"am",
     shifts:{am:emptyShift(),pm:emptyShift()}};
 }
+function normalizeItemType(type){ return (type==="商品" || type==="製品") ? "製品" : "充填品"; }
 function normalizeItem(raw){
   const out=Object.assign({}, raw && typeof raw==="object" ? raw : {});
   out.id=out.id==null || out.id==="" ? newStableId("i") : String(out.id);
   ["type","name","lot","snp","qty"].forEach(key=>{ out[key]=out[key]==null ? "" : String(out[key]); });
+  out.type=normalizeItemType(out.type);
   return out;
 }
 function normalizeSlip(raw){
@@ -1037,9 +1047,11 @@ function validSnapshotSpaces(sp,lots){
   });
 }
 function normalizeSnapshot(raw){
+  const lots=raw && Array.isArray(raw.lots)
+    ? raw.lots.map(lot=>Object.assign({},lot,{type:normalizeItemType(lot&&lot.type)})) : null;
   if(!raw || typeof raw!=="object" || Array.isArray(raw) || typeof raw.fp!=="string" ||
-     !validSnapshotLots(raw.lots) || !validSnapshotSpaces(raw.sp,raw.lots)) return null;
-  return Object.assign({}, raw, {fp:raw.fp, lots:clone(raw.lots), sp:clone(raw.sp)});
+     !validSnapshotLots(lots) || !validSnapshotSpaces(raw.sp,lots)) return null;
+  return Object.assign({}, raw, {fp:raw.fp, lots:lots, sp:clone(raw.sp)});
 }
 function normalizeShift(raw){
   try{
@@ -1073,7 +1085,7 @@ function legacyFingerprintForRows(rows){
   const legacyRows=rows.map(raw=>{
     const item=normalizeLegacyItem(raw);
     return {
-      type:item.type==="商品" ? "商品" : "仕掛品",
+      type:item.type==="製品" ? "商品" : "仕掛品",
       name:item.name,lot:item.lot,snp:item.snp,qty:item.qty,
     };
   });
@@ -1202,8 +1214,8 @@ function createItemRow(item){
   tr.dataset.itemId=d.id;
   tr.innerHTML=`
     <td><select class="item-type" onchange="rowChanged(this)">
-      <option value="仕掛品" ${d.type==="仕掛品"?"selected":""}>仕掛品</option>
-      <option value="商品" ${d.type==="商品"?"selected":""}>商品</option>
+      <option value="充填品" ${d.type==="充填品"?"selected":""}>充填品</option>
+      <option value="製品" ${d.type==="製品"?"selected":""}>製品</option>
     </select></td>
     <td><input enterkeyhint="next" value="${esc(d.name)}" placeholder="品名"
                oninput="nameChanged(this);acTyped(this)" onfocus="acOpen(this)" onkeydown="acKey(event,this)"></td>
@@ -1262,7 +1274,7 @@ function renderSlips(slips){
 function addSlip(status,data){
   saveActiveSlips();
   const raw=Object.assign({}, data||{}, {status:status==="provisional"?"provisional":"fax"});
-  if(!Array.isArray(raw.items) || !raw.items.length) raw.items=[normalizeItem({type:"仕掛品"})];
+  if(!Array.isArray(raw.items) || !raw.items.length) raw.items=[normalizeItem({type:"充填品"})];
   activeShift().slips.push(normalizeSlip(raw));
   saveSchedule();
   renderSlips(activeShift().slips);
@@ -1278,7 +1290,7 @@ function slipElement(slipOrId){
 
 function addItemRow(slipOrId,item){
   const slip=slipElement(slipOrId); if(!slip)return null;
-  const tr=createItemRow(item||{type:"仕掛品"});
+  const tr=createItemRow(item||{type:"充填品"});
   slip.querySelector("tbody").appendChild(tr);
   updateItemCount(slip);
   saveActiveSlips();
@@ -1292,7 +1304,7 @@ function removeItemRow(button){
   if(!tr||!slip)return;
   if(acInput && tr.contains(acInput)) acClose();
   tr.remove();
-  if(!slip.querySelector("tbody tr")) slip.querySelector("tbody").appendChild(createItemRow({type:"仕掛品"}));
+  if(!slip.querySelector("tbody tr")) slip.querySelector("tbody").appendChild(createItemRow({type:"充填品"}));
   updateItemCount(slip);
   saveActiveSlips();
   updateErrBanner();
@@ -1351,7 +1363,7 @@ function updateSlipCounts(){
 
 const compactInputMq=matchMedia("(max-width:600px)");
 function syncCompactLabels(){
-  const labels=compactInputMq.matches?["仕","商"]:["仕掛品","商品"];
+  const labels=compactInputMq.matches?["充","製"]:["充填品","製品"];
   document.querySelectorAll(".slip-table select.item-type").forEach(sel=>{
     [...sel.options].forEach((option,index)=>{ option.textContent=labels[index]; });
   });
@@ -1942,11 +1954,20 @@ function fillMix(lot, cols, rem){
 function place(lots,allowMix){
   const sp=buildWork();
   const cands=areaCandidates(sp);
-  // 仕掛品を先に処理してメインを確保させる。各グループ内は大口順。
-  // 大口から置くほど連続した列を取りやすい。
+  // 充填品を先に処理してメインを確保させる。同じ品名・SNPの異ロットは連続して
+  // 処理するので隣接した列を取りやすい。グループ間は最初の入力順を保ち、
+  // グループ内だけ大口順にする。
+  const groupOrder=new Map();
+  lots.forEach((lot,index)=>{
+    const key=[lot.type,lot.name,lot.snp].join("\u0000");
+    if(!groupOrder.has(key)) groupOrder.set(key,index);
+  });
   const order=[...lots].sort((a,b)=>{
-    const ta=(a.type==="仕掛品")?0:1, tb=(b.type==="仕掛品")?0:1;
+    const ta=(a.type==="充填品")?0:1, tb=(b.type==="充填品")?0:1;
     if(ta!==tb) return ta-tb;
+    const ga=groupOrder.get([a.type,a.name,a.snp].join("\u0000"));
+    const gb=groupOrder.get([b.type,b.name,b.snp].join("\u0000"));
+    if(ga!==gb) return ga-gb;
     return b.pallets-a.pallets;
   });
   for(const lot of order){ lot.rem=placeLot(lot, cands); }
@@ -1971,7 +1992,7 @@ function place(lots,allowMix){
 function inputWarnHtml(unknown, typeMix){
   let h="";
   if(typeMix && typeMix.length){
-    h+=`<div class="msg warn">⚠ 同じ品名・ロットで種別（仕掛品／商品）が違う行があります：${
+    h+=`<div class="msg warn">⚠ 同じ品名・ロットで種別（充填品／製品）が違う行があります：${
       typeMix.join(" / ")}。先に入力した行の種別でまとめています。</div>`;
   }
   if(unknown && unknown.length){
@@ -2001,24 +2022,17 @@ function renderResult(lots, unknown, typeMix){
   // renderSheet() も同じ sheetPlacement() を通すので、警告の件数と実際に紙へ出る欄数がずれない。
   // 回しきれずに紙から落ちる分だけを知らせる。
   const pl=sheetPlacement();
-  const lay=pl.lay, topSlots=pl.top, bottomSlots=pl.bottom;
-  // 上段のうち紙に残るのは lay.top 欄。そこから先は moved の分だけ下段へ回っている
-  const kept=lay.top+pl.moved.length;
-  const overTop=topSlots.length-kept;
-  const overBottom=bottomSlots.length-lay.bottom;
-  if(overTop>0 || overBottom>0){
-    const parts=[];
-    if(overTop>0) parts.push(`上段 ${lotsIn(topSlots.slice(kept))}件`);
-    if(overBottom>0) parts.push(`下段 ${lotsIn(bottomSlots.slice(lay.bottom))}件`);
-    warnHtml+=`<div class="msg warn">⚠ 配置図の表に載りきらないロットがあります：${parts.join(" / ")}。ブロック図で確認してください。</div>`;
+  if(pl.unlisted.length){
+    warnHtml+=`<div class="msg warn">⚠ 配置図のあふれブロックにも記載できない項目があります：`
+      + `${lotsIn(pl.unlisted)}件。ブロック図で確認してください。</div>`;
   }
-  // あふれブロックの描画が未実装なので、掲載先が over のエリアは配置の対象から外してある
-  // （areaCandidates 参照）。使えない場所があることを知らせる。
+  // 掲載先 over のエリアは、表の欄数超過で使う「あふれブロック」とは別の設定値。
+  // 自動配置の対象外なので、使えない場所があることを知らせる。
   // 「置きません」は新規配置の話であって、既にそこにある荷物が消えるわけではない
   // （下の「荷物が残っています」参照）。両方を満たす言い方にする。
   const overAreas=sheetAreas("over");
   if(overAreas.length){
-    warnHtml+=`<div class="msg warn">⚠ あふれブロックは未実装のため、次のエリアには新しく荷物を置きません：${overAreas.join("・")}</div>`;
+    warnHtml+=`<div class="msg warn">⚠ 掲載先を「あふれブロック」にした次のエリアには、新しく荷物を置きません：${overAreas.join("・")}</div>`;
   }
   // 掲載先だけの変更は applyConfig() が redraw() を呼び run() を呼ばないので、
   // 既存の荷物は消えない（clearManual() を避けるため）。そのため、あるエリアの
@@ -3176,13 +3190,13 @@ function showSelCount(){
   }
 }
 // 選択した退避分を、自動配置と同じ考え方で倉庫の空き列へ戻す。
-// 種別に合う側（仕掛品＝倉庫内 / 商品＝倉庫外）を先に見る。
+// 種別に合う側（充填品＝倉庫内 / 製品＝倉庫外）を先に見る。
 function returnSelToWarehouse(){
   if(!sel.cells.size) return;
   if(![...sel.cells].every(k=>k.split("|")[0]==="退避")) return;
   const n=sel.cells.size;
   const lot=lastLots?lastLots.find(l=>l.id===sel.lotId):null;
-  const home=(lot&&lot.type==="仕掛品")?"near":"far";
+  const home=(lot&&lot.type==="充填品")?"near":"far";
   const cand=[];
   lastSp.filter(s=>s.zone!=="stash").forEach(s=>s.cols.forEach((c,i)=>{
     if(c.aisle) return;                       // 通路へは戻さない
@@ -3777,6 +3791,28 @@ function lotsIn(slots){ return slots.reduce((a,g)=>a+(g.members?g.members.length
    areas が空になることは sheetEntries() の作り上ありえない（欄は必ず1つ以上のエリアに置かれる）。
    空文字を返す分岐は保険で、ここが空のまま回ると注釈のない欄が紙に出る。 */
 function slotAreaNote(areas){ return (areas && areas.length) ? "※"+areas.join("・") : ""; }
+/* 下段はメイン欄を左、PC横・EV横だけの欄を右端から埋める。
+   配置表は左から配列を描く。PC横の次にEV横が並ぶため、EV横が右端になる。
+   メインにも置かれたロット（引き出し線が必要な欄）と、上段から救済された欄は左側に残す。 */
+function arrangeBottomSlots(entries, count){
+  const baseArea=sheetAreas("bottom")[0]||null;
+  const left=[], right=[];
+  entries.forEach(entry=>{
+    if(entry.fromTop || (baseArea && entry.areas.includes(baseArea))) left.push(entry);
+    else right.push(entry);
+  });
+  // PC横・EV横が両方ある場合は、EV横を最も右に置く。欄超過時も右側の先頭から残す。
+  const keptRight=right.slice(0, Math.min(right.length, count));
+  const leftCap=Math.max(0, count-keptRight.length);
+  const keptLeft=left.slice(0, leftCap);
+  const dropped=left.slice(leftCap).concat(right.slice(keptRight.length));
+  return {slots:keptLeft.concat(Array(Math.max(0,count-keptLeft.length-keptRight.length)).fill(null), keptRight), dropped};
+}
+// 通常欄から漏れた項目は、あふれブロックに先頭2項目だけ記載する。
+// 3項目目以降は紙に記載できないため、画面の警告対象として分けて返す。
+function arrangeOverflowSlots(entries){
+  return {overflow:entries.slice(0,2), unlisted:entries.slice(2)};
+}
 /* 上段・下段の欄と様式を1回で決める。欄数超過の警告と renderSheet() の両方がここを通る。
    2か所で別々に数えると、警告の件数と実際に紙へ出る欄がずれる。
    上段に入りきらない欄は、下段に空きがあればその末尾へ回す（救済）。
@@ -3796,7 +3832,12 @@ function sheetPlacement(){
   const over=Math.max(0, top.length-lay.top);
   const moved=top.slice(lay.top, lay.top+Math.min(free, over))
     .map(e=>({...e, fromTop:true, note:slotAreaNote(e.areas)}));
-  return {lay, top, bottom:base.concat(moved), moved};
+  const bottomAll=base.concat(moved);
+  const arranged=arrangeBottomSlots(bottomAll, lay.bottom);
+  const omittedTop=top.slice(lay.top+moved.length);
+  const overflowed=arrangeOverflowSlots(omittedTop.concat(arranged.dropped));
+  return {lay, top, bottom:arranged.slots, bottomAll, droppedBottom:arranged.dropped,
+          overflow:overflowed.overflow, unlisted:overflowed.unlisted, moved};
 }
 /* 欄に入りきらない文字を水平に縮めて1行に収める。
    ・自然幅は .sheet の zoom で割って CSS px に直してから比を取る。
@@ -3942,7 +3983,7 @@ function renderSheet(){
   rows+=`<tr class="gap"><td class="none" colspan="${lay.cols}"></td></tr>`;
 
   // グリッド（メイン）
-  const grid=gridRows(lay.cols-SHEET_GRID_ORDER.length);
+  const grid=gridRows(lay.cols-SHEET_GRID_ORDER.length, pl.overflow);
   // グリッドが描けないときは、グリッドがあった位置に案内を出す。
   // 紙を見た人が「ここに図があるはずだ」と分かる位置に置く。
   if(grid.warn && grid.warn.kind!=="extra") rows+=gridNoticeRow(grid.warn, lay.cols);
@@ -3956,7 +3997,7 @@ function renderSheet(){
   fitSheetText(pl);               // 折り返しは行の高さを変えるので線より先に確定させる
   // 救済で下段へ回した欄には線を引かない。同じロットがメインと軒下に分割配置された日、
   // アンカーの有無に任せると救済欄からメインの同じマスへ2本目の線が伸びて誤読させる
-  drawLeaders(grid.anchors, bottom.map(e=>e.fromTop ? null : e.lot.id));
+  drawLeaders(grid.anchors, bottom.map(e=>e && !e.fromTop ? e.lot.id : null));
   applySheetZoom();
 }
 
@@ -4012,6 +4053,28 @@ function slotCells(entries,count,kind,extra){
   return out;
 }
 
+// あふれブロックの1項目は、右端2列の中で品名・ロット・P数・注記を縦に記載する。
+function overflowTable(entries){
+  if(!entries.length) return "";
+  const span=v=>v?`<span class="fit">${esc(v)}</span>`:"";
+  const cell=(e,kind)=>{
+    const l=e.lot, ms=e.members||[e];
+    let inner="", cls="slot";
+    if(kind==="name") inner=span(l.name);
+    else if(kind==="lot"){
+      const lots=ms.map(m=>m.lot.lot).filter(Boolean);
+      inner=lots.length>=3?`<span class="fitcol">${lots.map(span).join("")}</span>`:span(lots.join("/"));
+    }else if(kind==="pallet") inner=span(palSlotTextOf(ms));
+    else { inner=span(e.note||slotAreaNote(e.areas)); cls+=" c-note"; }
+    if(kind!=="note") cls+=" c-"+({name:"name",lot:"lot",pallet:"pal"}[kind]);
+    const edge=kind==="name"?"bt2 bb2 bl2 br2":kind==="note"?"bl2 br2 bb2":"bl2 br2";
+    const fit={name:"name",lot:"lot",pallet:"pal",note:"note"}[kind];
+    return `<tr><td class="${cls} ${edge}" data-fit="${fit}">${inner}</td></tr>`;
+  };
+  const records=entries.map(e=>["name","lot","pallet","note"].map(k=>cell(e,k)).join(""));
+  return `<table class="overflow-table">${records.join('<tr class="overflow-gap"><td></td></tr>')}</table>`;
+}
+
 // 紙の様式である 14 列の並び：通路 | 1-3 | 段番号 | 4-6 | 段番号 | 7-9 | 通路 | 段番号
 // 段番号の l/r は左右に隣り合うレーン。最後の段番号は右隣がないので跨がない。
 // gridRows() の外に出してあるのは、gridWarn() が列数を数えるため。
@@ -4040,12 +4103,14 @@ function gridWarn(sp){
 // 欄の基準エリア（sheetEntries の baseArea）と必ず同じエリアにする。
 // ここを固定名にしておくと、基準エリアの掲載先を変えたときに
 // 欄とグリッドが別のエリアを指し、引き出し線が的外れになる。
-/* pad: 表の右に余る列数。wide の様式ではメイン14列の右に2列（84px）余るので、
-   各行の末尾に空セルを足して表全体の列数をそろえる。
-   ここは後日あふれブロックが入る用地。罫線も背景色も持たせない
-   （背景色は既定で印刷されないため、意味を持たせてはいけない）。 */
-function gridRows(pad){
+/* pad: 表の右に余る列数。wide の様式ではメイン14列の右に2列（84px）余る。
+   あふれた項目がある日は、この2列を縦2項目のあふれブロックに使う。 */
+function gridRows(pad, overflow){
+  const useOverflow=pad>=2 && overflow && overflow.length;
   const padCell = pad>0 ? `<td class="none" colspan="${pad}"></td>` : "";
+  const sideCell=row=>useOverflow
+    ? (row===0?`<td class="overflow-host" colspan="${pad}" rowspan="8">${overflowTable(overflow)}</td>`:"")
+    : padCell;
   const sp=lastSp.find(s=>s.name===sheetAreas("bottom")[0]);
   const warn=gridWarn(sp);
   // 下段が空、または設定でエリア名を変えて見つからないことがある。
@@ -4138,7 +4203,7 @@ function gridRows(pad){
          + (id!=null?`<span class="mk">${half?"半":""}</span>`:"")
          + `</td>`;
     });
-    rows+=`<tr class="grow">${tds}${padCell}</tr>`;
+    rows+=`<tr class="grow">${tds}${sideCell(ri)}</tr>`;
   }
   // 列番号
   let nums="";
@@ -4151,7 +4216,7 @@ function gridRows(pad){
     if(a) anchors.push(a);
   });
 
-  return {html: rows+`<tr>${nums}${padCell}</tr>`, anchors, warn};
+  return {html: rows+`<tr>${nums}${sideCell(7)}</tr>`, anchors, warn};
 }
 
 /* 大きな配置図が出せない／欠けていることを伝える文。素のテキストを返す。
