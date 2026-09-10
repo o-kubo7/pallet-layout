@@ -142,3 +142,10 @@ test("FAX伝票と仮伝票のカード色分けCSSがある", () => {
   assert.match(source, /\.slip\[data-status="provisional"\] \.slip-head/);
   assert.match(source, /\.slip \.slip-head\.err-slip/);
 });
+
+test("エラー伝票ヘッダー内の件数表示は赤で明示上書きする", () => {
+  assert.match(
+    source,
+    /\.slip \.slip-head\.err-slip \.item-count\s*\{[^}]*color:#b91c1c[^}]*\}/
+  );
+});

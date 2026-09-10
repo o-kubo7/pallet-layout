@@ -354,6 +354,7 @@
   /* 入力欄の通常背景より確実に優先する。 */
   .err{border-color:#dc2626 !important;background:#fef2f2 !important}
   .slip .slip-head.err-slip{background:#fef2f2;color:#b91c1c;border-bottom-color:#fecaca}
+  .slip .slip-head.err-slip .item-count{color:#b91c1c}
   /* 不完全な行までスクロールすると見出し直下の帯は画面外へ流れるので sticky にする。
      top は .tabs の実測高を updateErrBanner() が入れる（.tabs 自身が sticky top:0 z-index:30 で、
      0 にすると裏に潜り込む）。.card にも .wrap にも overflow は無いので sticky は素直に効く */
