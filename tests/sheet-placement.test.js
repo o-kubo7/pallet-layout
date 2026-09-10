@@ -129,3 +129,16 @@ test("品目マスタにJSONバックアップボタンがある", () => {
   assert.match(source, /onclick="exportMasterJson\(\)"/);
   assert.match(source, />品目マスタをJSON保存</);
 });
+
+test("仮伝票追加と伝票内アクションに視認性用クラスがある", () => {
+  assert.match(source, /class="btn btn-slip-add btn-slip-add-provisional"/);
+  assert.match(source, /class="btn btn-ghost btn-slip-action-add"/);
+  assert.match(source, /class="btn btn-ghost btn-slip-action-receive"/);
+});
+
+test("FAX伝票と仮伝票のカード色分けCSSがある", () => {
+  assert.match(source, /\.slip\[data-status="fax"\]/);
+  assert.match(source, /\.slip\[data-status="provisional"\]/);
+  assert.match(source, /\.slip\[data-status="provisional"\] \.slip-head/);
+  assert.match(source, /\.slip \.slip-head\.err-slip/);
+});

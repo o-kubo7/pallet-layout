@@ -48,6 +48,7 @@
   .btn-primary{background:var(--accent);color:#fff}
   .btn-ghost{background:#eef2f7;color:#374151}
   .btn-slip-add{background:#eff6ff;color:#1d4ed8;border:2px solid #2563eb;padding:9px 14px}
+  .btn-slip-add-provisional{background:#fff7ed;color:#9a3412;border-color:#f97316}
   .btn-on{background:#fde68a;color:#7c2d12}
   .btn-mini{background:#fee2e2;color:#b91c1c;border-radius:8px;padding:8px 12px;font-size:13px;
             cursor:pointer;border:0;min-height:40px;min-width:44px}
@@ -330,14 +331,21 @@
   .clear-input{flex:none}
   .timing-switch{margin-top:10px}
   .slip-count{margin-top:8px;font-size:12px;color:var(--muted);font-weight:700}
-  .slip{border:1px solid var(--line);border-radius:10px;background:#fff;margin-bottom:14px;overflow:hidden;min-width:0}
-  .slip-head{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f8fafc;border-bottom:1px solid var(--line)}
+  .slip{border:2px solid #cbd5e1;border-radius:10px;background:#fff;margin-bottom:14px;overflow:hidden;min-width:0}
+  .slip[data-status="fax"]{border-color:#2563eb;background:#eff6ff}
+  .slip[data-status="provisional"]{border-color:#f97316;background:#fff7ed}
+  .slip-head{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f8fafc;border-bottom:2px solid #cbd5e1}
+  .slip[data-status="fax"] .slip-head{background:#eff6ff;border-bottom-color:#2563eb;color:#1d4ed8}
+  .slip[data-status="provisional"] .slip-head{background:#ffedd5;border-bottom-color:#f97316;color:#9a3412}
   .slip-head .item-count{font-size:12px;color:var(--muted)}
-  .slip-head .unreceived{font-size:11px;background:#fef3c7;color:#92400e;border-radius:99px;padding:2px 8px;font-weight:700}
+  .slip[data-status="provisional"] .slip-head .item-count{color:#9a3412}
+  .slip-head .unreceived{font-size:11px;background:#f97316;color:#fff;border-radius:99px;padding:2px 8px;font-weight:700}
   .slip-table{table-layout:fixed;min-width:0}
   .slip-table .c-type{width:86px}.slip-table .c-snp,.slip-table .c-qty{width:92px}
   .slip-table .c-pal{width:86px}.slip-table .c-del{width:56px}
   .slip-actions{display:flex;gap:8px;align-items:center;padding:10px 12px;flex-wrap:wrap}
+  .btn-slip-action-add{background:#eff6ff;color:#1d4ed8;border:2px solid #2563eb}
+  .btn-slip-action-receive{background:#f97316;color:#fff;border:2px solid #f97316}
   .slip-action-spacer{margin-left:auto}
   .input-add-actions{margin-bottom:10px}
   .compact-label{display:none}
@@ -345,7 +353,7 @@
   /* ---- 入力の不備 ---- */
   /* 入力欄の通常背景より確実に優先する。 */
   .err{border-color:#dc2626 !important;background:#fef2f2 !important}
-  .slip-head.err-slip{background:#fef2f2;color:#b91c1c;border-bottom-color:#fecaca}
+  .slip .slip-head.err-slip{background:#fef2f2;color:#b91c1c;border-bottom-color:#fecaca}
   /* 不完全な行までスクロールすると見出し直下の帯は画面外へ流れるので sticky にする。
      top は .tabs の実測高を updateErrBanner() が入れる（.tabs 自身が sticky top:0 z-index:30 で、
      0 にすると裏に潜り込む）。.card にも .wrap にも overflow は無いので sticky は素直に効く */
@@ -553,7 +561,7 @@
     <div id="slipList"></div>
     <div class="row-actions input-add-actions">
       <button class="btn btn-slip-add" onclick="addSlip('fax')">＋ FAX伝票を追加</button>
-      <button class="btn btn-slip-add" onclick="addSlip('provisional')">＋ 仮伝票を追加</button>
+      <button class="btn btn-slip-add btn-slip-add-provisional" onclick="addSlip('provisional')">＋ 仮伝票を追加</button>
       <label class="chk"><input type="checkbox" id="mixChk" checked> 満杯時に混載を許可</label>
       <button class="btn btn-primary" id="runBtnInline" onclick="runFromButton()">▶ 自動配置を作成</button>
     </div>
@@ -1280,8 +1288,8 @@ function renderSlips(slips){
         <tbody></tbody>
       </table>
       <div class="slip-actions">
-        <button class="btn btn-ghost" onclick="addItemRow(this)">＋ 品目を追加</button>
-        ${provisional?'<button class="btn btn-ghost" data-receive onclick="receiveSlip(this)">FAX受領済みにする</button>':""}
+        <button class="btn btn-ghost btn-slip-action-add" onclick="addItemRow(this)">＋ 品目を追加</button>
+        ${provisional?'<button class="btn btn-ghost btn-slip-action-receive" data-receive onclick="receiveSlip(this)">FAX受領済みにする</button>':""}
         <span class="slip-action-spacer"></span>
         <button class="btn-mini" onclick="removeSlip(this)">伝票を削除</button>
       </div>`;
