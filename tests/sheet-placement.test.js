@@ -105,3 +105,27 @@ test("あふれブロックの2項目の間に6pxの隙間を入れる", () => {
   ]);
   assert.match(html, /class="overflow-gap"/);
 });
+
+test("品目マスタJSONバックアップは品名とSNPだけを含む", () => {
+  const exportData = new Function(
+    "MASTER",
+    functionSource("masterExportData") + "; return masterExportData;"
+  );
+  const data = exportData([
+    { name: "カップ麺A", snp: 24, extra: "ignored" },
+    { name: "ゼリーC", snp: 30 },
+  ])("2026-09-11T00:00:00.000Z");
+  assert.deepEqual(data, {
+    version: 1,
+    exportedAt: "2026-09-11T00:00:00.000Z",
+    items: [
+      { name: "カップ麺A", snp: 24 },
+      { name: "ゼリーC", snp: 30 },
+    ],
+  });
+});
+
+test("品目マスタにJSONバックアップボタンがある", () => {
+  assert.match(source, /onclick="exportMasterJson\(\)"/);
+  assert.match(source, />品目マスタをJSON保存</);
+});

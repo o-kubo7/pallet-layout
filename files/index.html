@@ -704,6 +704,7 @@
         <div class="row-actions">
           <button class="btn btn-ghost" onclick="addMasterRow();onMasterChange()">＋ 品目を追加</button>
           <button class="btn btn-ghost" onclick="loadMaster()">サンプル品目を読込</button>
+          <button class="btn btn-ghost" onclick="exportMasterJson()">品目マスタをJSON保存</button>
         </div>
         <div class="hint" style="margin-top:8px">品名を入力するとSNPが自動で入ります。<b>同じ品名でSNPが違うものは、複数行に分けて登録</b>できます（入力時に候補から選べます）。伝票のSNPが登録と違う場合は、入力欄で直接書き換えれば、その値で計算されます。</div>
       </div>
@@ -1172,6 +1173,29 @@ function readMaster(){
     if(name && snp>0) list.push({name,snp});
   });
   return list;
+}
+function masterExportData(nowIso){
+  return {
+    version:1,
+    exportedAt:nowIso || new Date().toISOString(),
+    items:MASTER.map(m=>({name:String(m.name||""),snp:Number(m.snp)||0}))
+      .filter(m=>m.name && m.snp>0),
+  };
+}
+function exportMasterJson(){
+  onMasterChange();
+  const data=masterExportData();
+  const json=JSON.stringify(data,null,2);
+  const blob=new Blob([json],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const date=(headDate||defaultHeadDate()).replace(/-/g,"");
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=`pallet-master-${date}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 // その品名に登録されたSNPの一覧（重複除去）
 function snpsOf(name){
