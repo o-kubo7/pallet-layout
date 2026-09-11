@@ -149,3 +149,21 @@ test("エラー伝票ヘッダー内の件数表示は赤で明示上書きす�
     /\.slip \.slip-head\.err-slip \.item-count\s*\{[^}]*color:#b91c1c[^}]*\}/
   );
 });
+
+test("伝票カードはモック同様に白い本体へ部分的な濃淡を付ける", () => {
+  assert.match(source, /\.slip\[data-status="fax"\]\s*\{[^}]*border-color:#2563eb[^}]*\}/);
+  assert.doesNotMatch(source, /\.slip\[data-status="fax"\]\s*\{[^}]*background:#eff6ff/);
+  assert.match(source, /\.slip\[data-status="fax"\] \.slip-head\s*\{[^}]*background:#eff6ff[^}]*border-bottom-color:#2563eb[^}]*color:#1d4ed8[^}]*\}/);
+  assert.match(source, /\.slip\[data-status="fax"\] \.slip-table th\s*\{[^}]*background:#f8fafc[^}]*color:#475569[^}]*\}/);
+  assert.match(source, /\.slip\[data-status="fax"\] \.pallet-cell\s*\{[^}]*background:#f1f5f9[^}]*\}/);
+  assert.match(source, /\.slip\[data-status="fax"\] \.slip-actions\s*\{[^}]*background:#fff[^}]*border-top:2px solid #dbeafe[^}]*\}/);
+});
+
+test("仮伝票カードはFAXと同じ濃淡構造をオレンジ系にする", () => {
+  assert.match(source, /\.slip\[data-status="provisional"\]\s*\{[^}]*border-color:#f97316[^}]*\}/);
+  assert.doesNotMatch(source, /\.slip\[data-status="provisional"\]\s*\{[^}]*background:#fff7ed/);
+  assert.match(source, /\.slip\[data-status="provisional"\] \.slip-head\s*\{[^}]*background:#ffedd5[^}]*border-bottom-color:#f97316[^}]*color:#9a3412[^}]*\}/);
+  assert.match(source, /\.slip\[data-status="provisional"\] \.slip-table th\s*\{[^}]*background:#fff3df[^}]*border-color:#fed7aa[^}]*color:#9a3412[^}]*\}/);
+  assert.match(source, /\.slip\[data-status="provisional"\] \.pallet-cell\s*\{[^}]*background:#ffe9c4[^}]*color:#9a3412[^}]*\}/);
+  assert.match(source, /\.slip\[data-status="provisional"\] \.slip-actions\s*\{[^}]*background:#fffaf4[^}]*border-top-color:#fed7aa[^}]*\}/);
+});
