@@ -130,6 +130,57 @@ test("品目マスタにJSONバックアップボタンがある", () => {
   assert.match(source, />品目マスタをJSON保存</);
 });
 
+test("品目マスタJSON読込は品名とSNPだけを受け入れる", () => {
+  const parseImport = new Function(
+    functionSource("parseMasterImportData") + "; return parseMasterImportData;"
+  )();
+  const items = parseImport(JSON.stringify({
+    version: 1,
+    exportedAt: "2026-09-11T00:00:00.000Z",
+    items: [
+      { name: "カップ麺A", snp: 24 },
+      { name: "  ゼリーC  ", snp: 30 },
+    ],
+  }));
+  assert.deepEqual(items, [
+    { name: "カップ麺A", snp: 24 },
+    { name: "ゼリーC", snp: 30 },
+  ]);
+});
+
+test("品目マスタJSON読込は不正なJSONを拒否する", () => {
+  const parseImport = new Function(
+    functionSource("parseMasterImportData") + "; return parseMasterImportData;"
+  )();
+  assert.throws(
+    () => parseImport(JSON.stringify({ version: 1, items: [] })),
+    /品目マスタが空です/
+  );
+  assert.throws(
+    () => parseImport(JSON.stringify({ version: 2, items: [{ name: "A", snp: 1 }] })),
+    /対応していない品目マスタJSON/
+  );
+  assert.throws(
+    () => parseImport(JSON.stringify({ version: 1, items: [{ name: "", snp: 1 }] })),
+    /品目データが不正/
+  );
+  assert.throws(
+    () => parseImport(JSON.stringify({ version: 1, items: [{ name: "A", snp: "1" }] })),
+    /品目データが不正/
+  );
+  assert.throws(
+    () => parseImport(JSON.stringify({ version: 1, items: [{ name: "A", snp: 1.5 }] })),
+    /品目データが不正/
+  );
+});
+
+test("品目マスタにJSON読込ボタンとファイル入力がある", () => {
+  assert.match(source, /onclick="chooseMasterJson\(\)"/);
+  assert.match(source, />品目マスタをJSON読込</);
+  assert.match(source, /id="masterImportFile"[^>]*type="file"[^>]*accept="\.json,application\/json"/);
+  assert.match(source, /onchange="importMasterJson\(this\)"/);
+});
+
 test("仮伝票追加と伝票内アクションに視認性用クラスがある", () => {
   assert.match(source, /class="btn btn-slip-add btn-slip-add-provisional"/);
   assert.match(source, /class="btn btn-ghost btn-slip-action-add"/);

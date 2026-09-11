@@ -721,7 +721,9 @@
         <div class="row-actions">
           <button class="btn btn-ghost" onclick="addMasterRow();onMasterChange()">＋ 品目を追加</button>
           <button class="btn btn-ghost" onclick="loadMaster()">サンプル品目を読込</button>
+          <button class="btn btn-ghost" onclick="chooseMasterJson()">品目マスタをJSON読込</button>
           <button class="btn btn-ghost" onclick="exportMasterJson()">品目マスタをJSON保存</button>
+          <input id="masterImportFile" type="file" accept=".json,application/json" onchange="importMasterJson(this)" hidden>
         </div>
         <div class="hint" style="margin-top:8px">品名を入力するとSNPが自動で入ります。<b>同じ品名でSNPが違うものは、複数行に分けて登録</b>できます（入力時に候補から選べます）。伝票のSNPが登録と違う場合は、入力欄で直接書き換えれば、その値で計算されます。</div>
       </div>
@@ -1213,6 +1215,60 @@ function exportMasterJson(){
   a.click();
   a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function parseMasterImportData(json){
+  let data;
+  try{
+    data=JSON.parse(json);
+  }catch(e){
+    throw new Error("JSONファイルを読み込めませんでした。");
+  }
+  if(!data || data.version!==1 || !Array.isArray(data.items)){
+    throw new Error("対応していない品目マスタJSONです。");
+  }
+  const items=data.items.map(item=>{
+    if(!item || typeof item.name!=="string" || !Number.isSafeInteger(item.snp) || item.snp<=0){
+      throw new Error("品目マスタJSONの品目データが不正です。");
+    }
+    const name=item.name.trim();
+    if(!name) throw new Error("品目マスタJSONの品目データが不正です。");
+    return {name,snp:item.snp};
+  });
+  if(!items.length) throw new Error("品目マスタが空です。");
+  return items;
+}
+function applyMasterImportItems(items){
+  const tbody=document.querySelector("#masterTable tbody");
+  tbody.innerHTML="";
+  items.forEach(addMasterRow);
+  onMasterChange();
+}
+function chooseMasterJson(){
+  const input=document.getElementById("masterImportFile");
+  if(!input) return;
+  input.value="";
+  input.click();
+}
+function importMasterJson(input){
+  const file=input && input.files && input.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const items=parseMasterImportData(reader.result);
+      if(!confirm(`品目マスタを${items.length}件で置き換えます。よろしいですか？`)) return;
+      applyMasterImportItems(items);
+    }catch(e){
+      alert(e.message || "品目マスタJSONを読み込めませんでした。");
+    }finally{
+      input.value="";
+    }
+  };
+  reader.onerror=()=>{
+    alert("品目マスタJSONを読み込めませんでした。");
+    input.value="";
+  };
+  reader.readAsText(file);
 }
 // その品名に登録されたSNPの一覧（重複除去）
 function snpsOf(name){
