@@ -1001,7 +1001,7 @@ function newStableId(prefix){
   return prefix+"-"+Date.now().toString(36)+"-"+stableSeq.toString(36);
 }
 function emptyShift(){
-  return {slips:[],result:null,manual:null,resultFingerprint:null};
+  return {slips:[],result:null,manual:null,resultFingerprint:null,blocked:[]};
 }
 function emptySchedule(date){
   return {version:SCHEDULE_VERSION,date:date||"",activeTiming:"am",
@@ -1081,10 +1081,53 @@ function normalizeShift(raw){
       result:normalizeSnapshot(src.result),
       manual:normalizeSnapshot(src.manual),
       resultFingerprint:typeof src.resultFingerprint==="string" ? src.resultFingerprint : null,
+      blocked:normalizeBlocked(src.blocked),
     };
   }catch(e){
     return emptyShift();
   }
+}
+function blockedCellKey(spaceName,colIndex,rowIndex){
+  return `${spaceName}|${colIndex}|${rowIndex}`;
+}
+function blockedRowsFor(spaceName,colIndex,blocked){
+  const prefix=blockedCellKey(spaceName,colIndex,"");
+  const rows=new Set();
+  (Array.isArray(blocked) ? blocked : []).forEach(key=>{
+    if(typeof key!=="string" || !key.startsWith(prefix)) return;
+    const rowText=key.slice(prefix.length);
+    const rowIndex=Number(rowText);
+    if(String(rowIndex)===rowText && Number.isSafeInteger(rowIndex) && rowIndex>=0) rows.add(rowIndex);
+  });
+  return rows;
+}
+function normalizeBlocked(raw){
+  return Array.isArray(raw) ? [...new Set(raw.filter(key=>typeof key==="string"))] : [];
+}
+function pruneBlockedForSpaces(blocked,spaces){
+  const byName=new Map((Array.isArray(spaces) ? spaces : []).map(space=>[space.name,space]));
+  return normalizeBlocked(blocked).filter(key=>{
+    const parts=key.split("|");
+    if(parts.length!==3) return false;
+    const [spaceName,colText,rowText]=parts;
+    const colIndex=Number(colText), rowIndex=Number(rowText);
+    if(String(colIndex)!==colText || String(rowIndex)!==rowText ||
+       !Number.isSafeInteger(colIndex) || !Number.isSafeInteger(rowIndex) ||
+       colIndex<0 || rowIndex<0) return false;
+    const space=byName.get(spaceName);
+    return !!(space && Array.isArray(space.cols) && space.cols[colIndex] && rowIndex<space.cols[colIndex].h);
+  });
+}
+function pruneScheduleBlockedForSpaces(){
+  let changed=false;
+  TIMING_KEYS.forEach(key=>{
+    const shift=schedule && schedule.shifts && schedule.shifts[key];
+    if(!shift) return;
+    const next=pruneBlockedForSpaces(shift.blocked,SPACES);
+    if(next.length!==shift.blocked.length) changed=true;
+    shift.blocked=next;
+  });
+  return changed;
 }
 function defaultHeadDate(){
   const date=new Date();
@@ -3521,10 +3564,13 @@ function applyConfig(){
   const geomBefore=spacesToText(false);
   SPACES=withStash(out);          // [試作] 退避スペースを取り戻す
   saveData(STORE_KEY.spaces, {v:SPACES_SAVE_VERSION, spaces:SPACES});
+  const blockedWerePruned=pruneScheduleBlockedForSpaces();
+  saveSchedule();
   // 省略された掲載先は上で解決済み。resetConfig() と同じく正規形を書き戻して、
   // 実際に保存された内容が画面に出るようにする。
   document.getElementById("cfgText").value=spacesToText();
   clearCfgNote();
+  if(blockedWerePruned) showCfgNote("存在しない配置不可セルを解除しました");
   showCapacity();
   if(spacesToText(false)===geomBefore){
     if(isActiveFresh()) redraw(); else refreshFreshness();
@@ -3542,7 +3588,10 @@ function resetConfig(){
   const geomBefore=spacesToText(false);
   SPACES=clone(DEFAULT_SPACES);
   saveData(STORE_KEY.spaces, null);   // 「初期値に戻す」は保存も消す
+  const blockedWerePruned=pruneScheduleBlockedForSpaces();
+  saveSchedule();
   clearCfgNote();
+  if(blockedWerePruned) showCfgNote("存在しない配置不可セルを解除しました");
   document.getElementById("cfgText").value=spacesToText();
   showCapacity();
   if(spacesToText(false)===geomBefore){
@@ -4457,6 +4506,11 @@ updateSaveStatus();
 (function initSchedule(){
   const loaded=loadOrMigrateSchedule();
   schedule=loaded.value;
+  const blockedWerePruned=pruneScheduleBlockedForSpaces();
+  if(blockedWerePruned){
+    saveSchedule();
+    showCfgNote("存在しない配置不可セルを解除しました");
+  }
   activeTiming=schedule.activeTiming;
   headDate=schedule.date||defaultHeadDate();
   schedule.date=headDate;

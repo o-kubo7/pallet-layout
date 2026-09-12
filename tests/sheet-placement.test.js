@@ -24,6 +24,59 @@ function functionSource(name) {
   throw new Error(`${name} has no closing brace`);
 }
 
+test("旧形式の時間帯データは配置不可セルなしとして読み込む", () => {
+  const normalizeShift = new Function(
+    "normalizeSlip", "normalizeSnapshot", "normalizeBlocked",
+    functionSource("normalizeShift") + "; return normalizeShift;"
+  )(
+    value => value,
+    value => value,
+    () => []
+  );
+  const shift = normalizeShift({ slips: [], result: null, manual: null });
+  assert.deepEqual(shift.blocked, []);
+});
+
+test("配置不可セルは重複を除き正規化する", () => {
+  const normalizeBlocked = new Function(
+    functionSource("normalizeBlocked") + "; return normalizeBlocked;"
+  )();
+  assert.deepEqual(
+    normalizeBlocked(["メイン|1|2", "メイン|1|2", "PC横|0|0"]),
+    ["メイン|1|2", "PC横|0|0"]
+  );
+});
+
+test("セルキーはエリア名・列・行をパイプで連結する", () => {
+  const blockedCellKey = new Function(
+    functionSource("blockedCellKey") + "; return blockedCellKey;"
+  )();
+  assert.equal(blockedCellKey("メイン", 1, 2), "メイン|1|2");
+});
+
+test("配置不可行は指定されたエリアと列だけから抽出する", () => {
+  const blockedRowsFor = new Function(
+    functionSource("blockedCellKey") +
+    functionSource("blockedRowsFor") + "; return blockedRowsFor;"
+  )();
+  assert.deepEqual(
+    [...blockedRowsFor("メイン", 1, ["メイン|1|2", "メイン|1|0", "PC横|1|3", "メイン|0|4"])],
+    [2, 0]
+  );
+});
+
+test("存在しない列または行の配置不可指定を除去する", () => {
+  const pruneBlockedForSpaces = new Function(
+    functionSource("normalizeBlocked") +
+    functionSource("pruneBlockedForSpaces") + "; return pruneBlockedForSpaces;"
+  )();
+  const spaces = [{ name: "メイン", cols: [{ h: 2 }] }];
+  assert.deepEqual(
+    pruneBlockedForSpaces(["メイン|0|1", "メイン|0|2", "不存在|0|0"], spaces),
+    ["メイン|0|1"]
+  );
+});
+
 test("PC横・EV横ではEV横を右端に配置する", () => {
   const placement = new Function(
     "sheetSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas",
