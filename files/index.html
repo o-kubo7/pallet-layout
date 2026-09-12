@@ -4102,14 +4102,14 @@ function arrangeBottomSlots(entries, count, positions){
   // PC横・EV横が両方ある場合は、EV横を最も右に置く。欄超過時も右側の先頭から残す。
   const keptRight=rightEntries.slice(0, Math.min(rightEntries.length, count));
   const mainCap=Math.max(0, count-keptRight.length);
-  const allPositions=positions && mainEntries.every(entry=>
+  const keptMain=mainEntries.slice(0, mainCap);
+  const allPositions=positions && keptMain.every(entry=>
     Object.prototype.hasOwnProperty.call(positions, entry.lot.id));
   const orderedMain=allPositions
-    ? mainEntries.map((entry,index)=>({entry,index}))
+    ? keptMain.map((entry,index)=>({entry,index}))
       .sort((a,b)=>positions[a.entry.lot.id]-positions[b.entry.lot.id] || a.index-b.index)
       .map(item=>item.entry)
-    : mainEntries;
-  const keptMain=orderedMain.slice(0, mainCap);
+    : keptMain;
   const rescueCap=Math.max(0, mainCap-keptMain.length);
   const keptRescued=rescuedEntries.slice(0, rescueCap);
   const slots=Array(count).fill(null);
@@ -4120,7 +4120,7 @@ function arrangeBottomSlots(entries, count, positions){
     const choose=(start, picked)=>{
       if(picked.length===keptMain.length){
         const distance=picked.reduce((sum, slot, index)=>
-          sum+Math.abs(positions[keptMain[index].lot.id]-((slot+.5)*2)), 0);
+          sum+Math.abs(positions[orderedMain[index].lot.id]-((slot+.5)*2)), 0);
         const earlier=best && picked.findIndex((slot,index)=>slot!==best.slots[index]);
         if(!best || distance<best.distance ||
            (distance===best.distance && earlier>=0 && picked[earlier]<best.slots[earlier])){
@@ -4131,12 +4131,12 @@ function arrangeBottomSlots(entries, count, positions){
       for(let slot=start;slot<mainCap;slot++) choose(slot+1, picked.concat(slot));
     };
     choose(0, []);
-    best.slots.forEach((slot,index)=>{ slots[slot]=keptMain[index]; });
+    best.slots.forEach((slot,index)=>{ slots[slot]=orderedMain[index]; });
   }else{
-    keptMain.forEach((entry,index)=>{ slots[index]=entry; });
+    orderedMain.forEach((entry,index)=>{ slots[index]=entry; });
   }
   keptRescued.forEach(entry=>{ slots[slots.slice(0,mainCap).indexOf(null)]=entry; });
-  const dropped=orderedMain.slice(keptMain.length)
+  const dropped=mainEntries.slice(keptMain.length)
     .concat(rescuedEntries.slice(keptRescued.length), rightEntries.slice(keptRight.length));
   return {slots, dropped};
 }
@@ -4170,7 +4170,7 @@ function sheetPlacement(){
      typeof sheetGridAnchors==="function"){
     const sp=lastSp && lastSp.find(s=>s.name===sheetAreas("bottom")[0]);
     const anchors=sheetGridAnchors(sp, SHEET_GRID_ORDER);
-    if(anchors) positions=Object.fromEntries(anchors.map(anchor=>[anchor.id, anchor.k]));
+    if(anchors) positions=Object.fromEntries(anchors.map(anchor=>[anchor.id, anchor.k+.5]));
   }
   const arranged=arrangeBottomSlots(bottomAll, lay.bottom, positions);
   const omittedTop=top.slice(lay.top+moved.length);

@@ -327,6 +327,45 @@ test("右端を予約してもメインロットは物理的に最短の下段�
     [null, null, null, null, 1, 2, 3]);
 });
 
+test("sheetPlacementはグリッドセル中心に近い下段欄へメインロットを置く", () => {
+  const placement = new Function(
+    "sheetSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas", "lastSp", "SHEET_GRID_ORDER",
+    functionSource("sheetGridAnchors") +
+    functionSource("arrangeBottomSlots") +
+    functionSource("arrangeOverflowSlots") +
+    functionSource("sheetPlacement") + "; return sheetPlacement;"
+  );
+  const main = { lot: { id: 1 }, areas: ["メイン"] };
+  const computeSheetPlacement = placement(
+    tier => tier === "top" ? [] : [main],
+    () => ({ top: 4, bottom: 7 }),
+    areas => `※${areas.join("・")}`,
+    false,
+    tier => tier === "bottom" ? ["メイン"] : [],
+    [{ name: "メイン", cols: [
+      { h: 1, fills: [] }, { h: 1, fills: [] }, { h: 1, fills: [{ id: 1, count: 1 }] },
+    ] }],
+    [{ c: 0 }, { c: 1 }, { c: 2 }]
+  );
+  assert.deepEqual(computeSheetPlacement().bottom.map(entry => entry && entry.lot.id),
+    [null, 1, null, null, null, null, null]);
+});
+
+test("右端予約で欄数が減ってもあふれたメイン項目は入力順を保つ", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const right = { lot: { id: 1 }, areas: ["メイン"] };
+  const left = { lot: { id: 2 }, areas: ["メイン"] };
+  const middle = { lot: { id: 3 }, areas: ["メイン"] };
+  const pc = { lot: { id: 4 }, areas: ["PC横"] };
+  const ev = { lot: { id: 5 }, areas: ["EV横"] };
+  const result = arrange([right, left, middle, pc, ev], 4, { 1: 9, 2: 1, 3: 5 });
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id), [2, 1, 4, 5]);
+  assert.deepEqual(result.dropped.map(entry => entry.lot.id), [3]);
+});
+
 test("入力順が逆でもメイン項目はグリッドの左から右へ並ぶ", () => {
   const arrange = new Function(
     "sheetAreas",
