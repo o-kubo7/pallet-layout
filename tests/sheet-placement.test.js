@@ -311,7 +311,20 @@ test("PC横とEV横はメイン項目に挟まず右端へ連続配置する", (
   const ev = { lot: { id: 4 }, areas: ["EV横"] };
   const result = arrange([mainLeft, pc, mainRight, ev], 7, { 1: 1, 2: 9 });
   assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
-    [1, null, null, 2, null, 3, 4]);
+    [1, null, null, null, 2, 3, 4]);
+});
+
+test("右端を予約してもメインロットは物理的に最短の下段欄へ置く", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const main = { lot: { id: 1 }, areas: ["メイン"] };
+  const pc = { lot: { id: 2 }, areas: ["PC横"] };
+  const ev = { lot: { id: 3 }, areas: ["EV横"] };
+  const result = arrange([main, pc, ev], 7, { 1: 10 });
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
+    [null, null, null, null, 1, 2, 3]);
 });
 
 test("入力順が逆でもメイン項目はグリッドの左から右へ並ぶ", () => {

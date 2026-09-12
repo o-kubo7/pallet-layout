@@ -4120,7 +4120,7 @@ function arrangeBottomSlots(entries, count, positions){
     const choose=(start, picked)=>{
       if(picked.length===keptMain.length){
         const distance=picked.reduce((sum, slot, index)=>
-          sum+Math.abs(positions[keptMain[index].lot.id]-((slot+.5)*2*count/mainCap)), 0);
+          sum+Math.abs(positions[keptMain[index].lot.id]-((slot+.5)*2)), 0);
         const earlier=best && picked.findIndex((slot,index)=>slot!==best.slots[index]);
         if(!best || distance<best.distance ||
            (distance===best.distance && earlier>=0 && picked[earlier]<best.slots[earlier])){
