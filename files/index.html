@@ -2659,6 +2659,8 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
 /* ---------- 配置不可編集とロット移動 ---------- */
 let blockedEditMode=false;
 let blockedEditPointerKey=null;
+let blockedEditPointerId=null;
+let blockedEditStrokeMoved=false;
 
 function setBlockedEditMode(enabled){
   blockedEditMode=!!enabled;
@@ -2681,7 +2683,11 @@ function setBlockedEditMode(enabled){
     ? "セルをタップまたはなぞって配置不可を切り替えます。ロットが残るセルは再配置待ちです。"
     : "配置不可にするセルを編集できます。";
   if(map) map.classList.toggle("blocked-edit",blockedEditMode);
-  if(!blockedEditMode) blockedEditPointerKey=null;
+  if(!blockedEditMode){
+    blockedEditPointerKey=null;
+    blockedEditPointerId=null;
+    blockedEditStrokeMoved=false;
+  }
 }
 
 function toggleBlockedCell(cellEl){
@@ -2740,7 +2746,11 @@ function toggleCell(cellEl){
 document.addEventListener("click",e=>{
   if(blockedEditMode){
     const c=e.target.closest(".cell"); if(!c || !c.closest("#mapBody")) return;
-    if(blockedEditPointerKey===cellKey(c)){ blockedEditPointerKey=null; return; }
+    if(blockedEditStrokeMoved){
+      blockedEditPointerKey=null;
+      blockedEditStrokeMoved=false;
+      return;
+    }
     toggleBlockedCell(c);
     return;
   }
@@ -2751,17 +2761,30 @@ document.addEventListener("click",e=>{
   toggleCell(c);
 });
 
+document.addEventListener("pointerdown",e=>{
+  if(!blockedEditMode || e.button!=null && e.button!==0) return;
+  const c=cellAt(e.clientX,e.clientY); if(!c) return;
+  blockedEditPointerId=e.pointerId;
+  blockedEditPointerKey=null;
+  blockedEditStrokeMoved=false;
+  try{ c.setPointerCapture(e.pointerId); }catch(err){}
+});
 document.addEventListener("pointermove",e=>{
   if(!blockedEditMode) return;
-  if(!e.buttons) return;
-  const c=e.target.closest(".cell"); if(!c || !c.closest("#mapBody")) return;
+  if(e.pointerId!==blockedEditPointerId) return;
+  // ポインタ捕捉後の event.target は開始セルのままになるため、指先座標で取る。
+  const c=cellAt(e.clientX,e.clientY); if(!c) return;
   const key=cellKey(c);
   if(key===blockedEditPointerKey) return;
   blockedEditPointerKey=key;
+  blockedEditStrokeMoved=true;
   toggleBlockedCell(c);
 });
-document.addEventListener("pointerup",()=>{
-  if(blockedEditMode) setTimeout(()=>{ blockedEditPointerKey=null; },0);
+document.addEventListener("pointerup",e=>{
+  if(blockedEditMode && e.pointerId===blockedEditPointerId){
+    blockedEditPointerId=null;
+    setTimeout(()=>{ blockedEditPointerKey=null; blockedEditStrokeMoved=false; },0);
+  }
 });
 
 /* ---------- ロット移動（ドラッグ） ---------- */
@@ -3313,13 +3336,10 @@ function syncFlagRect(){
   // スクロールのたびに syncFlagTop() で追い直す。
   syncFlagTop();
   // スマホ幅: ⚙ の下（gap 8px。.editctl の margin-bottom と同じ値）。
-  // fixed の top はビューポート基準なので、現在のスクロール量を足して
-  // 「ページ上での絶対Y座標」に変換しておく。そうすれば、いつ・どこまで
-  // スクロールされた状態で測っても、変数の値は動かない。
-  // （rect.top は「絶対Y − scrollY」なので、rect.top + scrollY は常に
-  // 絶対Yに戻り、スクロール位置に依存しない不変量になる。）
+  // fixed の top はビューポート基準なので、scrollY は加えない。
+  // 加えるとページを下へ送った量だけ、帯も画面の下へずれてしまう。
   const ctlRect=ctl.getBoundingClientRect();
-  document.documentElement.style.setProperty("--flagtopm", Math.round(ctlRect.bottom+window.scrollY+8)+"px");
+  document.documentElement.style.setProperty("--flagtopm", Math.round(ctlRect.bottom+8)+"px");
 }
 function setDockPos(v){
   dockPos=(v==="tl"||v==="bottom")?v:"tr";

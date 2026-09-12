@@ -8,7 +8,7 @@ test("Service Workerは版付きキャッシュ名を使う", () => {
   const sw = fs.readFileSync("files/sw.js", "utf8");
   assert.match(sw, /const CACHE_VERSION = "v\d+"/);
   assert.match(sw, /const CACHE_NAME = "pallet-layout-" \+ CACHE_VERSION/);
-  assert.match(sw, /const CACHE_VERSION = "v42"/);
+  assert.match(sw, /const CACHE_VERSION = "v43"/);
 });
 
 test("配置編集には配置不可編集と再配置の操作がある", () => {
@@ -16,6 +16,19 @@ test("配置編集には配置不可編集と再配置の操作がある", () =>
   assert.match(source, /onclick="setBlockedEditMode\(true\)"/);
   assert.match(source, /id="blockedRunBtn"/);
   assert.match(source, /onclick="runFromBlockedEdit\(\)"/);
+});
+
+test("スマホの選択ガイドはビューポート座標で配置する", () => {
+  assert.doesNotMatch(source, /--flagtopm", Math\.round\(ctlRect\.bottom\+window\.scrollY\+8\)/);
+});
+
+test("配置不可編集は指先直下のセルをなぞり対象にする", () => {
+  const start = source.indexOf('document.addEventListener("pointermove",e=>{\n  if(!blockedEditMode) return;');
+  const end = source.indexOf('/* ---------- ロット移動（ドラッグ） ---------- */', start);
+  assert.notEqual(start, -1);
+  assert.match(source.slice(start, end), /const c=cellAt\(e\.clientX,e\.clientY\)/);
+  assert.match(source, /blockedEditPointerId=e\.pointerId/);
+  assert.match(source, /setPointerCapture\(e\.pointerId\)/);
 });
 
 function functionSource(name) {
