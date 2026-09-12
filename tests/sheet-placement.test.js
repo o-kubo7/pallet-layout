@@ -8,7 +8,7 @@ test("Service Workerは版付きキャッシュ名を使う", () => {
   const sw = fs.readFileSync("files/sw.js", "utf8");
   assert.match(sw, /const CACHE_VERSION = "v\d+"/);
   assert.match(sw, /const CACHE_NAME = "pallet-layout-" \+ CACHE_VERSION/);
-  assert.match(sw, /const CACHE_VERSION = "v41"/);
+  assert.match(sw, /const CACHE_VERSION = "v42"/);
 });
 
 test("配置編集には配置不可編集と再配置の操作がある", () => {
@@ -76,6 +76,29 @@ test("配置不可行は指定されたエリアと列だけから抽出する",
   assert.deepEqual(
     [...blockedRowsFor("メイン", 1, ["メイン|1|2", "メイン|1|0", "PC横|1|3", "メイン|0|4"])],
     [2, 0]
+  );
+});
+
+test("配置表のメイン配置不可セルには斜線用クラスを出力する", () => {
+  const gridRows = new Function(
+    "lastSp", "sheetAreas", "gridWarn", "SHEET_GRID_ORDER", "overflowTable", "lastLots", "tailAreaOf",
+    functionSource("gridRows") + "; return gridRows;"
+  )(
+    [{ name: "メイン", cols: [{ h: 1, fills: [], blockedRows: new Set([0]) }] }],
+    () => ["メイン"],
+    () => null,
+    [{ c: 0 }],
+    () => "",
+    [],
+    () => null
+  );
+  assert.match(gridRows(0, []).html, /<td class="g blocked">/);
+});
+
+test("配置表の配置不可セルは印刷用の斜線スタイルを持つ", () => {
+  assert.match(
+    source,
+    /\.sheet td\.g\.blocked\{[^}]*repeating-linear-gradient[^}]*print-color-adjust:exact/s
   );
 });
 

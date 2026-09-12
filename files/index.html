@@ -494,6 +494,10 @@
   /* 通路列の灰色。ブラウザは既定で背景色を印刷しないので、このセルだけは
      印刷ダイアログの「背景のグラフィック」を待たずに出すよう指示する */
   .sheet td.g.aisle{background:#d9d9d9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  /* 配置不可セルは画面と印刷の両方で斜線を表示する */
+  .sheet td.g.blocked{background-color:#d1d5db;
+                       background-image:repeating-linear-gradient(-45deg,rgba(71,85,105,.38) 0 4px,transparent 4px 8px);
+                       -webkit-print-color-adjust:exact;print-color-adjust:exact}
   /* ○は引き出し線より奥に見えるよう灰色にする */
   .sheet td.g .mk{display:inline-flex;align-items:center;justify-content:center;
                   vertical-align:middle;line-height:1;
@@ -4469,6 +4473,7 @@ function gridRows(pad, overflow){
       if(ri>=col.h){ tds+=`<td class="none"></td>`; return; }
       const id=at(o.c,ri);
       const cls=["g"]; if(o.aisle)cls.push("aisle");
+      if(col.blockedRows && col.blockedRows.has(ri)) cls.push("blocked");
       if(id!=null){
         if(at(o.c,ri-1)!==id) cls.push("bt");
         if(at(o.c,ri+1)!==id) cls.push("bb");
