@@ -211,8 +211,7 @@
   .toolflag{position:fixed;z-index:65;display:none;padding:9px 12px;border-radius:8px;
             font-size:13px;font-weight:700;color:#fff;text-align:center;
             left:var(--flagleft,16px);width:var(--flagwidth,calc(100% - 32px));
-            /* 既定（スマホ幅）は ⚙ の下。PC 幅は @media (min-width:700px) で
-               ⚙ と同じ高さへ上書きする */
+            /* タブ列の直下。PC 幅は @media (min-width:700px) で横幅だけを調整する */
             top:var(--flagtopm,110px);
             gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
   .flagundo{border:0;border-radius:6px;padding:7px 12px;background:#fff;color:#1f2937;
@@ -3258,7 +3257,9 @@ window.addEventListener("resize",syncDockTop);
 function syncFlagTop(){
   const tabsEl=document.querySelector(".tabs");
   const tabsBottom = tabsEl ? tabsEl.getBoundingClientRect().bottom : 48;
-  document.documentElement.style.setProperty("--flagtop", Math.round(tabsBottom+8)+"px");
+  const top=Math.round(tabsBottom+8)+"px";
+  document.documentElement.style.setProperty("--flagtop", top);
+  document.documentElement.style.setProperty("--flagtopm", top);
 }
 // スクロール中は縦位置だけを追う。rAF でまとめて、1フレームに1回に抑える。
 let flagTopTick=false;
@@ -3335,11 +3336,8 @@ function syncFlagRect(){
   // fixed の top はビューポート基準なので、ビューポート座標のまま入れ、
   // スクロールのたびに syncFlagTop() で追い直す。
   syncFlagTop();
-  // スマホ幅: ⚙ の下（gap 8px。.editctl の margin-bottom と同じ値）。
-  // fixed の top はビューポート基準なので、scrollY は加えない。
-  // 加えるとページを下へ送った量だけ、帯も画面の下へずれてしまう。
-  const ctlRect=ctl.getBoundingClientRect();
-  document.documentElement.style.setProperty("--flagtopm", Math.round(ctlRect.bottom+8)+"px");
+  // スマホ幅も syncFlagTop() でタブ列の直下へ置く。編集ボタン行はスクロールで
+  // 画面外に出るため、fixed の帯の縦位置の基準には使わない。
 }
 function setDockPos(v){
   dockPos=(v==="tl"||v==="bottom")?v:"tr";

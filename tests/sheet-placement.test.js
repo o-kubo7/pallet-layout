@@ -8,7 +8,7 @@ test("Service Workerは版付きキャッシュ名を使う", () => {
   const sw = fs.readFileSync("files/sw.js", "utf8");
   assert.match(sw, /const CACHE_VERSION = "v\d+"/);
   assert.match(sw, /const CACHE_NAME = "pallet-layout-" \+ CACHE_VERSION/);
-  assert.match(sw, /const CACHE_VERSION = "v43"/);
+  assert.match(sw, /const CACHE_VERSION = "v44"/);
 });
 
 test("配置編集には配置不可編集と再配置の操作がある", () => {
@@ -20,6 +20,9 @@ test("配置編集には配置不可編集と再配置の操作がある", () =>
 
 test("スマホの選択ガイドはビューポート座標で配置する", () => {
   assert.doesNotMatch(source, /--flagtopm", Math\.round\(ctlRect\.bottom\+window\.scrollY\+8\)/);
+  const sync = functionSource("syncFlagTop");
+  assert.match(sync, /const top=Math\.round\(tabsBottom\+8\)\+"px"/);
+  assert.match(sync, /setProperty\("--flagtopm", top\)/);
 });
 
 test("配置不可編集は指先直下のセルをなぞり対象にする", () => {
