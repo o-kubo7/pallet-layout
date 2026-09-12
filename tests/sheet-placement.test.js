@@ -77,6 +77,89 @@ test("存在しない列または行の配置不可指定を除去する", () =>
   );
 });
 
+test("列途中の配置不可セルを飛ばしてロットを描画する", () => {
+  const cellsOf = new Function(
+    functionSource("cellsOf") + "; return cellsOf;"
+  )();
+  const cells = cellsOf({ h: 4, fills: [{ id: 7, count: 3 }] }, new Set([1]));
+  assert.deepEqual(cells.map(cell => [cell.row, cell.id, cell.blocked]), [
+    [0, 7, false], [1, null, true], [2, 7, false], [3, 7, false],
+  ]);
+});
+
+test("配置不可セルは連続配置の容量に数えない", () => {
+  const findRun = new Function(
+    functionSource("used") +
+    functionSource("usableCount") +
+    functionSource("columnFreeCount") +
+    functionSource("findRun") + "; return findRun;"
+  )();
+  const cols = [{ h: 3, fills: [], blockedRows: new Set([1]) }];
+  assert.equal(findRun(cols, 3, false), null);
+});
+
+test("自動配置は配置不可セルを飛ばして容量まで追加する", () => {
+  const placeLot = new Function(
+    functionSource("used") +
+    functionSource("usableCount") +
+    functionSource("columnFreeCount") +
+    functionSource("findRun") +
+    functionSource("placeLot") + "; return placeLot;"
+  )();
+  const col = { h: 4, fills: [], blockedRows: new Set([1]) };
+  const lot = { id: 7, pallets: 3 };
+  assert.equal(placeLot(lot, [{ cols: [col], useAisle: false }]), 0);
+  assert.deepEqual(col.fills, [{ id: 7, count: 3, ov: undefined }]);
+});
+
+test("手動移動先の配置不可セルを空き容量に含めない", () => {
+  const columnFreeCount = new Function(
+    functionSource("used") +
+    functionSource("usableCount") +
+    functionSource("columnFreeCount") + "; return columnFreeCount;"
+  )();
+  const col = { h: 4, fills: [{ id: 1, count: 1 }], blockedRows: new Set([2, 3]) };
+  assert.equal(columnFreeCount(col, col.blockedRows), 1);
+});
+
+test("手動移動は配置不可セルを飛ばして描画される", () => {
+  const moveCells = new Function(
+    functionSource("normalizeFills") +
+    functionSource("moveCells") + "; return moveCells;"
+  )();
+  const cellsOf = new Function(
+    functionSource("cellsOf") + "; return cellsOf;"
+  )();
+  const next = [
+    { name: "移動元", cols: [{ h: 2, fills: [{ id: 1, count: 1 }] }] },
+    { name: "移動先", cols: [{ h: 3, fills: [], blockedRows: new Set([1]) }] },
+  ];
+  assert.equal(moveCells(next, 1, { "移動元|0": 1 }, "移動先", 0), 1);
+  assert.deepEqual(
+    cellsOf(next[1].cols[0]).map(cell => [cell.row, cell.id, cell.blocked]),
+    [[0, 1, false], [1, null, true], [2, null, false]]
+  );
+});
+
+test("手動移動は配置不可セルで減った容量を超えると拒否する", () => {
+  const validateMove = new Function(
+    "used", "columnFreeCount", "movingCount", "blockCountOf", "clone", "moveCells",
+    functionSource("validateMove") + "; return validateMove;"
+  )(
+    col => col.fills.reduce((sum, fill) => sum + fill.count, 0),
+    col => col.h - col.fills.reduce((sum, fill) => sum + fill.count, 0) - col.blockedRows.size,
+    () => 2,
+    () => 0,
+    value => value,
+    () => { throw new Error("容量不足では移動してはいけません"); }
+  );
+  const sp = [{ name: "移動先", cols: [{ h: 4, fills: [{ id: 1, count: 1 }], blockedRows: new Set([2, 3]) }] }];
+  assert.deepEqual(
+    validateMove(sp, 1, { "移動元|0": 2 }, "移動先", 0),
+    { ok: false, reason: "移動先の空きが足りません" }
+  );
+});
+
 test("PC横・EV横ではEV横を右端に配置する", () => {
   const placement = new Function(
     "sheetSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas",

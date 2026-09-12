@@ -1973,6 +1973,14 @@ function enterKey(ev, el){
 
 /* ---------- 配置アルゴリズム ---------- */
 function used(c){return c.fills.reduce((a,f)=>a+f.count,0);}
+function usableCount(col,blockedRows){
+  const rows=blockedRows instanceof Set ? blockedRows : col.blockedRows;
+  if(!(rows instanceof Set)) return col.h;
+  let blocked=0;
+  rows.forEach(row=>{ if(Number.isSafeInteger(row) && row>=0 && row<col.h) blocked++; });
+  return col.h-blocked;
+}
+function columnFreeCount(col,blockedRows){return usableCount(col,blockedRows)-used(col);}
 
 /* 連続した空き列で rem パレットが丸ごと入る窓を探す。
    cols     : buildWork() が作った作業用の列配列
@@ -1984,25 +1992,33 @@ function findRun(cols, rem, useAisle){
     const c = cols[i];
     if(c.fills.length > 0) return false;     // 使用済みの列は窓を分断する
     if(c.aisle && !useAisle) return false;   // 通路を使わない段では通路も分断する
-    return true;
+    return columnFreeCount(c,c.blockedRows)>0;
   };
   for(let s=0; s<cols.length; s++){
     if(!usable(s)) continue;
     let cap = 0;
     for(let e=s; e<cols.length; e++){
       if(!usable(e)) break;
-      cap += cols[e].h;
+      cap += columnFreeCount(cols[e],cols[e].blockedRows);
       if(cap >= rem) return [s, e];
     }
   }
   return null;
 }
-function buildWork(){
+function buildWork(blocked){
   return SPACES.map(s=>({
     name:s.name, zone:s.zone, orient:s.orient||"v", block:s.block||99, align:s.align||"bottom",
     // row / off は描画専用。配置ロジックは見ないが、drawZone() が受け取るのは
     // ここで作った lastSp なので、落とすと一度も実形で描かれない
-    cols:s.cols.map(c=>({h:c.h, aisle:!!c.aisle, row:c.row, off:c.off, fills:[]}))
+    cols:s.cols.map((c,ci)=>({
+      h:c.h, aisle:!!c.aisle, row:c.row, off:c.off, fills:[],
+      blockedRows:blockedRowsFor(s.name,ci,blocked)
+    }))
+  }));
+}
+function hydrateBlockedRows(sp,blocked){
+  sp.forEach(space=>space.cols.forEach((col,colIndex)=>{
+    col.blockedRows=blockedRowsFor(space.name,colIndex,blocked);
   }));
 }
 /* 優先順に「どの列を対象に、通路を使うか」の候補を並べる。
@@ -2048,7 +2064,7 @@ function placeLot(lot, cands){
     if(!run) continue;
     for(let i=run[0]; i<=run[1] && rem>0; i++){
       const col=c.cols[i];
-      const put=Math.min(rem, col.h);
+      const put=Math.min(rem, columnFreeCount(col,col.blockedRows));
       col.fills.push({id:lot.id, count:put, ov:col.aisle});
       rem-=put;
     }
@@ -2060,7 +2076,7 @@ function placeLot(lot, cands){
       if(rem<=0) break;
       if(col.fills.length>0) continue;
       if(col.aisle && !c.useAisle) continue;
-      const put=Math.min(rem, col.h);
+      const put=Math.min(rem, columnFreeCount(col,col.blockedRows));
       col.fills.push({id:lot.id, count:put, ov:col.aisle});
       rem-=put;
     }
@@ -2077,7 +2093,7 @@ function fillMix(lot, cols, rem){
   for(const c of cols){
     if(rem<=0)break;
     if(c.aisle)continue;
-    const free=c.h-used(c); if(free<=0)continue;
+    const free=columnFreeCount(c,c.blockedRows); if(free<=0)continue;
     const put=Math.min(rem,free);
     // c.fills[0] は前回の呼び出しで unshift された混載ロットの場合があるため、
     // mix でない最初の要素（placeLot が入れた本来の占有ロット）を holder とする。
@@ -2091,8 +2107,8 @@ function fillMix(lot, cols, rem){
   return rem;
 }
 
-function place(lots,allowMix){
-  const sp=buildWork();
+function place(lots,allowMix,blocked){
+  const sp=buildWork(blocked);
   const cands=areaCandidates(sp);
   // 充填品を先に処理してメインを確保させる。同じ品名・SNPの異ロットは連続して
   // 処理するので隣接した列を取りやすい。グループ間は最初の入力順を保ち、
@@ -2261,7 +2277,7 @@ function run(goMap,deferSave=false){
     const n=keepStash[lotKey(l)]||0;
     if(n>0){ l.stashed=Math.min(n,l.pallets); l.pallets-=l.stashed; }
   });
-  lastSp=place(lots,allowMix); lastLots=lots; hasResult=true;
+  lastSp=place(lots,allowMix,activeShift().blocked); lastLots=lots; hasResult=true;
   // 倉庫へ置く分だけを place() に渡したので、退避分をここで積み戻し、
   // 合計表示のためにパレット数も元に戻す。
   lots.forEach(l=>{ if(l.stashed){ putToStash(lastSp,l.id,l.stashed); l.pallets+=l.stashed; } });
@@ -2278,11 +2294,15 @@ function run(goMap,deferSave=false){
 
 /* ---------- 描画 ---------- */
 // row は列内の行番号（0始まり）。選択とドラッグでマスを特定するために持たせる。
-function cellsOf(col){
-  const arr=Array.from({length:col.h},(_,i)=>({id:null,seg:false,row:i}));
+function cellsOf(col,blockedRows){
+  const blocked=blockedRows instanceof Set ? blockedRows : col.blockedRows;
+  const arr=Array.from({length:col.h},(_,i)=>({id:null,seg:false,row:i,blocked:blocked instanceof Set && blocked.has(i)}));
   let r=0;
   col.fills.forEach((f,fi)=>{
-    for(let k=0;k<f.count;k++){ if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),row:r}; r++; } }
+    for(let k=0;k<f.count;k++){
+      while(r<col.h && arr[r].blocked) r++;
+      if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),row:r,blocked:false}; r++; }
+    }
   });
   return arr;
 }
@@ -2321,6 +2341,7 @@ function drawZone(elId, spaces, colorOf){
         const bg=filled?colorOf[a.id]:"";
         const cls=["cell"];
         if(!filled&&col.aisle)cls.push("aisle-empty");
+        if(a.blocked)cls.push("blocked");
         if(a.seg)cls.push(horizontal?"segline-h":"segline");
         // ロットコードは 1111-2222 のように長いことがあり 30px のマスに入らない。
         // 凡例と同じ通し番号を出す。id は readLots() が付ける0始まりの連番。
@@ -2329,7 +2350,7 @@ function drawZone(elId, spaces, colorOf){
               +` style="${bg?'background:'+bg:''}">${label}</div>`;
       });
       const inner = horizontal ? `<div class="hrow">${cells}</div>` : `<div class="col${topAlign?' top':''}">${cells}</div>`;
-      const cap = `<div class="colcap">${used(col)}/${col.h}${col.aisle?' 通':''}</div>`;
+      const cap = `<div class="colcap">${used(col)}/${usableCount(col,col.blockedRows)}${col.aisle?' 通':''}</div>`;
       const gapCls = blockStart? " blockgap":"";
       const style = place ? ` style="${place}"` : "";
       return `<div class="colwrap${col.aisle?' aisle':''}${gapCls}"`
@@ -2583,9 +2604,12 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
   if(n<=0) return {ok:false, same:true, reason:"動くマスがありません"};
   // used(dc) には落とし先に既にあるそのロットの分が含まれ、n からはその分が除かれているので
   // 二重に数えることはない。
-  if(used(dc)+n > dc.h) return {ok:false, reason:"移動先の空きが足りません"};
+  if(n > columnFreeCount(dc,dc.blockedRows)) return {ok:false, reason:"移動先の空きが足りません"};
   const before=blockCountOf(sp, lotId);
   const next=clone(sp);
+  sp.forEach((space,spaceIndex)=>space.cols.forEach((col,colIndex)=>{
+    next[spaceIndex].cols[colIndex].blockedRows=col.blockedRows instanceof Set ? new Set(col.blockedRows) : new Set();
+  }));
   moveCells(next, lotId, counts, destSpaceName, destColIndex);
   const after=blockCountOf(next, lotId);
   // before が 0 になるのは、そのロットが倉庫に1マスも無いとき（退避スペースに
@@ -2715,6 +2739,7 @@ function restoreActiveShift(renderInput=true){
   renderTimingSwitches();
   if(!snapshot){ clearDisplayedPlacement(); return false; }
   const candidateLots=clone(snapshot.lots), candidateSp=clone(snapshot.sp), candidateFp=snapshot.fp;
+  hydrateBlockedRows(candidateSp,activeShift().blocked);
   try{
     // renderResult() の既存ヘルパーはglobalsを参照するため、候補を一時的に載せて描画する。
     // 失敗時は下のcatchでsnapshotと表示状態をまとめて破棄し、混在表示を残さない。
