@@ -4,6 +4,13 @@ const test = require("node:test");
 
 const source = fs.readFileSync("files/index.html", "utf8");
 
+test("Service Workerは版付きキャッシュ名を使う", () => {
+  const sw = fs.readFileSync("files/sw.js", "utf8");
+  assert.match(sw, /const CACHE_VERSION = "v\d+"/);
+  assert.match(sw, /const CACHE_NAME = "pallet-layout-" \+ CACHE_VERSION/);
+  assert.match(sw, /const CACHE_VERSION = "v41"/);
+});
+
 test("配置編集には配置不可編集と再配置の操作がある", () => {
   assert.match(source, /id="blockedEditBtn"/);
   assert.match(source, /onclick="setBlockedEditMode\(true\)"/);
