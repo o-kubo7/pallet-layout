@@ -8,7 +8,7 @@ test("Service Workerは版付きキャッシュ名を使う", () => {
   const sw = fs.readFileSync("files/sw.js", "utf8");
   assert.match(sw, /const CACHE_VERSION = "v\d+"/);
   assert.match(sw, /const CACHE_NAME = "pallet-layout-" \+ CACHE_VERSION/);
-  assert.match(sw, /const CACHE_VERSION = "v44"/);
+  assert.match(sw, /const CACHE_VERSION = "v45"/);
 });
 
 test("配置編集には配置不可編集と再配置の操作がある", () => {
@@ -98,7 +98,7 @@ test("配置不可行は指定されたエリアと列だけから抽出する",
 test("配置表のメイン配置不可セルには斜線用クラスを出力する", () => {
   const gridRows = new Function(
     "lastSp", "sheetAreas", "gridWarn", "SHEET_GRID_ORDER", "overflowTable", "lastLots", "tailAreaOf",
-    functionSource("gridRows") + "; return gridRows;"
+    functionSource("sheetGridAnchors") + functionSource("gridRows") + "; return gridRows;"
   )(
     [{ name: "メイン", cols: [{ h: 1, fills: [], blockedRows: new Set([0]) }] }],
     () => ["メイン"],
@@ -286,6 +286,67 @@ test("PC横・EV横ではEV横を右端に配置する", () => {
     result.bottom.map(entry => entry && entry.lot.id),
     [1, null, null, null, null, 2, 3]
   );
+});
+
+test("メインロットはグリッド位置に最も近い下段欄へ置く", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const mainLeft = { lot: { id: 1 }, areas: ["メイン"] };
+  const mainRight = { lot: { id: 2 }, areas: ["メイン"] };
+  const result = arrange([mainLeft, mainRight], 7, { 1: 1, 2: 9 });
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
+    [1, null, null, null, 2, null, null]);
+});
+
+test("PC横とEV横はメイン項目に挟まず右端へ連続配置する", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const mainLeft = { lot: { id: 1 }, areas: ["メイン"] };
+  const mainRight = { lot: { id: 2 }, areas: ["メイン"] };
+  const pc = { lot: { id: 3 }, areas: ["PC横"] };
+  const ev = { lot: { id: 4 }, areas: ["EV横"] };
+  const result = arrange([mainLeft, pc, mainRight, ev], 7, { 1: 1, 2: 9 });
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
+    [1, null, null, 2, null, 3, 4]);
+});
+
+test("入力順が逆でもメイン項目はグリッドの左から右へ並ぶ", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const right = { lot: { id: 2 }, areas: ["メイン"] };
+  const left = { lot: { id: 1 }, areas: ["メイン"] };
+  const result = arrange([right, left], 7, { 1: 1, 2: 9 });
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
+    [1, null, null, null, 2, null, null]);
+});
+
+test("最短の組合せを選びメイン項目の矢印を交差させない", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const left = { lot: { id: 1 }, areas: ["メイン"] };
+  const right = { lot: { id: 2 }, areas: ["メイン"] };
+  const result = arrange([left, right], 2, { 1: 9, 2: 11 });
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id), [1, 2]);
+});
+
+test("グリッド座標がない場合はメイン項目を左から順に置く", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const first = { lot: { id: 1 }, areas: ["メイン"] };
+  const second = { lot: { id: 2 }, areas: ["メイン"] };
+  const result = arrange([first, second], 7, null);
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
+    [1, 2, null, null, null, null, null]);
 });
 
 test("配置表からあふれた先頭2項目をあふれブロックへ記載する", () => {
