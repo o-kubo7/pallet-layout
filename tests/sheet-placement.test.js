@@ -160,6 +160,57 @@ test("手動移動は配置不可セルで減った容量を超えると拒否�
   );
 });
 
+test("分割配置は全セル配置不可の通常列と通路列に空fillを追加しない", () => {
+  const placeLot = new Function(
+    functionSource("used") +
+    functionSource("usableCount") +
+    functionSource("columnFreeCount") +
+    functionSource("findRun") +
+    functionSource("placeLot") + "; return placeLot;"
+  )();
+  const blockedNormal = { h: 2, fills: [], blockedRows: new Set([0, 1]) };
+  const blockedAisle = { h: 2, aisle: true, fills: [], blockedRows: new Set([0, 1]) };
+  const available = { h: 2, fills: [], blockedRows: new Set() };
+  const lot = { id: 9, pallets: 3 };
+  assert.equal(placeLot(lot, [{ cols: [blockedNormal, blockedAisle, available], useAisle: true }]), 1);
+  assert.deepEqual(blockedNormal.fills, []);
+  assert.deepEqual(blockedAisle.fills, []);
+  assert.deepEqual(available.fills, [{ id: 9, count: 2, ov: undefined }]);
+});
+
+test("保存用snapshotは派生した配置不可行を含まない", () => {
+  const snapshotSpaces = new Function(
+    functionSource("clone") +
+    functionSource("snapshotSpaces") + "; return snapshotSpaces;"
+  )();
+  const sp = [{ name: "メイン", cols: [{ h: 3, fills: [{ id: 1, count: 1 }], blockedRows: new Set([1]) }] }];
+  assert.deepEqual(snapshotSpaces(sp), [
+    { name: "メイン", cols: [{ h: 3, fills: [{ id: 1, count: 1 }] }] },
+  ]);
+  assert.deepEqual([...sp[0].cols[0].blockedRows], [1]);
+});
+
+test("配置不可で有効容量を超えたsnapshotは復元候補にしない", () => {
+  const activePlacementSnapshot = new Function(
+    "schedule", "inputFingerprint", "activeShift",
+    functionSource("used") +
+    functionSource("usableCount") +
+    functionSource("blockedCellKey") +
+    functionSource("blockedRowsFor") +
+    functionSource("snapshotFitsBlocked") +
+    functionSource("activePlacementSnapshot") + "; return activePlacementSnapshot;"
+  )(
+    {},
+    () => "fp",
+    () => ({
+      blocked: ["メイン|0|1"],
+      manual: null,
+      result: { fp: "fp", lots: [], sp: [{ name: "メイン", cols: [{ h: 3, fills: [{ id: 1, count: 3 }] }] }] },
+    })
+  );
+  assert.equal(activePlacementSnapshot(), null);
+});
+
 test("PC横・EV横ではEV横を右端に配置する", () => {
   const placement = new Function(
     "sheetSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas",

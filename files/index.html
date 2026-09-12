@@ -1071,7 +1071,7 @@ function normalizeSnapshot(raw){
     ? raw.lots.map(lot=>Object.assign({},lot,{type:normalizeItemType(lot&&lot.type)})) : null;
   if(!raw || typeof raw!=="object" || Array.isArray(raw) || typeof raw.fp!=="string" ||
      !validSnapshotLots(lots) || !validSnapshotSpaces(raw.sp,lots)) return null;
-  return Object.assign({}, raw, {fp:raw.fp, lots:lots, sp:clone(raw.sp)});
+  return Object.assign({}, raw, {fp:raw.fp, lots:lots, sp:snapshotSpaces(raw.sp)});
 }
 function normalizeShift(raw){
   try{
@@ -2021,6 +2021,16 @@ function hydrateBlockedRows(sp,blocked){
     col.blockedRows=blockedRowsFor(space.name,colIndex,blocked);
   }));
 }
+function snapshotSpaces(sp){
+  const saved=clone(sp);
+  saved.forEach(space=>space.cols.forEach(col=>{ delete col.blockedRows; }));
+  return saved;
+}
+function snapshotFitsBlocked(sp,blocked){
+  return sp.every(space=>space.cols.every((col,colIndex)=>
+    used(col)<=usableCount(col,blockedRowsFor(space.name,colIndex,blocked))
+  ));
+}
 /* 優先順に「どの列を対象に、通路を使うか」の候補を並べる。
    各エリアを (通路なし)→(通路あり) の順で並べることで、
    「メインを使い切ったら軒下より先にメインの通路を使う」が成立する。
@@ -2077,6 +2087,7 @@ function placeLot(lot, cands){
       if(col.fills.length>0) continue;
       if(col.aisle && !c.useAisle) continue;
       const put=Math.min(rem, columnFreeCount(col,col.blockedRows));
+      if(put<=0) continue;
       col.fills.push({id:lot.id, count:put, ov:col.aisle});
       rem-=put;
     }
@@ -2283,7 +2294,7 @@ function run(goMap,deferSave=false){
   lots.forEach(l=>{ if(l.stashed){ putToStash(lastSp,l.id,l.stashed); l.pallets+=l.stashed; } });
   lastFp=inputFingerprint();
   activeShift().slips=readSlips();
-  activeShift().result={fp:lastFp,lots:clone(lastLots),sp:clone(lastSp)};
+  activeShift().result={fp:lastFp,lots:clone(lastLots),sp:snapshotSpaces(lastSp)};
   activeShift().manual=null;
   activeShift().resultFingerprint=lastFp;
   if(!deferSave) saveSchedule();
@@ -2719,7 +2730,8 @@ function activePlacementSnapshot(){
   if(!schedule) return null;
   const fp=inputFingerprint(), shift=activeShift();
   return [shift.manual,shift.result].find(snapshot=>snapshot && snapshot.fp===fp &&
-    Array.isArray(snapshot.lots) && Array.isArray(snapshot.sp)) || null;
+    Array.isArray(snapshot.lots) && Array.isArray(snapshot.sp) &&
+    snapshotFitsBlocked(snapshot.sp,shift.blocked)) || null;
 }
 function isActiveFresh(){
   return !!(hasResult && lastLots && lastSp && lastFp===inputFingerprint() && activePlacementSnapshot());
@@ -2772,7 +2784,7 @@ function refreshFreshness(){
 }
 function saveManual(){
   if(!isActiveFresh()) return;
-  activeShift().manual={fp:lastFp,sp:clone(lastSp),lots:clone(lastLots)};
+  activeShift().manual={fp:lastFp,sp:snapshotSpaces(lastSp),lots:clone(lastLots)};
   saveSchedule();
 }
 function clearManual(){
