@@ -128,6 +128,12 @@
         font-size:calc(var(--cell) * .46);line-height:1;
         user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
   .cell.aisle-empty{background:#e5e7eb}
+  /* 配置不可は斜線と文字で示す。ロットが残る場合は番号を消さず、再配置が必要なことを示す。 */
+  .cell.blocked{background-color:#d1d5db !important;
+                background-image:repeating-linear-gradient(-45deg,rgba(71,85,105,.28) 0 4px,transparent 4px 8px) !important;
+                color:#334155;border-color:#64748b}
+  .cell.blocked.has-lot{box-shadow:inset 0 0 0 2px #b45309;color:#78350f}
+  #mapBody.blocked-edit .cell{cursor:crosshair;touch-action:none}
   /* ---- ロットの手動移動 ---- */
   /* 選択中のマス。マスの背景はロットの色なので、色ではなく枠で示す。
      touch-action:none は「選択された時点」で必要。ドラッグ開始まで待つと
@@ -143,7 +149,11 @@
   .cell.segline-h{border-left:2px dashed #374151}
   .colcap{font-size:10px;color:#9ca3af;text-align:center;margin-top:2px}
   /* 配置編集タブの ⚙。盤より上に常に出るのはこのボタンだけ */
-  .editctl{display:flex;justify-content:flex-end;margin-bottom:8px}
+  .editctl{display:flex;justify-content:flex-end;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  .blocked-edit-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;
+                        padding:8px 10px;border:1px solid #f59e0b;border-radius:8px;background:#fffbeb}
+  .blocked-edit-actions[hidden]{display:none}
+  .blocked-edit-help{font-size:12px;color:#78350f;flex:1 1 220px}
   .editcfg{border:1px solid var(--line);border-radius:10px;padding:10px 12px;
            margin-bottom:10px;background:#fcfcfd}
   /* .editcfg に display を書かない。書くと hidden より強くなって閉じられなくなる */
@@ -592,15 +602,22 @@
     </div>
   </div>
 
-  <!-- ===== 配置編集タブ（ブロック図：ロットの移動と退避ができる。モードの切り替えは無い） ===== -->
+  <!-- ===== 配置編集タブ（ブロック図：ロットの移動・退避・配置不可編集ができる） ===== -->
   <div id="tab-edit" class="tabpanel" style="display:none">
     <div class="card" id="editCard">
       <div class="timing-switch" data-timing-switch></div>
       <div class="empty" id="editEmpty"></div>
       <!-- 表示設定は既定でたたんでおく。 -->
       <div class="editctl" id="editCtl">
+        <button class="btn btn-ghost" id="blockedEditBtn" aria-pressed="false"
+                onclick="setBlockedEditMode(true)">配置不可エリアを編集</button>
         <button class="btn btn-ghost" id="cfgToggleBtn" aria-expanded="false"
                 aria-controls="editCfg" onclick="toggleEditCfg()">⚙ 表示設定</button>
+        <div class="blocked-edit-actions" id="blockedEditActions" hidden>
+          <span class="blocked-edit-help" id="blockedEditHelp" role="status">配置不可にするセルを編集できます。</span>
+          <button class="btn btn-primary" id="blockedRunBtn" onclick="runFromBlockedEdit()">自動配置を実行</button>
+          <button class="btn btn-ghost" onclick="setBlockedEditMode(false)">編集を終了</button>
+        </div>
       </div>
       <div class="editcfg" id="editCfg" hidden>
       <div class="sizectl" id="dockCtl">
@@ -2352,12 +2369,18 @@ function drawZone(elId, spaces, colorOf){
         const bg=filled?colorOf[a.id]:"";
         const cls=["cell"];
         if(!filled&&col.aisle)cls.push("aisle-empty");
-        if(a.blocked)cls.push("blocked");
+        const blocked=a.blocked || activeShift().blocked.includes(blockedCellKey(sp.name,ci,a.row));
+        if(blocked){
+          cls.push("blocked");
+          if(filled) cls.push("has-lot");
+        }
         if(a.seg)cls.push(horizontal?"segline-h":"segline");
         // ロットコードは 1111-2222 のように長いことがあり 30px のマスに入らない。
         // 凡例と同じ通し番号を出す。id は readLots() が付ける0始まりの連番。
         const label=filled?String(a.id+1):"";
-        cells+=`<div class="${cls.join(' ')}" data-row="${a.row}"${filled?` data-lot="${a.id}"`:""}`
+        const stateLabel=blocked ? (filled ? "配置不可・ロットあり。再配置待ち" : "配置不可")
+          : (filled ? `ロット ${label}` : "空きセル");
+        cells+=`<div class="${cls.join(' ')}" data-row="${a.row}" aria-label="${stateLabel}"${filled?` data-lot="${a.id}"`:""}`
               +` style="${bg?'background:'+bg:''}">${label}</div>`;
       });
       const inner = horizontal ? `<div class="hrow">${cells}</div>` : `<div class="col${topAlign?' top':''}">${cells}</div>`;
@@ -2629,6 +2652,53 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
   return {ok:true, needConfirm: before>0 && after>before, before, after, next};
 }
 
+/* ---------- 配置不可編集とロット移動 ---------- */
+let blockedEditMode=false;
+let blockedEditPointerKey=null;
+
+function setBlockedEditMode(enabled){
+  blockedEditMode=!!enabled;
+  if(blockedEditMode){
+    if(drag) endDrag();
+    if(sweep) endSweep();
+    clearSel();
+  }
+  const editBtn=document.getElementById("blockedEditBtn");
+  const actions=document.getElementById("blockedEditActions");
+  const help=document.getElementById("blockedEditHelp");
+  const map=document.getElementById("mapBody");
+  if(editBtn){
+    editBtn.setAttribute("aria-pressed", blockedEditMode?"true":"false");
+    editBtn.className="btn "+(blockedEditMode?"btn-on":"btn-ghost");
+    editBtn.textContent=blockedEditMode ? "配置不可エリアを編集中" : "配置不可エリアを編集";
+  }
+  if(actions) actions.hidden=!blockedEditMode;
+  if(help) help.textContent=blockedEditMode
+    ? "セルをタップまたはなぞって配置不可を切り替えます。ロットが残るセルは再配置待ちです。"
+    : "配置不可にするセルを編集できます。";
+  if(map) map.classList.toggle("blocked-edit",blockedEditMode);
+  if(!blockedEditMode) blockedEditPointerKey=null;
+}
+
+function toggleBlockedCell(cellEl){
+  if(!blockedEditMode || !cellEl || !cellEl.closest("#mapBody")) return;
+  const key=cellKey(cellEl);
+  const blocked=activeShift().blocked;
+  const index=blocked.indexOf(key);
+  if(index===-1) blocked.push(key); else blocked.splice(index,1);
+  saveSchedule();
+  const isBlocked=index===-1;
+  cellEl.classList.toggle("blocked",isBlocked);
+  cellEl.classList.toggle("has-lot",isBlocked && cellEl.dataset.lot!=null);
+  cellEl.setAttribute("aria-label",isBlocked
+    ? (cellEl.dataset.lot!=null ? "配置不可・ロットあり。再配置待ち" : "配置不可")
+    : (cellEl.dataset.lot!=null ? `ロット ${Number(cellEl.dataset.lot)+1}` : "空きセル"));
+}
+
+function runFromBlockedEdit(){
+  runFromButton({goMap:true,source:"blocked-edit"});
+}
+
 /* ---------- ロット移動（moveMode の宣言と選択） ---------- */
 // 配置編集タブは開いた時点で編集できる。切り替えるボタンは無い。
 // 変数を残すのは、これを見ている箇所（pointerdown / click ハンドラ）を
@@ -2664,11 +2734,30 @@ function toggleCell(cellEl){
 }
 
 document.addEventListener("click",e=>{
+  if(blockedEditMode){
+    const c=e.target.closest(".cell"); if(!c || !c.closest("#mapBody")) return;
+    if(blockedEditPointerKey===cellKey(c)){ blockedEditPointerKey=null; return; }
+    toggleBlockedCell(c);
+    return;
+  }
   if(!moveMode) return;
   if(dragMoved){ dragMoved=false; return; }     // ドラッグ直後の click は選択を動かさない
   const c=e.target.closest(".cell"); if(!c) return;
   if(!c.closest("#mapBody")) return;
   toggleCell(c);
+});
+
+document.addEventListener("pointermove",e=>{
+  if(!blockedEditMode) return;
+  if(!e.buttons) return;
+  const c=e.target.closest(".cell"); if(!c || !c.closest("#mapBody")) return;
+  const key=cellKey(c);
+  if(key===blockedEditPointerKey) return;
+  blockedEditPointerKey=key;
+  toggleBlockedCell(c);
+});
+document.addEventListener("pointerup",()=>{
+  if(blockedEditMode) setTimeout(()=>{ blockedEditPointerKey=null; },0);
 });
 
 /* ---------- ロット移動（ドラッグ） ---------- */
@@ -2819,7 +2908,8 @@ function registerItems(list){
   onMasterChange();   // 保存・候補更新・パレット数の再計算
 }
 // 「▶ 自動配置を作成」の入口。手動調整があるときだけ確認する。
-function runFromButton(){
+function runFromButton(options={}){
+  const goMap=options.goMap!==false;
   // 入力が不完全なら、ここで止める。手動調整の破棄を聞く前に返すので、破棄せずに直せる
   const validation=validateSlips();
   if(validation.badRows.length || validation.emptySlips.length){ showLotErrors(validation); return; }
@@ -2839,7 +2929,7 @@ function runFromButton(){
     }
   }
 
-  run(true);
+  run(goMap);
 
   // run() の中の renderResult() が #messages を上書きするので、そのあとに足す。
   // ロットを動かすと redraw() → renderResult() でこの行は消えるが、
@@ -2926,6 +3016,7 @@ function applyMove(spaceName, colIndex){
 }
 
 document.addEventListener("pointerdown",e=>{
+  if(blockedEditMode) return;
   // ドラッグ中に2本目の指が触れても乗っ取らせない。
   // 乗っ取ると1本目のゴーストが孤児になって画面に残る。
   if(drag) return;
@@ -2935,6 +3026,7 @@ document.addEventListener("pointerdown",e=>{
   // 決まった時点で drag を組み立てるので、以降は従来どおりの移動処理が動く。
 });
 document.addEventListener("pointermove",e=>{
+  if(blockedEditMode) return;
   if(!drag || e.pointerId!==drag.id) return;
   if(!drag.started){
     if(Math.abs(e.clientX-drag.x0)<8 && Math.abs(e.clientY-drag.y0)<8) return;
@@ -3453,6 +3545,7 @@ function setMoving(on){
 }
 
 document.addEventListener("pointerdown",e=>{
+  if(blockedEditMode) return;
   if(sweep||drag) return;
   if(!moveMode) return;
   if(e.button!=null && e.button!==0) return;
@@ -3468,6 +3561,7 @@ document.addEventListener("pointerdown",e=>{
          erased:[], lotId0:sel.lotId};
 });
 document.addEventListener("pointermove",e=>{
+  if(blockedEditMode) return;
   if(!sweep || e.pointerId!==sweep.id) return;
   if(!sweep.started){
     if(Math.abs(e.clientX-sweep.x0)<6 && Math.abs(e.clientY-sweep.y0)<6) return;

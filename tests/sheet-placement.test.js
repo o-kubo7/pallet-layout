@@ -4,6 +4,13 @@ const test = require("node:test");
 
 const source = fs.readFileSync("files/index.html", "utf8");
 
+test("配置編集には配置不可編集と再配置の操作がある", () => {
+  assert.match(source, /id="blockedEditBtn"/);
+  assert.match(source, /onclick="setBlockedEditMode\(true\)"/);
+  assert.match(source, /id="blockedRunBtn"/);
+  assert.match(source, /onclick="runFromBlockedEdit\(\)"/);
+});
+
 function functionSource(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} must exist`);
