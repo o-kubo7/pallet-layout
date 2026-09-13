@@ -20,6 +20,7 @@
   header h1{margin:0;font-size:16px}
   header p{margin:3px 0 0;font-size:11px;color:#cbd5e1}
   .wrap{max-width:1240px;margin:0 auto;padding:14px 16px calc(96px + var(--safe));min-width:0}
+  #tab-input{max-width:1000px;margin:0 auto}
   .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px;min-width:0}
   .card h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .badge{font-size:11px;background:#eef2ff;color:#3730a3;border-radius:99px;padding:2px 8px}
@@ -27,9 +28,11 @@
   /* ---- タブ ---- */
   .tabs{display:flex;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
   /* 4タブになったので、iPhone SE 幅（375px）でも折り返さないよう詰める */
-  .tab{flex:1;border:0;background:none;padding:13px 3px;font-size:13px;font-weight:700;color:var(--muted);
+  .tab{position:relative;flex:1;border:0;background:none;padding:13px 3px;font-size:16px;font-weight:700;color:var(--muted);
        white-space:nowrap;
        cursor:pointer;border-bottom:3px solid transparent;min-height:48px}
+  .tab:not(:last-child)::before{content:"";position:absolute;top:12px;right:0;bottom:12px;width:1px;background:var(--line)}
+  .tab:hover{background:#eff6ff;color:#1d4ed8}
   .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
   .tab .dot{display:inline-block;margin-left:5px;font-size:11px;background:#eef2ff;color:#3730a3;
             border-radius:99px;padding:1px 7px;font-weight:700}
@@ -50,7 +53,7 @@
   .btn-slip-add{background:#eff6ff;color:#1d4ed8;border:2px solid #2563eb;padding:9px 14px}
   .btn-slip-add-provisional{background:#fff7ed;color:#9a3412;border-color:#f97316}
   .btn-on{background:#fde68a;color:#7c2d12}
-  .btn-mini{background:#fee2e2;color:#b91c1c;border-radius:8px;padding:8px 12px;font-size:13px;
+  .btn-mini{background:#fee2e2;color:#b91c1c;border-radius:8px;padding:8px 12px;font-size:14px;
             cursor:pointer;border:0;min-height:40px;min-width:44px}
   .item-delete{width:24px;min-width:24px;height:24px;min-height:24px;padding:0;border:0;border-radius:6px;
                background:#fee2e2;color:#b91c1c;font-size:16px;line-height:1;cursor:pointer}
@@ -63,7 +66,7 @@
   .actionbar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(255,255,255,.96);
              border-top:1px solid var(--line);padding:10px 16px calc(10px + var(--safe));
              backdrop-filter:blur(6px);display:none}
-  .actionbar .btn{width:100%;font-size:15px;min-height:50px}
+  .actionbar .btn{width:100%;font-size:14px;min-height:50px}
 
   /* ---- 配置図 ---- */
   .legend{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
@@ -163,14 +166,14 @@
   .sizectl .lbl{font-size:12px;color:var(--muted)}
   /* ラベルとボタンの組。行が折り返しても組の途中で切れないようにする */
   .sizectl .grp{display:inline-flex;gap:6px;align-items:center;margin-left:12px}
-  .sizebtn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 14px;font-size:13px;
+  .sizebtn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 14px;font-size:14px;
            cursor:pointer;min-height:40px;color:#374151}
   .sizebtn.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
 
   /* 設定タブの中のサブタブ。メインタブ（.tab）と見た目を変えて階層を示す */
   .subtabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
   .subtab{position:relative;border:1px solid var(--line);background:#fff;color:#374151;
-          border-radius:999px;padding:8px 16px;font-size:13px;cursor:pointer;min-height:40px}
+          border-radius:999px;padding:8px 16px;font-size:14px;cursor:pointer;min-height:40px}
   .subtab.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
   /* 「見てほしい知らせがある」の印。件数を出す .dot とは別物 */
   .subtab.alert::after{content:"";position:absolute;top:-2px;right:-2px;
@@ -334,24 +337,28 @@
   .input-head{padding-bottom:10px}
   .date-row{display:flex;justify-content:space-between;min-width:0;gap:12px;align-items:flex-start}
   .date-field{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
-  .date-field label{font-size:12px;color:var(--muted);font-weight:700}
+  .input-head .date-field{flex-wrap:nowrap}
+  .input-head .date-field label,.input-head #dowHint,.input-head .slip-count{font-size:16px}
+  .date-field label{color:var(--muted);font-weight:700}
   .date-field input[type=date]{border:1px solid var(--line);border-radius:8px;padding:9px 10px;
                                font-size:16px;min-height:44px;background:#fff;color:#1f2937}
   .clear-input{flex:none}
   .timing-switch{margin-top:10px}
-  .slip-count{margin-top:8px;font-size:12px;color:var(--muted);font-weight:700}
+  .input-head .timing-switch{margin-top:0}
+  .slip-count{margin-top:8px;color:var(--muted);font-weight:700}
   .slip{border:3px solid #cbd5e1;border-radius:12px;background:#fff;margin-bottom:16px;overflow:hidden;min-width:0}
   .slip[data-status="fax"]{border-color:#2563eb}
   .slip[data-status="provisional"]{border-color:#f97316}
-  .slip-head{display:flex;align-items:center;gap:12px;padding:12px 14px;background:#f8fafc;border-bottom:3px solid #cbd5e1}
+  .slip-head{display:flex;align-items:center;gap:12px;padding:12px 14px;background:#f8fafc;border-bottom:3px solid #cbd5e1;font-size:16px}
   .slip[data-status="fax"] .slip-head{background:#eff6ff;border-bottom-color:#2563eb;color:#1d4ed8}
   .slip[data-status="provisional"] .slip-head{background:#ffedd5;border-bottom-color:#f97316;color:#9a3412}
-  .slip-head .item-count{margin-left:auto;font-size:12px;color:var(--muted)}
+  .slip-head .item-count{margin-left:auto;font-size:16px;color:var(--muted)}
   .slip[data-status="provisional"] .slip-head .item-count{color:#9a3412}
   .slip-head .unreceived{font-size:11px;background:#f97316;color:#fff;border-radius:99px;padding:2px 8px;font-weight:700}
   .slip-table{table-layout:fixed;min-width:0}
-  .slip-table .c-type{width:86px}.slip-table .c-snp,.slip-table .c-qty{width:92px}
-  .slip-table .c-pal{width:86px}.slip-table .c-del{width:56px}
+  .slip-table .c-type{width:100px}.slip-table .c-snp,.slip-table .c-qty,.slip-table .c-pal{width:100px}
+  .slip-table .c-del{width:56px}
+  .slip-table th,.slip-table td input,.slip-table td select,.slip-table .pallet-cell{font-size:14px}
   .slip[data-status="fax"] .slip-table th{background:#f8fafc;color:#475569}
   .slip[data-status="fax"] .pallet-cell{background:#f1f5f9}
   .slip[data-status="provisional"] .slip-table th{background:#fff3df;border-color:#fed7aa;color:#9a3412}
@@ -382,12 +389,13 @@
   @media (max-width:600px){
     .wrap{padding:12px 12px calc(96px + var(--safe))}
     .card{padding:12px;border-radius:12px}
+    .input-head .date-field{flex-wrap:wrap}
     .slip{padding:0}
     .slip-table{width:100%;max-width:100%;table-layout:fixed}
     .slip-table .c-type{width:11%}.slip-table .c-name{width:23%}.slip-table .c-lot{width:18%}
     .slip-table .c-snp{width:14%}.slip-table .c-qty{width:14%}.slip-table .c-pal{width:12%}.slip-table .c-del{width:8%}
     .slip-table th,.slip-table td{padding:2px}
-    .slip-table td input,.slip-table td select{min-width:0;padding:1px;font-size:16px}
+    .slip-table td input,.slip-table td select{min-width:0;padding:1px;font-size:14px}
     .slip-table .pallet-cell{overflow:hidden;text-overflow:ellipsis}
     .slip-table .item-delete{display:block;position:relative;left:50%;transform:translateX(-50%)}
     .slip-table .wide-label{display:none}
@@ -573,10 +581,9 @@
 
     <div class="card input-head">
       <div class="date-row">
-        <div class="date-field"><label for="dateInput">搬入日</label><input type="date" id="dateInput" onchange="onHeadChange()"><span id="dowHint"></span></div>
+        <div class="date-field"><label for="dateInput">搬入日</label><input type="date" id="dateInput" onchange="onHeadChange()"><span id="dowHint"></span><div class="timing-switch" data-timing-switch></div></div>
         <button class="btn-mini clear-input" onclick="clearLots()">入力をクリア</button>
       </div>
-      <div class="timing-switch" data-timing-switch></div>
       <div class="slip-count" id="slipCount"></div>
     </div>
     <div id="inputErr" class="inputerr" style="display:none"></div>

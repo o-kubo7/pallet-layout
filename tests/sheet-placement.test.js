@@ -4,11 +4,50 @@ const test = require("node:test");
 
 const source = fs.readFileSync("files/index.html", "utf8");
 
+test("入力ヘッダーでは日付の直後に時間帯切替を表示する", () => {
+  const inputStart = source.indexOf('<div id="tab-input"');
+  const inputEnd = source.indexOf('<!-- ===== 配置編集タブ', inputStart);
+  assert.notEqual(inputStart, -1);
+  assert.notEqual(inputEnd, -1);
+  const inputTab = source.slice(inputStart, inputEnd);
+
+  assert.match(
+    inputTab,
+    /id="dowHint"><\/span><div class="timing-switch" data-timing-switch><\/div>/
+  );
+});
+
+test("PCの伝票では種別・SNP・個数・パレット数を各100pxにする", () => {
+  assert.match(
+    source,
+    /\.slip-table \.c-type\{width:100px\}\.slip-table \.c-snp,\.slip-table \.c-qty,\.slip-table \.c-pal\{width:100px\}/
+  );
+});
+
+test("入力タブの主要コンテナは1000px以下で中央寄せする", () => {
+  assert.match(source, /#tab-input\{max-width:1000px;margin:0 auto\}/);
+});
+
+test("メインタブは16pxで、区切り線とhover表示を持つ", () => {
+  assert.match(source, /\.tab\{[^}]*font-size:16px/);
+  assert.match(source, /\.tab:not\(:last-child\)::before\{[^}]*width:1px[^}]*background:var\(--line\)/);
+  assert.match(source, /\.tab:hover\{[^}]*background:#eff6ff[^}]*color:#1d4ed8/);
+});
+
+test("入力画面の操作と伝票本文は14px、ヘッダーは16pxで表示する", () => {
+  assert.match(source, /\.btn-mini\{[^}]*font-size:14px/);
+  assert.match(source, /\.sizebtn\{[^}]*font-size:14px/);
+  assert.match(source, /\.input-head \.date-field\{flex-wrap:nowrap\}/);
+  assert.match(source, /\.input-head \.date-field label,\.input-head #dowHint,\.input-head \.slip-count\{font-size:16px/);
+  assert.match(source, /\.slip-head\{[^}]*font-size:16px/);
+  assert.match(source, /\.slip-table th,\.slip-table td input,\.slip-table td select,\.slip-table \.pallet-cell\{font-size:14px/);
+});
+
 test("Service Workerは版付きキャッシュ名を使う", () => {
   const sw = fs.readFileSync("files/sw.js", "utf8");
   assert.match(sw, /const CACHE_VERSION = "v\d+"/);
   assert.match(sw, /const CACHE_NAME = "pallet-layout-" \+ CACHE_VERSION/);
-  assert.match(sw, /const CACHE_VERSION = "v45"/);
+  assert.match(sw, /const CACHE_VERSION = "v48"/);
 });
 
 test("配置編集には配置不可編集と再配置の操作がある", () => {
