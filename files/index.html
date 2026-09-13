@@ -345,6 +345,9 @@
   .clear-input{flex:none}
   .timing-switch{margin-top:10px}
   .input-head .timing-switch{margin-top:0}
+  .sheet-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .sheet-toolbar .timing-switch{margin-top:0}
+  .sheet-print{width:112px;margin-left:auto}
   .slip-count{margin-top:8px;color:var(--muted);font-weight:700}
   .slip{border:3px solid #cbd5e1;border-radius:12px;background:#fff;margin-bottom:16px;overflow:hidden;min-width:0}
   .slip[data-status="fax"]{border-color:#2563eb}
@@ -568,7 +571,7 @@
 <div class="tabs">
   <button class="tab active" id="tabbtn-input" onclick="switchTab('input')">入力</button>
   <button class="tab" id="tabbtn-edit" onclick="switchTab('edit')">配置編集</button>
-  <button class="tab" id="tabbtn-sheet" onclick="switchTab('sheet')">配置表</button>
+  <button class="tab" id="tabbtn-sheet" onclick="switchTab('sheet')">配置図</button>
   <button class="tab" id="tabbtn-settings" onclick="switchTab('settings')">設定<span class="dot" id="regDot">0</span></button>
 </div>
 
@@ -576,9 +579,6 @@
 
   <!-- ===== 入力タブ ===== -->
   <div id="tab-input" class="tabpanel">
-    <div id="regInfo" class="regcount"></div>
-    <div id="saveStatus" class="savestat"></div>
-
     <div class="card input-head">
       <div class="date-row">
         <div class="date-field"><label for="dateInput">搬入日</label><input type="date" id="dateInput" onchange="onHeadChange()"><span id="dowHint"></span><div class="timing-switch" data-timing-switch></div></div>
@@ -708,10 +708,10 @@
   <!-- ===== 配置表タブ（印刷はこちら。印刷CSSが配置編集タブを隠す） ===== -->
   <div id="tab-sheet" class="tabpanel" style="display:none">
     <div class="card" id="sheetCard">
-      <div class="timing-switch" data-timing-switch></div>
-      <h2>配置表
-        <button class="btn btn-ghost" id="printBtn" style="margin-left:auto" onclick="printSheet()" disabled>🖨 印刷</button>
-      </h2>
+      <div class="sheet-toolbar">
+        <div class="timing-switch" data-timing-switch></div>
+        <button class="btn btn-ghost sheet-print" id="printBtn" onclick="printSheet()" disabled>🖨 印刷</button>
+      </div>
 
       <div class="sizectl" id="zoomCtl">
         <span class="lbl">表示倍率</span>
@@ -1366,6 +1366,7 @@ function updateRegCount(){
   const names=new Set(MASTER.map(m=>m.name));
   document.getElementById("regDot").textContent=names.size;
   const info=document.getElementById("regInfo");
+  if(!info)return;
   info.innerHTML = names.size===0
     ? "⚠ 品目が未登録です。「設定」タブで登録するか、SNPを直接入力してください。"
     : `登録品目 <b>${names.size}件</b>（SNPの編集は「設定」タブ）`;

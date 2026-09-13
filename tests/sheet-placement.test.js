@@ -34,6 +34,25 @@ test("メインタブは16pxで、区切り線とhover表示を持つ", () => {
   assert.match(source, /\.tab:hover\{[^}]*background:#eff6ff[^}]*color:#1d4ed8/);
 });
 
+test("入力画面に登録品目数と保存状態の表示を置かない", () => {
+  assert.doesNotMatch(source, /id="regInfo"/);
+  assert.doesNotMatch(source, /id="saveStatus"/);
+  const updateRegCount = functionSource("updateRegCount");
+  assert.match(updateRegCount, /if\(!info\)return;/);
+});
+
+test("配置表は時間帯切替の右に112px幅の印刷ボタンを置く", () => {
+  const sheetStart = source.indexOf('<div id="tab-sheet"');
+  const sheetEnd = source.indexOf('<!-- ===== 設定タブ', sheetStart);
+  assert.notEqual(sheetStart, -1);
+  assert.notEqual(sheetEnd, -1);
+  const sheetTab = source.slice(sheetStart, sheetEnd);
+  assert.match(sheetTab, /<div class="sheet-toolbar">[\s\S]*?data-timing-switch[\s\S]*?class="btn btn-ghost sheet-print"/);
+  assert.doesNotMatch(sheetTab, /<h2>配置表/);
+  assert.match(source, /\.sheet-print\{width:112px;margin-left:auto\}/);
+  assert.match(source, /id="tabbtn-sheet"[^>]*>配置図</);
+});
+
 test("入力画面の操作と伝票本文は14px、ヘッダーは16pxで表示する", () => {
   assert.match(source, /\.btn-mini\{[^}]*font-size:14px/);
   assert.match(source, /\.sizebtn\{[^}]*font-size:14px/);
@@ -47,7 +66,7 @@ test("Service Workerは版付きキャッシュ名を使う", () => {
   const sw = fs.readFileSync("files/sw.js", "utf8");
   assert.match(sw, /const CACHE_VERSION = "v\d+"/);
   assert.match(sw, /const CACHE_NAME = "pallet-layout-" \+ CACHE_VERSION/);
-  assert.match(sw, /const CACHE_VERSION = "v48"/);
+  assert.match(sw, /const CACHE_VERSION = "v50"/);
 });
 
 test("配置編集には配置不可編集と再配置の操作がある", () => {
