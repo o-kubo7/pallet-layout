@@ -131,6 +131,10 @@
         font-size:calc(var(--cell) * .46);line-height:1;
         user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
   .cell.aisle-empty{background:#e5e7eb}
+  /* 緊急用の通路マス。列全体が通路の .aisle-empty とは別で、
+     荷物が乗っても通路だと分かるように縁を残す */
+  .cell.aisle-cell{background:#e5e7eb}
+  .cell.aisle-cell[data-lot]{box-shadow:inset 0 0 0 2px #9ca3af}
   /* 配置不可は斜線と文字で示す。ロットが残る場合は番号を消さず、再配置が必要なことを示す。 */
   .cell.blocked{background-color:#d1d5db !important;
                 background-image:repeating-linear-gradient(-45deg,rgba(71,85,105,.28) 0 4px,transparent 4px 8px) !important;
@@ -2361,12 +2365,17 @@ function run(goMap,deferSave=false){
 // row は列内の行番号（0始まり）。選択とドラッグでマスを特定するために持たせる。
 function cellsOf(col,blockedRows){
   const blocked=blockedRows instanceof Set ? blockedRows : col.blockedRows;
-  const arr=Array.from({length:col.h},(_,i)=>({id:null,seg:false,row:i,blocked:blocked instanceof Set && blocked.has(i)}));
+  // 緊急用の通路マスは印を付けるだけ。blocked と違って飛ばさない。
+  // 飛ばすと、列が埋まっても手で運んだ荷物が入らなくなる
+  const aisleRows=Array.isArray(col.aisleRows)?col.aisleRows:[];
+  const arr=Array.from({length:col.h},(_,i)=>({id:null,seg:false,row:i,
+    blocked:blocked instanceof Set && blocked.has(i),
+    aisleRow:aisleRows.includes(i)}));
   let r=0;
   col.fills.forEach((f,fi)=>{
     for(let k=0;k<f.count;k++){
       while(r<col.h && arr[r].blocked) r++;
-      if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),row:r,blocked:false}; r++; }
+      if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),row:r,blocked:false,aisleRow:aisleRows.includes(r)}; r++; }
     }
   });
   return arr;
@@ -2406,6 +2415,7 @@ function drawZone(elId, spaces, colorOf){
         const bg=filled?colorOf[a.id]:"";
         const cls=["cell"];
         if(!filled&&col.aisle)cls.push("aisle-empty");
+        if(a.aisleRow)cls.push("aisle-cell");
         const blocked=a.blocked || activeShift().blocked.includes(blockedCellKey(sp.name,ci,a.row));
         if(blocked){
           cls.push("blocked");
@@ -2421,7 +2431,7 @@ function drawZone(elId, spaces, colorOf){
               +` style="${bg?'background:'+bg:''}">${label}</div>`;
       });
       const inner = horizontal ? `<div class="hrow">${cells}</div>` : `<div class="col${topAlign?' top':''}">${cells}</div>`;
-      const cap = `<div class="colcap">${used(col)}/${usableCount(col,col.blockedRows)}${col.aisle?' 通':''}</div>`;
+      const cap = `<div class="colcap">${used(col)}/${usableCount(col,col.blockedRows)}${col.aisle||aisleRowCount(col,col.blockedRows)?' 通':''}</div>`;
       const gapCls = blockStart? " blockgap":"";
       const style = place ? ` style="${place}"` : "";
       return `<div class="colwrap${col.aisle?' aisle':''}${gapCls}"`

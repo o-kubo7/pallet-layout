@@ -726,3 +726,26 @@ test("自動配置は緊急用の通路マスの手前で止まる", () => {
   assert.equal(placeLot(lot, [{ cols: [col], useAisle: false }]), 1);
   assert.deepEqual(col.fills, [{ id: 3, count: 7, ov: undefined }]);
 });
+
+test("緊急用の通路マスには印を付け、荷物は飛ばさずに入れる", () => {
+  const cellsOf = new Function(
+    functionSource("cellsOf") + "; return cellsOf;"
+  )();
+  const cells = cellsOf({ h: 3, fills: [{ id: 5, count: 3 }], aisleRows: [2] });
+  assert.deepEqual(cells.map(cell => [cell.row, cell.id, cell.aisleRow]), [
+    [0, 5, false], [1, 5, false], [2, 5, true],
+  ]);
+});
+
+test("緊急用の通路マスは配置不可セルと違う見た目にする", () => {
+  assert.match(source, /\.cell\.aisle-cell\{background:#e5e7eb/);
+  assert.match(source, /\.cell\.aisle-cell\[data-lot\]\{box-shadow:inset 0 0 0 2px #9ca3af/);
+});
+
+test("盤のマスは緊急用の通路マスにクラスを付ける", () => {
+  assert.match(source, /if\(a\.aisleRow\)cls\.push\("aisle-cell"\)/);
+});
+
+test("緊急用マスがある列の列キャップにも通の印を付ける", () => {
+  assert.match(source, /col\.aisle\|\|aisleRowCount\(col,col\.blockedRows\)\?' 通':''/);
+});
