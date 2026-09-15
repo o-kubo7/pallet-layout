@@ -203,6 +203,8 @@ test("配置不可セルは連続配置の容量に数えない", () => {
     functionSource("used") +
     functionSource("usableCount") +
     functionSource("columnFreeCount") +
+    functionSource("aisleRowCount") +
+    functionSource("autoFreeCount") +
     functionSource("findRun") + "; return findRun;"
   )();
   const cols = [{ h: 3, fills: [], blockedRows: new Set([1]) }];
@@ -214,6 +216,8 @@ test("自動配置は配置不可セルを飛ばして容量まで追加する",
     functionSource("used") +
     functionSource("usableCount") +
     functionSource("columnFreeCount") +
+    functionSource("aisleRowCount") +
+    functionSource("autoFreeCount") +
     functionSource("findRun") +
     functionSource("placeLot") + "; return placeLot;"
   )();
@@ -276,6 +280,8 @@ test("分割配置は全セル配置不可の通常列と通路列に空fillを�
     functionSource("used") +
     functionSource("usableCount") +
     functionSource("columnFreeCount") +
+    functionSource("aisleRowCount") +
+    functionSource("autoFreeCount") +
     functionSource("findRun") +
     functionSource("placeLot") + "; return placeLot;"
   )();
@@ -648,4 +654,75 @@ test("作業用の列に緊急用マスと上方向の飛び出しを引き継�
   assert.equal(work[0].cols[0].up, 1);
   assert.deepEqual(work[0].cols[1].aisleRows, [7]);
   assert.equal(work[0].cols[1].up, undefined);
+});
+
+test("自動配置は緊急用の通路マスを空きに数えない", () => {
+  const autoFreeCount = new Function(
+    functionSource("used") +
+    functionSource("usableCount") +
+    functionSource("columnFreeCount") +
+    functionSource("aisleRowCount") +
+    functionSource("autoFreeCount") + "; return autoFreeCount;"
+  )();
+  assert.equal(autoFreeCount({ h: 8, fills: [], aisleRows: [7] }), 7);
+});
+
+test("手動移動は緊急用の通路マスを空きに数える", () => {
+  const columnFreeCount = new Function(
+    functionSource("used") +
+    functionSource("usableCount") +
+    functionSource("columnFreeCount") + "; return columnFreeCount;"
+  )();
+  assert.equal(columnFreeCount({ h: 8, fills: [], aisleRows: [7] }), 8);
+});
+
+test("緊急用の通路マスは列の高さの外を指していたら数えない", () => {
+  const aisleRowCount = new Function(
+    functionSource("aisleRowCount") + "; return aisleRowCount;"
+  )();
+  assert.equal(aisleRowCount({ h: 3, aisleRows: [2, 9, -1] }), 1);
+  assert.equal(aisleRowCount({ h: 3 }), 0);
+});
+
+test("配置不可と重なった緊急用マスは二重に引かない", () => {
+  const autoFreeCount = new Function(
+    functionSource("used") +
+    functionSource("usableCount") +
+    functionSource("columnFreeCount") +
+    functionSource("aisleRowCount") +
+    functionSource("autoFreeCount") + "; return autoFreeCount;"
+  )();
+  // 下端が緊急用マスであり、同じ行が配置不可にも塗られている
+  const col = { h: 8, fills: [], aisleRows: [7], blockedRows: new Set([7]) };
+  assert.equal(autoFreeCount(col, col.blockedRows), 7);
+});
+
+test("連続配置の窓は緊急用の通路マスを含めない", () => {
+  const findRun = new Function(
+    functionSource("used") +
+    functionSource("usableCount") +
+    functionSource("columnFreeCount") +
+    functionSource("aisleRowCount") +
+    functionSource("autoFreeCount") +
+    functionSource("findRun") + "; return findRun;"
+  )();
+  const cols = [{ h: 8, fills: [], aisleRows: [7] }];
+  assert.equal(findRun(cols, 8, false), null);
+  assert.deepEqual(findRun(cols, 7, false), [0, 0]);
+});
+
+test("自動配置は緊急用の通路マスの手前で止まる", () => {
+  const placeLot = new Function(
+    functionSource("used") +
+    functionSource("usableCount") +
+    functionSource("columnFreeCount") +
+    functionSource("aisleRowCount") +
+    functionSource("autoFreeCount") +
+    functionSource("findRun") +
+    functionSource("placeLot") + "; return placeLot;"
+  )();
+  const col = { h: 8, fills: [], aisleRows: [7] };
+  const lot = { id: 3, pallets: 8 };
+  assert.equal(placeLot(lot, [{ cols: [col], useAisle: false }]), 1);
+  assert.deepEqual(col.fills, [{ id: 3, count: 7, ov: undefined }]);
 });
