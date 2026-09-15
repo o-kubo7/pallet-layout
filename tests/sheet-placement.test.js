@@ -749,3 +749,25 @@ test("盤のマスは緊急用の通路マスにクラスを付ける", () => {
 test("緊急用マスがある列の列キャップにも通の印を付ける", () => {
   assert.match(source, /col\.aisle\|\|aisleRowCount\(col,col\.blockedRows\)\?' 通':''/);
 });
+
+test("上に飛び出す列は下げず、飛び出さない列を1マス下げる", () => {
+  const colTopOffset = new Function(
+    functionSource("colTopOffset") + "; return colTopOffset;"
+  )();
+  const sp = { cols: [{ h: 9, up: 1 }, { h: 8 }] };
+  assert.equal(colTopOffset(sp, sp.cols[0]), 0);
+  assert.equal(colTopOffset(sp, sp.cols[1]), 1);
+});
+
+test("上に飛び出す列が無いエリアはどの列も下げない", () => {
+  const colTopOffset = new Function(
+    functionSource("colTopOffset") + "; return colTopOffset;"
+  )();
+  const sp = { cols: [{ h: 7 }, { h: 7 }] };
+  assert.equal(colTopOffset(sp, sp.cols[0]), 0);
+  assert.equal(colTopOffset(sp, sp.cols[1]), 0);
+});
+
+test("盤は飛び出さない列にマス1つ分のマージンを与える", () => {
+  assert.match(source, /margin-top:calc\(\(var\(--cell\) \+ 2px\) \* \$\{topOff\}\)/);
+});

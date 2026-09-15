@@ -2362,6 +2362,15 @@ function run(goMap,deferSave=false){
 }
 
 /* ---------- 描画 ---------- */
+/* 上に飛び出す列があるエリアで、その列を何マス分下げるか。
+   位置指定モード（row/off）は横向きのエリアにしか効かないので、
+   縦向きのメインはこの計算で上端をずらす。
+   効くのは align:"top" のエリアだけ。既定の下揃えでは見た目に出ない。 */
+function colTopOffset(sp,col){
+  const maxUp=Math.max(0,...sp.cols.map(c=>Number.isFinite(c.up)?c.up:0));
+  const up=Number.isFinite(col.up)?col.up:0;
+  return maxUp-up;
+}
 // row は列内の行番号（0始まり）。選択とドラッグでマスを特定するために持たせる。
 function cellsOf(col,blockedRows){
   const blocked=blockedRows instanceof Set ? blockedRows : col.blockedRows;
@@ -2463,7 +2472,10 @@ function drawZone(elId, spaces, colorOf){
       sp.cols.forEach((col,ci)=>{
         const blockStart = grouping && !col.aisle && nonAisleSeen>0 && (nonAisleSeen % sp.block===0);
         if(!col.aisle) nonAisleSeen++;
-        lines+=colHtml(col, ci, blockStart, "");
+        // 1マス＝マスの幅（--cell）＋列の中の gap 2px
+        const topOff=topAlign?colTopOffset(sp,col):0;
+        const place = topOff>0 ? `margin-top:calc((var(--cell) + 2px) * ${topOff})` : "";
+        lines+=colHtml(col, ci, blockStart, place);
       });
     }
     const gridCls = horizontal ? ("grid-h"+(positioned?" pos":"")) : "grid";
