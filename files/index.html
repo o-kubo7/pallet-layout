@@ -505,6 +505,10 @@
                      white-space:normal;font-size:10px;line-height:1.3;
                      color:#000;padding:4px 2px;word-break:break-all}
   .sheet td.g{height:30px;position:relative;padding:0;line-height:0}
+  /* メインのグリッドが 8 行になる日は、○を縮めて行高を詰める。
+     8行×26px＝208px で、7行×30px＝210px に収まるので紙の高さは増えない */
+  .sheet.grid8 td.g{height:26px}
+  .sheet.grid8 td.g .mk{width:19px;height:19px}
   /* 通路列の灰色。ブラウザは既定で背景色を印刷しないので、このセルだけは
      印刷ダイアログの「背景のグラフィック」を待たずに出すよう指示する */
   .sheet td.g.aisle{background:#d9d9d9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -4386,7 +4390,9 @@ function renderSheet(){
   // 12列以上のときはグリッド自体は描けているので、案内はその下に置く
   if(grid.warn && grid.warn.kind==="extra")  rows+=gridNoticeRow(grid.warn, lay.cols);
 
-  host.innerHTML=`<div class="sheet"><div class="sheetbox"><table>
+  // 8 行になる日は○を縮めて行高を詰める。紙の高さを増やさないための切り替え
+  const gridCls = (grid.rows>7) ? " grid8" : "";
+  host.innerHTML=`<div class="sheet${gridCls}"><div class="sheetbox"><table>
     <colgroup>${Array(lay.cols).fill(`<col style="width:${lay.colW}px">`).join("")}</colgroup>
     ${rows}</table></div></div>`;
   fitSheetText(pl);               // 折り返しは行の高さを変えるので線より先に確定させる
@@ -4595,11 +4601,17 @@ function gridRows(pad, overflow){
     list.slice(-n).forEach(k=>{ isHalf[k]=true; });
   });
 
-  const at=(ci,ri)=>(colCells[ci]&&colCells[ci][ri])?colCells[ci][ri].id:null;
+  const g=gridShift(sp,colCells);
+  const at=(ci,ri)=>{
+    // 端の列で太枠の左右を見るとき、存在しない添字が来る
+    if(!sp.cols[ci]) return null;
+    const r=ri-g.shiftOf(ci)+g.startOf(ci);
+    return (r>=0 && colCells[ci] && colCells[ci][r]) ? colCells[ci][r].id : null;
+  };
   const circled=["①","②","③","④","⑤","⑥","⑦"];
 
   let rows="";
-  for(let ri=0;ri<7;ri++){
+  for(let ri=0;ri<g.rows;ri++){
     let tds="";
     order.forEach(o=>{
       if(o.lab){
@@ -4610,20 +4622,23 @@ function gridRows(pad, overflow){
           if(span(ri-1)!==cur) cls.push("bt");
           if(span(ri+1)!==cur) cls.push("bb");
         }
-        tds+=`<td class="${cls.join(" ")}">${circled[ri]||""}</td>`; return;
+        // 上に飛び出したマスの行には段番号を振らない。現場が呼んでいる段の名前を変えないため
+        const li=ri-(g.upUsed?g.maxUp:0);
+        tds+=`<td class="${cls.join(" ")}">${li>=0?(circled[li]||""):""}</td>`; return;
       }
       const col=sp.cols[o.c];
-      if(ri>=col.h){ tds+=`<td class="none"></td>`; return; }
+      const r=ri-g.shiftOf(o.c)+g.startOf(o.c);
+      if(r<0 || r>=g.endOf(o.c)){ tds+=`<td class="none"></td>`; return; }
       const id=at(o.c,ri);
       const cls=["g"]; if(o.aisle)cls.push("aisle");
-      if(col.blockedRows && col.blockedRows.has(ri)) cls.push("blocked");
+      if(col.blockedRows && col.blockedRows.has(r)) cls.push("blocked");
       if(id!=null){
         if(at(o.c,ri-1)!==id) cls.push("bt");
         if(at(o.c,ri+1)!==id) cls.push("bb");
         if(at(o.c-1,ri)!==id) cls.push("bl");
         if(at(o.c+1,ri)!==id) cls.push("br");
       }
-      const half=isHalf[o.c+"_"+ri];
+      const half=isHalf[o.c+"_"+r];
       tds+=`<td class="${cls.join(" ")}">`
          + (id!=null?`<span class="mk">${half?"半":""}</span>`:"")
          + `</td>`;
@@ -4637,7 +4652,7 @@ function gridRows(pad, overflow){
   // メインに置かれている全ロットの終点を集める
   const anchors=sheetGridAnchors(sp, order)||[];
 
-  return {html: rows+`<tr>${nums}${sideCell(7)}</tr>`, anchors, warn};
+  return {html: rows+`<tr>${nums}${sideCell(7)}</tr>`, anchors, warn, rows:g.rows};
 }
 
 /* 大きな配置図が出せない／欠けていることを伝える文。素のテキストを返す。

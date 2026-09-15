@@ -112,6 +112,25 @@ function functionSource(name) {
   throw new Error(`${name} has no closing brace`);
 }
 
+// gridRows は lastSp / lastLots など外の値を見るので、注入して組み立てる
+function makeGridRows(cols, order) {
+  return new Function(
+    "lastSp", "sheetAreas", "gridWarn", "SHEET_GRID_ORDER", "overflowTable", "lastLots", "tailAreaOf",
+    functionSource("aisleRowCount") +
+    functionSource("gridShift") +
+    functionSource("sheetGridAnchors") +
+    functionSource("gridRows") + "; return gridRows;"
+  )(
+    [{ name: "メイン", cols }],
+    () => ["メイン"],
+    () => null,
+    order,
+    () => "",
+    [],
+    () => null
+  );
+}
+
 test("旧形式の時間帯データは配置不可セルなしとして読み込む", () => {
   const normalizeShift = new Function(
     "normalizeSlip", "normalizeSnapshot", "normalizeBlocked",
@@ -156,6 +175,9 @@ test("配置不可行は指定されたエリアと列だけから抽出する",
 test("配置表のメイン配置不可セルには斜線用クラスを出力する", () => {
   const gridRows = new Function(
     "lastSp", "sheetAreas", "gridWarn", "SHEET_GRID_ORDER", "overflowTable", "lastLots", "tailAreaOf",
+    // gridRows は内部で gridShift を呼ぶようになったため、依存元も注入する
+    functionSource("aisleRowCount") +
+    functionSource("gridShift") +
     functionSource("sheetGridAnchors") + functionSource("gridRows") + "; return gridRows;"
   )(
     [{ name: "メイン", cols: [{ h: 1, fills: [], blockedRows: new Set([0]) }] }],
@@ -830,4 +852,50 @@ test("下端の緊急用マスはグリッド本体の行数に入れない", ()
   const sp = { cols: [{ h: 8, aisleRows: [7] }] };
   const g = gridShift(sp, [[{ id: 0 }]]);
   assert.equal(g.rows, 7);
+});
+
+test("上に飛び出したマスに荷物がある日のグリッドは8行", () => {
+  const gridRows = makeGridRows([
+    { h: 9, up: 1, fills: [{ id: 0, count: 2 }], aisleRows: [8] },
+    { h: 8, fills: [{ id: 0, count: 1 }], aisleRows: [7] },
+  ], [{ c: 0 }, { c: 1 }]);
+  const out = gridRows(0, []);
+  assert.equal(out.rows, 8);
+  // 飛び出さない列の0行目は空セル
+  const firstRow = out.html.split("<tr")[1];
+  assert.match(firstRow, /<td class="none"><\/td>/);
+});
+
+test("上に飛び出したマスが空の日のグリッドは7行", () => {
+  const gridRows = makeGridRows([
+    { h: 9, up: 1, fills: [], aisleRows: [8] },
+    { h: 8, fills: [{ id: 0, count: 1 }], aisleRows: [7] },
+  ], [{ c: 0 }, { c: 1 }]);
+  assert.equal(gridRows(0, []).rows, 7);
+});
+
+test("上に飛び出したマスには段番号を振らない", () => {
+  const gridRows = makeGridRows([
+    { h: 9, up: 1, fills: [{ id: 0, count: 2 }], aisleRows: [8] },
+    { h: 8, fills: [{ id: 0, count: 1 }], aisleRows: [7] },
+  ], [{ c: 0 }, { lab: true }, { c: 1 }]);
+  const rows = gridRows(0, []).html.split("<tr");
+  assert.match(rows[1], /<td class="lab"><\/td>/);   // 飛び出した行は空欄
+  assert.match(rows[2], /①/);                        // その下が①
+});
+
+test("端の列でも太枠の左右判定で落ちない", () => {
+  const gridRows = makeGridRows([
+    { h: 8, fills: [{ id: 0, count: 1 }], aisleRows: [7] },
+  ], [{ c: 0 }]);
+  assert.doesNotThrow(() => gridRows(0, []));
+});
+
+test("8行の日は○を小さくして行高を詰める", () => {
+  assert.match(source, /\.sheet\.grid8 td\.g\{height:26px\}/);
+  assert.match(source, /\.sheet\.grid8 td\.g \.mk\{width:19px;height:19px\}/);
+});
+
+test("8行の日だけ紙にgrid8の印を付ける", () => {
+  assert.match(source, /const gridCls = \(grid\.rows>7\) \? " grid8" : "";/);
 });
