@@ -843,8 +843,16 @@ const DEFAULT_SPACES = [
   // row / off は描画専用（row＝ブロック図の何行目、off＝行内の何マス目から）。
   // 2026-08-30 の現場実測（配置図の表/配置マス.xlsx）に合わせてある。
   // 省略した列は「順に積む・左端から」の意味になる。
+  // 中央 9 列は下端 1 マスが緊急用の通路マス（aisleRows）。自動配置では使わない。
+  // 4/5/6/8 は上に 1 マス飛び出す（up）。2026-09-15 の現場確認で判明した
   {name:"メイン", zone:"near", orient:"v", block:3, align:"top", sheet:"bottom", cols:[
-     {h:6,aisle:true},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:7},{h:5,aisle:true}]},
+     {h:6,aisle:true},
+     {h:8, aisleRows:[7]}, {h:8, aisleRows:[7]}, {h:8, aisleRows:[7]},
+     {h:9, up:1, aisleRows:[8]}, {h:9, up:1, aisleRows:[8]}, {h:9, up:1, aisleRows:[8]},
+     {h:8, aisleRows:[7]},
+     {h:9, up:1, aisleRows:[8]},
+     {h:8, aisleRows:[7]},
+     {h:5,aisle:true}]},
   // 軒下①：現場で振った番号がそのまま配置順。列はどれも柱をまたがない
   {name:"軒下①", zone:"far", orient:"h", block:99, sheet:"top", cols:[
      {h:8,  row:4, off:0},    // 1-8
@@ -853,16 +861,21 @@ const DEFAULT_SPACES = [
      {h:3,  row:0, off:9},    // 22-24
      {h:11, row:2, off:0}]},  // 25-35　※ row1 は通路の空き行
   {name:"軒下②", zone:"far", orient:"h", block:99, sheet:"top", cols:[{h:4},{h:4}]},
-  // PC横：1-4 と 5-12 の間の row1 が通路。右起点
+  // PC横：1-4 と 5-12 の間の row1 が通路。右起点。
+  // 2026-09-15 の現場確認で、5-12 の左に 1 マス空けて 2 マス置けることが分かった
   {name:"PC横", zone:"near", orient:"h", block:99, sheet:"bottom", cols:[
      {h:4, row:0},            // 1-4
-     {h:8, row:2}]},          // 5-12　※ row1 は通路の空き行
-  // EV横：L 字なので列を分ける。5 と 6 は直角の位置関係で、連続しては置けない
+     {h:8, row:2},            // 5-12　※ row1 は通路の空き行
+     {h:2, row:2, off:9}]},   // 飛び地。8マスの左に1マス空ける
+  // EV横：L 字なので列を分ける。5 と 6 は直角の位置関係で、連続しては置けない。
+  // 2026-09-15 の現場確認で、1-5 の左に 1 マス空けて 2 マス置けることが分かった。
+  // 左起点なので、飛び地を左端に置くため既存の列の off を 3 ずつ後ろへずらしてある
   {name:"EV横", zone:"near", orient:"h", block:99, sheet:"bottom", cols:[
-     {h:5, row:2, off:0},     // 1-5
-     {h:1, row:3, off:4},     // 6
-     {h:2, row:1, off:6},     // 7-8
-     {h:2, row:0, off:6}]},   // 9-10
+     {h:5, row:2, off:3},     // 1-5
+     {h:1, row:3, off:7},     // 6
+     {h:2, row:1, off:9},     // 7-8
+     {h:2, row:0, off:9},     // 9-10
+     {h:2, row:2, off:0}]},   // 飛び地。1-5 の左に1マス空ける
   // あふれ受け。普段はここまで来ない
   {name:"出庫口横", zone:"far", orient:"h", block:99, sheet:"top", cols:[{h:2},{h:2}]},
   {name:"5棟壁際", zone:"far", orient:"h", block:99, sheet:"top", cols:[{h:6},{h:6},{h:6}]},

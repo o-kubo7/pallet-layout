@@ -112,6 +112,20 @@ function functionSource(name) {
   throw new Error(`${name} has no closing brace`);
 }
 
+// DEFAULT_SPACES は配列リテラルなので、宣言ごと切り出して評価する
+function defaultSpaces() {
+  const start = source.indexOf("const DEFAULT_SPACES = [");
+  assert.notEqual(start, -1);
+  const end = source.indexOf("\n];", start);
+  assert.notEqual(end, -1);
+  return new Function(source.slice(start, end + 3) + "; return DEFAULT_SPACES;")();
+}
+function defaultSpace(name) {
+  const found = defaultSpaces().find(space => space.name === name);
+  assert.ok(found, `${name} must exist`);
+  return found;
+}
+
 // gridRows は lastSp / lastLots など外の値を見るので、注入して組み立てる
 function makeGridRows(cols, order) {
   return new Function(
@@ -1029,4 +1043,63 @@ test("版が変わったら配置不可セルも一緒に解除する", () => {
 
 test("列の高さを変えて緊急用マスが消えたら設定タブで知らせる", () => {
   assert.match(functionSource("applyConfig"), /緊急用の通路マス/);
+});
+
+test("メインの中央9列は下端に緊急用マスを持つ", () => {
+  const main = defaultSpace("メイン");
+  const mid = main.cols.slice(1, 10);
+  assert.equal(mid.length, 9);
+  mid.forEach((col, i) => {
+    assert.deepEqual(col.aisleRows, [col.h - 1], `${i + 1}列目`);
+  });
+});
+
+test("メインの4/5/6/8列は上に1マス飛び出す", () => {
+  const main = defaultSpace("メイン");
+  [4, 5, 6, 8].forEach(i => {
+    assert.equal(main.cols[i].up, 1, `${i}列目`);
+    assert.equal(main.cols[i].h, 9, `${i}列目の高さ`);
+  });
+  [1, 2, 3, 7, 9].forEach(i => {
+    assert.equal(main.cols[i].up, undefined, `${i}列目`);
+    assert.equal(main.cols[i].h, 8, `${i}列目の高さ`);
+  });
+});
+
+test("PC横は8マス列の左に1マス空けて2マス持つ", () => {
+  const pc = defaultSpace("PC横");
+  assert.equal(pc.cols.length, 3);
+  assert.deepEqual(pc.cols[2], { h: 2, row: 2, off: 9 });
+});
+
+test("EV横は5マス列の左に1マス空けて2マス持つ", () => {
+  const ev = defaultSpace("EV横");
+  assert.equal(ev.cols.length, 5);
+  assert.deepEqual(ev.cols[0], { h: 5, row: 2, off: 3 });
+  assert.deepEqual(ev.cols[4], { h: 2, row: 2, off: 0 });
+});
+
+// 合成オブジェクトのテストだけでは、実行時に属性が落ちていても気づけない。
+// 既定値から作業用の列を作り、自動配置まで通して確かめる
+test("既定の配置マスから自動配置まで通すと緊急用マスが空く", () => {
+  const run = new Function(
+    "SPACES", "blockedRowsFor",
+    functionSource("used") +
+    functionSource("usableCount") +
+    functionSource("columnFreeCount") +
+    functionSource("aisleRowCount") +
+    functionSource("autoFreeCount") +
+    functionSource("findRun") +
+    functionSource("placeLot") +
+    functionSource("buildWork") +
+    "; return {buildWork, placeLot};"
+  )(defaultSpaces(), () => new Set());
+  const work = run.buildWork([]);
+  const main = work.find(s => s.name === "メイン");
+  const col = main.cols[1];                    // h:8、下端が緊急用
+  assert.deepEqual(col.aisleRows, [7]);        // buildWork が落としていない
+  const rem = run.placeLot({ id: 0, pallets: 8 }, [{ cols: [col], useAisle: false }]);
+  assert.equal(rem, 1);                        // 緊急用マスには置かない
+  // buildWork() が aisle を !!c.aisle で真偽値化するため、通路でない列は ov:false になる
+  assert.deepEqual(col.fills, [{ id: 0, count: 7, ov: false }]);
 });
