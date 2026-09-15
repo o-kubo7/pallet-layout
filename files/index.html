@@ -2037,9 +2037,12 @@ function buildWork(blocked){
   return SPACES.map(s=>({
     name:s.name, zone:s.zone, orient:s.orient||"v", block:s.block||99, align:s.align||"bottom",
     // row / off は描画専用。配置ロジックは見ないが、drawZone() が受け取るのは
-    // ここで作った lastSp なので、落とすと一度も実形で描かれない
+    // ここで作った lastSp なので、落とすと一度も実形で描かれない。
+    // aisleRows（緊急用の通路マス）と up（上方向の飛び出し）も同じ。盤・紙・自動配置・
+    // 知らせはすべて lastSp を見るので、ここで落とすとどこにも効かない
     cols:s.cols.map((c,ci)=>({
-      h:c.h, aisle:!!c.aisle, row:c.row, off:c.off, fills:[],
+      h:c.h, aisle:!!c.aisle, row:c.row, off:c.off,
+      aisleRows:c.aisleRows, up:c.up, fills:[],
       blockedRows:blockedRowsFor(s.name,ci,blocked)
     }))
   }));

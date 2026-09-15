@@ -633,3 +633,19 @@ test("仮伝票カードはFAXと同じ濃淡構造をオレンジ系にする",
   assert.match(source, /\.slip\[data-status="provisional"\] \.pallet-cell\s*\{[^}]*background:#ffe9c4[^}]*color:#9a3412[^}]*\}/);
   assert.match(source, /\.slip\[data-status="provisional"\] \.slip-actions\s*\{[^}]*background:#fff(?:;|})[^}]*border-top-color:#fed7aa[^}]*\}/);
 });
+
+test("作業用の列に緊急用マスと上方向の飛び出しを引き継ぐ", () => {
+  const buildWork = new Function(
+    "SPACES", "blockedRowsFor",
+    functionSource("buildWork") + "; return buildWork;"
+  )(
+    [{ name: "メイン", zone: "near", orient: "v", block: 3, align: "top",
+       cols: [{ h: 9, up: 1, aisleRows: [8] }, { h: 8, aisleRows: [7] }] }],
+    () => new Set()
+  );
+  const work = buildWork([]);
+  assert.deepEqual(work[0].cols[0].aisleRows, [8]);
+  assert.equal(work[0].cols[0].up, 1);
+  assert.deepEqual(work[0].cols[1].aisleRows, [7]);
+  assert.equal(work[0].cols[1].up, undefined);
+});
