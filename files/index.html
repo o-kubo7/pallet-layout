@@ -4493,6 +4493,26 @@ function gridWarn(sp){
   return null;
 }
 
+/* 紙のグリッドの行のずらしを決める。gridRows() と sheetGridAnchors() が
+   同じ結果を使う。別々に計算すると引き出し線が 1 行ずれる。
+   上に飛び出したマスに荷物が無い日は、その行を描かずに 7 行のままにする
+   （紙の形をいつもと同じに保つため）。 */
+function gridShift(sp,colCells){
+  const ups=sp.cols.map(c=>Number.isFinite(c.up)?c.up:0);
+  const maxUp=Math.max(0,...ups);
+  // 飛び出した行（0 〜 up-1）に荷物があるか
+  const upUsed=maxUp>0 && sp.cols.some((c,ci)=>{
+    for(let r=0;r<ups[ci];r++) if(colCells[ci] && colCells[ci][r]) return true;
+    return false;
+  });
+  const shiftOf=ci=>upUsed?(maxUp-ups[ci]):0;
+  const startOf=ci=>upUsed?0:ups[ci];
+  // 下端の緊急用マスは列番号行が受け持つので、本体の行数には入れない
+  const endOf=ci=>sp.cols[ci].h-aisleRowCount(sp.cols[ci],sp.cols[ci].blockedRows);
+  const rows=Math.max(...sp.cols.map((c,ci)=>shiftOf(ci)+endOf(ci)-startOf(ci)));
+  return {rows, shiftOf, startOf, endOf, upUsed, maxUp};
+}
+
 // 引き出し線と下段欄の並び替えで共有する、ロットごとの最初の連続ブロックの中央列。
 // DOMの実測値には依存しない。列番号は表の離散座標で、下段欄の中心 (1, 3, ...)
 // と比較できる。欄数は常に表の列数の半分なので、normal/wide でも同じ座標系になる。

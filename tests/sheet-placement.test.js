@@ -771,3 +771,63 @@ test("上に飛び出す列が無いエリアはどの列も下げない", () =>
 test("盤は飛び出さない列にマス1つ分のマージンを与える", () => {
   assert.match(source, /margin-top:calc\(\(var\(--cell\) \+ 2px\) \* \$\{topOff\}\)/);
 });
+
+test("上に飛び出したマスに荷物がある日は8行になる", () => {
+  const gridShift = new Function(
+    functionSource("aisleRowCount") +
+    functionSource("gridShift") + "; return gridShift;"
+  )();
+  const sp = { cols: [{ h: 9, up: 1, aisleRows: [8] }, { h: 8, aisleRows: [7] }] };
+  const colCells = [
+    [{ id: 0 }, { id: 0 }, null, null, null, null, null, null, null],
+    [{ id: 1 }, null, null, null, null, null, null, null],
+  ];
+  const g = gridShift(sp, colCells);
+  assert.equal(g.upUsed, true);
+  assert.equal(g.rows, 8);
+  assert.equal(g.shiftOf(0), 0);
+  assert.equal(g.shiftOf(1), 1);
+  assert.equal(g.startOf(0), 0);
+  assert.equal(g.startOf(1), 0);
+});
+
+test("上に飛び出したマスが空の日は7行のまま", () => {
+  const gridShift = new Function(
+    functionSource("aisleRowCount") +
+    functionSource("gridShift") + "; return gridShift;"
+  )();
+  const sp = { cols: [{ h: 9, up: 1, aisleRows: [8] }, { h: 8, aisleRows: [7] }] };
+  const colCells = [
+    [null, { id: 0 }, null, null, null, null, null, null, null],
+    [{ id: 1 }, null, null, null, null, null, null, null],
+  ];
+  const g = gridShift(sp, colCells);
+  assert.equal(g.upUsed, false);
+  assert.equal(g.rows, 7);
+  assert.equal(g.shiftOf(0), 0);
+  assert.equal(g.startOf(0), 1);   // 飛び出した空きを飛ばして描く
+  assert.equal(g.startOf(1), 0);
+});
+
+test("上に飛び出す列が無いエリアは今までどおり", () => {
+  const gridShift = new Function(
+    functionSource("aisleRowCount") +
+    functionSource("gridShift") + "; return gridShift;"
+  )();
+  const sp = { cols: [{ h: 7 }, { h: 7 }] };
+  const colCells = [[{ id: 0 }], [{ id: 1 }]];
+  const g = gridShift(sp, colCells);
+  assert.equal(g.rows, 7);
+  assert.equal(g.shiftOf(0), 0);
+  assert.equal(g.startOf(0), 0);
+});
+
+test("下端の緊急用マスはグリッド本体の行数に入れない", () => {
+  const gridShift = new Function(
+    functionSource("aisleRowCount") +
+    functionSource("gridShift") + "; return gridShift;"
+  )();
+  const sp = { cols: [{ h: 8, aisleRows: [7] }] };
+  const g = gridShift(sp, [[{ id: 0 }]]);
+  assert.equal(g.rows, 7);
+});
