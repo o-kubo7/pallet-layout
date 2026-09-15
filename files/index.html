@@ -969,7 +969,7 @@ let spacesWereReset=false;
 const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", schedule:"palletApp.schedule"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
-const SPACES_SAVE_VERSION = 3;   // [試作] 退避スペースを足したので上げる
+const SPACES_SAVE_VERSION = 4;   // 現場の実測で置き場が増えたので上げる
 // 列の高さ・列数・エリア数の上限。drawZone() は col.h 個の div を innerHTML で
 // 組み立てるので、上限のない値（打ち間違いの桁違い等）はタブを固まらせる。
 // 例外にならないので bootDraw() の try/catch では捕まえられない。
@@ -1164,6 +1164,23 @@ function pruneScheduleBlockedForSpaces(){
     if(next.length!==shift.blocked.length) changed=true;
     shift.blocked=next;
   });
+  return changed;
+}
+/* 保存されている配置不可セルを全部消す。配置不可は「エリア名|列|行番号」で
+   覚えているので、列の高さが上に伸びると指す場所が 1 段ずれる。
+   pruneBlockedForSpaces() は高さを超えた行しか落とさないので、
+   増える方向では何も落ちず黙ってずれる。版を上げたときに一緒に解除する。
+   initSpaces() は schedule を読み込むより前に動く（initSchedule() が後）ので、
+   メモリ上の schedule ではなく保存データを直接読み書きする。 */
+function clearAllBlocked(){
+  const saved=loadData(STORE_KEY.schedule);
+  if(!saved || !saved.shifts) return false;
+  let changed=false;
+  TIMING_KEYS.forEach(key=>{
+    const shift=saved.shifts[key];
+    if(shift && Array.isArray(shift.blocked) && shift.blocked.length){ shift.blocked=[]; changed=true; }
+  });
+  if(changed) saveData(STORE_KEY.schedule, saved);
   return changed;
 }
 function defaultHeadDate(){
@@ -3737,6 +3754,7 @@ function spacesToText(withSheet=true){
 function applyConfig(){
   const lines=document.getElementById("cfgText").value.split("\n").map(l=>l.trim()).filter(Boolean);
   const out=[];
+  const lostAisleRows=[];
   for(const ln of lines){
     const p=ln.split("|").map(x=>x.trim());
     if(p.length<5){alert("形式が不正な行があります（5項目必要）:\n"+ln);return;}
@@ -3763,7 +3781,13 @@ function applyConfig(){
       cols.forEach((c,i)=>{
         if(prev.cols[i].row!==undefined) c.row=prev.cols[i].row;
         if(prev.cols[i].off!==undefined) c.off=prev.cols[i].off;
+        if(prev.cols[i].aisleRows!==undefined) c.aisleRows=prev.cols[i].aisleRows;
+        if(prev.cols[i].up!==undefined) c.up=prev.cols[i].up;
       });
+    }else if(prev && prev.cols.some(pc=>Array.isArray(pc.aisleRows)&&pc.aisleRows.length)){
+      // 高さを変えると緊急用の通路マスが落ちる。落ちたままだと自動配置がそこに置くので、
+      // 黙って変えずに知らせる
+      lostAisleRows.push(p[0]);
     }
     // 掲載先は省略できる。省略したら今の設定を引き継ぎ、無ければ下段にする。
     const sheetRaw=p[5]||"";
@@ -3789,6 +3813,10 @@ function applyConfig(){
   document.getElementById("cfgText").value=spacesToText();
   clearCfgNote();
   if(blockedWerePruned) showCfgNote("存在しない配置不可セルを解除しました");
+  if(lostAisleRows.length){
+    showCfgNote(`列の高さを変えたので、次のエリアの緊急用の通路マスが外れました：${lostAisleRows.join("・")}。`
+      +`自動配置がそのマスにも荷物を置くようになります。戻すには「初期値に戻す」を押してください。`);
+  }
   showCapacity();
   if(spacesToText(false)===geomBefore){
     if(isActiveFresh()) redraw(); else refreshFreshness();
@@ -3868,6 +3896,9 @@ function validSpaces(a){
         // row / off は任意。無いのは正常な状態なので、あるときだけ範囲を見る
         && (c.row===undefined || (Number.isFinite(c.row) && c.row>=0 && c.row<=SPACES_MAX_ROW))
         && (c.off===undefined || (Number.isFinite(c.off) && c.off>=0 && c.off<=SPACES_MAX_OFF))
+        && (c.aisleRows===undefined || (Array.isArray(c.aisleRows)
+            && c.aisleRows.length===1 && c.aisleRows[0]===c.h-1))
+        && (c.up===undefined || (Number.isSafeInteger(c.up) && c.up>=0 && c.up<=SPACES_MAX_ROW))
        ))) return false;
   const dup=a.map(s=>s.name).find((n,i,arr)=>arr.indexOf(n)!==i);
   if(dup) return false;
@@ -3884,8 +3915,11 @@ function normalizeSpaces(a){
       orient:(s.orient==="h")?"h":"v",
       block:Number.isFinite(s.block)?s.block:99,
       align:s.align,
-      // row / off は保存に無ければ undefined のまま。既定の「順に詰める」の意味になる
-      cols:s.cols.map(c=>({h:c.h, aisle:!!c.aisle, row:c.row, off:c.off})),
+      // row / off は保存に無ければ undefined のまま。既定の「順に詰める」の意味になる。
+      // aisleRows / up も同じく、無ければ「緊急用マス無し・上に飛び出さない」になる
+      cols:s.cols.map(c=>({h:c.h, aisle:!!c.aisle, row:c.row, off:c.off,
+                           aisleRows:Array.isArray(c.aisleRows)?c.aisleRows.slice():undefined,
+                           up:Number.isSafeInteger(c.up)?c.up:undefined})),
       sheet:SHEETS.includes(s.sheet)?s.sheet:"bottom",
     };
   });
@@ -4792,7 +4826,11 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","
     saveData(STORE_KEY.spacesResetPending, true);
     saveData(STORE_KEY.spaces, null);
     spacesWereReset=true;
-    showCfgNote("配置マスを現場の実測に合わせて更新したので、スペース設定と手動調整を初期値に戻しました。");
+    // 配置不可セルは行番号で覚えているので、列が上に伸びると指す場所がずれる。
+    // 移行はせず解除して、同じ知らせで伝える
+    const hadBlocked=clearAllBlocked();
+    showCfgNote("配置マスを現場の実測に合わせて更新したので、スペース設定と手動調整を初期値に戻しました。"
+      +(hadBlocked?"配置不可セルも解除しました。":""));
     return;
   }
   if(!validSpaces(d.spaces)){

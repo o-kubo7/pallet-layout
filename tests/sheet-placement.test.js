@@ -976,3 +976,57 @@ test("収容能力は緊急用の通路マスを数えない", () => {
 test("退避から戻すときは緊急用の通路マスを使わない", () => {
   assert.match(functionSource("returnSelToWarehouse"), /autoFreeCount\(c,c\.blockedRows\)>=n/);
 });
+
+test("保存する列に緊急用マスと上方向の飛び出しを含める", () => {
+  const normalizeSpaces = new Function(
+    "DEFAULT_SPACES",
+    functionSource("normalizeSpaces") + "; return normalizeSpaces;"
+  )([]);
+  const out = normalizeSpaces([{
+    name: "メイン", zone: "near", orient: "v", block: 3, align: "top", sheet: "bottom",
+    cols: [{ h: 9, aisle: false, up: 1, aisleRows: [8] }],
+  }]);
+  assert.deepEqual(out[0].cols[0].aisleRows, [8]);
+  assert.equal(out[0].cols[0].up, 1);
+});
+
+test("古い保存に新しい属性が無くても既定の形に寄せる", () => {
+  const normalizeSpaces = new Function(
+    "DEFAULT_SPACES",
+    functionSource("normalizeSpaces") + "; return normalizeSpaces;"
+  )([]);
+  const out = normalizeSpaces([{
+    name: "メイン", zone: "near", orient: "v", block: 3, align: "top", sheet: "bottom",
+    cols: [{ h: 7, aisle: false }],
+  }]);
+  assert.equal(out[0].cols[0].aisleRows, undefined);
+  assert.equal(out[0].cols[0].up, undefined);
+});
+
+test("緊急用マスは列の下端1マスだけを認める", () => {
+  const validSpaces = new Function(
+    "SPACES_MAX_AREAS", "SPACES_MAX_COLS", "SPACES_MAX_COL_H", "SPACES_MAX_ROW", "SPACES_MAX_OFF", "isPlainObject",
+    functionSource("validSpaces") + "; return validSpaces;"
+  )(99, 99, 99, 99, 99, v => !!v && typeof v === "object" && !Array.isArray(v));
+  const make = aisleRows => ([{
+    name: "メイン", zone: "near", orient: "v", block: 3, align: "top", sheet: "bottom",
+    cols: [{ h: 8, aisle: false, aisleRows }],
+  }]);
+  assert.equal(validSpaces(make([7])), true);
+  assert.equal(validSpaces(make([6])), false);      // 下端ではない
+  assert.equal(validSpaces(make([6, 7])), false);   // 2 マスは認めない
+});
+
+test("配置マスを更新したので保存バージョンを上げる", () => {
+  assert.match(source, /const SPACES_SAVE_VERSION = 4;/);
+});
+
+test("版が変わったら配置不可セルも一緒に解除する", () => {
+  const start = source.indexOf("if(d.v!==SPACES_SAVE_VERSION){");
+  assert.notEqual(start, -1);
+  assert.match(source.slice(start, start + 460), /clearAllBlocked\(\)/);
+});
+
+test("列の高さを変えて緊急用マスが消えたら設定タブで知らせる", () => {
+  assert.match(functionSource("applyConfig"), /緊急用の通路マス/);
+});
