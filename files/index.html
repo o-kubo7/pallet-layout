@@ -542,6 +542,8 @@
   .sheet td.g.bb.bl::after{border-bottom-left-radius:var(--lot-corner)}
   .sheet td.g.bb.br::after{border-bottom-right-radius:var(--lot-corner)}
   .sheet td.colno{border:0;font-size:11px;height:20px}
+  /* 下端の緊急用マス。既存の通路列と同じ灰色にし、背景色を印刷でも出す */
+  .sheet td.colno.aisle{background:#d9d9d9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 
   @media print{
     @page{size:A4 landscape;margin:8mm}
@@ -4646,8 +4648,20 @@ function gridRows(pad, overflow){
     rows+=`<tr class="grow">${tds}${sideCell(ri)}</tr>`;
   }
   // 列番号
+  // 下端の緊急用マスは、行を増やさずにこの行が受け持つ。紙を 1 ページに
+  // 収めるため、専用の行は作らない（列番号行は元からある 20px の行）
   let nums="";
-  order.forEach(o=>{ nums+=`<td class="colno">${(o.lab||o.aisle)?"":o.c}</td>`; });
+  order.forEach(o=>{
+    if(o.lab||o.aisle){ nums+=`<td class="colno"></td>`; return; }
+    const col=sp.cols[o.c];
+    if(!aisleRowCount(col,col.blockedRows)){ nums+=`<td class="colno">${o.c}</td>`; return; }
+    const row=col.h-1;                      // 緊急用マスは列の下端
+    const id=(colCells[o.c]&&colCells[o.c][row])?colCells[o.c][row].id:null;
+    if(id==null){ nums+=`<td class="colno aisle">${o.c}</td>`; return; }
+    // 半が来た日は列番号より半を優先する。半は現物の数に関わる
+    const mark=isHalf[o.c+"_"+row]?"半":o.c;
+    nums+=`<td class="colno aisle g"><span class="mk">${mark}</span></td>`;
+  });
 
   // メインに置かれている全ロットの終点を集める
   const anchors=sheetGridAnchors(sp, order)||[];

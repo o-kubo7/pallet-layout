@@ -899,3 +899,24 @@ test("8行の日は○を小さくして行高を詰める", () => {
 test("8行の日だけ紙にgrid8の印を付ける", () => {
   assert.match(source, /const gridCls = \(grid\.rows>7\) \? " grid8" : "";/);
 });
+
+test("緊急用マスが空なら列番号行は数字のまま", () => {
+  const gridRows = makeGridRows([
+    { h: 8, fills: [{ id: 0, count: 7 }], aisleRows: [7] },
+  ], [{ c: 0 }]);
+  assert.match(gridRows(0, []).html, /<td class="colno aisle">0<\/td>/);
+});
+
+test("緊急用マスに荷物があると○の中に列番号を出す", () => {
+  const gridRows = makeGridRows([
+    { h: 8, fills: [{ id: 0, count: 8 }], aisleRows: [7] },
+  ], [{ c: 0 }]);
+  assert.match(gridRows(0, []).html, /<td class="colno aisle g"><span class="mk">0<\/span><\/td>/);
+});
+
+test("列番号行の緊急用マスは印刷でも灰色を出す", () => {
+  assert.match(
+    source,
+    /\.sheet td\.colno\.aisle\{[^}]*background:#d9d9d9[^}]*print-color-adjust:exact/s
+  );
+});
