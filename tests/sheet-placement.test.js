@@ -416,6 +416,8 @@ test("右端を予約してもメインロットは物理的に最短の下段�
 test("sheetPlacementはグリッドセル中心に近い下段欄へメインロットを置く", () => {
   const placement = new Function(
     "sheetSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas", "lastSp", "SHEET_GRID_ORDER",
+    functionSource("aisleRowCount") +
+    functionSource("gridShift") +
     functionSource("sheetGridAnchors") +
     functionSource("arrangeBottomSlots") +
     functionSource("arrangeOverflowSlots") +
@@ -919,4 +921,39 @@ test("列番号行の緊急用マスは印刷でも灰色を出す", () => {
     source,
     /\.sheet td\.colno\.aisle\{[^}]*background:#d9d9d9[^}]*print-color-adjust:exact/s
   );
+});
+
+test("引き出し線の行は紙の行番号で返す", () => {
+  const sheetGridAnchors = new Function(
+    "lastLots",
+    functionSource("aisleRowCount") +
+    functionSource("gridShift") +
+    functionSource("sheetGridAnchors") + "; return sheetGridAnchors;"
+  )([]);
+  // 0列目は上に飛び出す列。1列目は飛び出さない列で、どちらも先頭に荷物がある
+  const sp = { name: "メイン", cols: [
+    { h: 9, up: 1, fills: [{ id: 0, count: 1 }], aisleRows: [8] },
+    { h: 8, fills: [{ id: 1, count: 1 }], aisleRows: [7] },
+  ] };
+  const anchors = sheetGridAnchors(sp, [{ c: 0 }, { c: 1 }]);
+  const a0 = anchors.find(a => a.id === 0);
+  const a1 = anchors.find(a => a.id === 1);
+  // 上に飛び出す列の荷物は紙の0行目、飛び出さない列の荷物は紙の1行目
+  assert.equal(a0.row, 0);
+  assert.equal(a1.row, 1);
+});
+
+test("上に飛び出したマスが空の日は行がずれない", () => {
+  const sheetGridAnchors = new Function(
+    "lastLots",
+    functionSource("aisleRowCount") +
+    functionSource("gridShift") +
+    functionSource("sheetGridAnchors") + "; return sheetGridAnchors;"
+  )([]);
+  const sp = { name: "メイン", cols: [
+    { h: 9, up: 1, fills: [], aisleRows: [8] },
+    { h: 8, fills: [{ id: 1, count: 1 }], aisleRows: [7] },
+  ] };
+  const anchors = sheetGridAnchors(sp, [{ c: 0 }, { c: 1 }]);
+  assert.equal(anchors.find(a => a.id === 1).row, 0);
 });

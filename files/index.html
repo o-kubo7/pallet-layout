@@ -4531,7 +4531,14 @@ function sheetGridAnchors(sp, order){
     (col.fills||[]).forEach(f=>{ for(let k=0;k<f.count;k++){ if(r<col.h) arr[r++]={id:f.id}; } });
     return arr;
   });
-  const at=(ci,ri)=>(colCells[ci]&&colCells[ci][ri])?colCells[ci][ri].id:null;
+  const g=gridShift(sp,colCells);
+  // 紙の行番号で返す。drawLeaders() は この row で tr.grow を直接引くので、
+  // gridRows() と同じずらしを通さないと線が 1 行ずれる
+  const at=(ci,ri)=>{
+    if(!sp.cols[ci]) return null;
+    const r=ri-g.shiftOf(ci)+g.startOf(ci);
+    return (r>=0 && colCells[ci] && colCells[ci][r]) ? colCells[ci][r].id : null;
+  };
   const anchorOf=id=>{
     const list=[]; let row=0;
     for(let k=0;k<order.length;k++){
@@ -4543,7 +4550,8 @@ function sheetGridAnchors(sp, order){
         continue;
       }
       let r0=null;
-      for(let r=0;r<sp.cols[o.c].h;r++) if(at(o.c,r)===id){ r0=r; break; }
+      // 紙の行で探す。列ごとにずらし量が違うので、生の行番号で比べてはいけない
+      for(let r=0;r<g.rows;r++) if(at(o.c,r)===id){ r0=r; break; }
       if(r0==null){ if(list.length) break; continue; }
       if(!list.length){ row=r0; list.push(k); }
       else if(r0===row) list.push(k);
