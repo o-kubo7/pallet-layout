@@ -957,3 +957,8 @@ test("上に飛び出したマスが空の日は行がずれない", () => {
   const anchors = sheetGridAnchors(sp, [{ c: 0 }, { c: 1 }]);
   assert.equal(anchors.find(a => a.id === 1).row, 0);
 });
+
+test("追記欄のrowspanはグリッドの行数から決める", () => {
+  assert.doesNotMatch(source, /rowspan="8">\$\{overflowTable/);
+  assert.match(source, /rowspan="\$\{g\.rows\+1\}">\$\{overflowTable/);
+});

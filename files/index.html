@@ -4574,9 +4574,6 @@ function sheetGridAnchors(sp, order){
 function gridRows(pad, overflow){
   const useOverflow=pad>=2 && overflow && overflow.length;
   const padCell = pad>0 ? `<td class="none" colspan="${pad}"></td>` : "";
-  const sideCell=row=>useOverflow
-    ? (row===0?`<td class="overflow-host" colspan="${pad}" rowspan="8">${overflowTable(overflow)}</td>`:"")
-    : padCell;
   const sp=lastSp.find(s=>s.name===sheetAreas("bottom")[0]);
   const warn=gridWarn(sp);
   // 下段が空、または設定でエリア名を変えて見つからないことがある。
@@ -4612,6 +4609,10 @@ function gridRows(pad, overflow){
   });
 
   const g=gridShift(sp,colCells);
+  // 追記欄はグリッドの全行と列番号行をまたぐ。行数は日によって変わる
+  const sideCell=row=>useOverflow
+    ? (row===0?`<td class="overflow-host" colspan="${pad}" rowspan="${g.rows+1}">${overflowTable(overflow)}</td>`:"")
+    : padCell;
   const at=(ci,ri)=>{
     // 端の列で太枠の左右を見るとき、存在しない添字が来る
     if(!sp.cols[ci]) return null;
