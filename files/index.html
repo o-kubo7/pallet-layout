@@ -2247,7 +2247,10 @@ function renderResult(lots, unknown, typeMix){
   lastColor=colorOf;
 
   const over=lots.filter(l=>l.rem>0);
-  const usedAisle=sp.some(s=>s.cols.some(c=>c.aisle&&c.fills.length));
+  // 通路「列」だけでなく、緊急用の通路マスに載った分も「通路へのはみ出し」に数える。
+  // 現場から見ればどちらも通路なので、知らせは分けない
+  const usedAisle=sp.some(s=>s.cols.some(c=>
+    (c.aisle&&c.fills.length) || used(c)>usableCount(c,c.blockedRows)-aisleRowCount(c,c.blockedRows)));
   const usedMix=sp.some(s=>s.cols.some(c=>c.fills.length>1));
   // 配置図の表の欄数は様式で決まり、上段のあふれは下段の空き欄へ回る（sheetPlacement）。
   // renderSheet() も同じ sheetPlacement() を通すので、警告の件数と実際に紙へ出る欄数がずれない。
@@ -3553,7 +3556,7 @@ function returnSelToWarehouse(){
   const cand=[];
   lastSp.filter(s=>s.zone!=="stash").forEach(s=>s.cols.forEach((c,i)=>{
     if(c.aisle) return;                       // 通路へは戻さない
-    if(c.h-used(c)>=n) cand.push({name:s.name, idx:i, home:(s.zone===home)?0:1});
+    if(autoFreeCount(c,c.blockedRows)>=n) cand.push({name:s.name, idx:i, home:(s.zone===home)?0:1});
   }));
   cand.sort((a,b)=>a.home-b.home);
   if(!cand.length){
@@ -3892,7 +3895,8 @@ function showCapacity(){
   const overNames=new Set(sheetAreas("over"));
   // [試作] 退避スペースは倉庫の収容能力ではないので除く
   const live=SPACES.filter(s=>!overNames.has(s.name) && s.zone!=="stash");
-  const sum=(z,f)=>live.filter(s=>s.zone===z).reduce((a,s)=>a+s.cols.filter(f).reduce((x,c)=>x+c.h,0),0);
+  // 緊急用の通路マスは日常的に数える置き場ではないので、収容能力から外す
+  const sum=(z,f)=>live.filter(s=>s.zone===z).reduce((a,s)=>a+s.cols.filter(f).reduce((x,c)=>x+c.h-aisleRowCount(c),0),0);
   const excluded=overNames.size?`　（あふれ指定のため除外：${[...overNames].join("・")}）`:"";
   document.getElementById("capacity").textContent=
     `収容能力 — 倉庫内: 通常${sum("near",c=>!c.aisle)}P＋通路${sum("near",c=>c.aisle)}P ／ `+

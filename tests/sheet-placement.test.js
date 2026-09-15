@@ -962,3 +962,17 @@ test("追記欄のrowspanはグリッドの行数から決める", () => {
   assert.doesNotMatch(source, /rowspan="8">\$\{overflowTable/);
   assert.match(source, /rowspan="\$\{g\.rows\+1\}">\$\{overflowTable/);
 });
+
+test("緊急用マスに荷物があると通路へのはみ出しとして知らせる", () => {
+  const start = source.indexOf("const usedAisle=");
+  assert.notEqual(start, -1);
+  assert.match(source.slice(start, start + 260), /aisleRowCount\(c,c\.blockedRows\)/);
+});
+
+test("収容能力は緊急用の通路マスを数えない", () => {
+  assert.match(functionSource("showCapacity"), /x\+c\.h-aisleRowCount\(c\)/);
+});
+
+test("退避から戻すときは緊急用の通路マスを使わない", () => {
+  assert.match(functionSource("returnSelToWarehouse"), /autoFreeCount\(c,c\.blockedRows\)>=n/);
+});
