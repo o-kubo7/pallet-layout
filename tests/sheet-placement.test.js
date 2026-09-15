@@ -1103,3 +1103,19 @@ test("既定の配置マスから自動配置まで通すと緊急用マスが�
   // buildWork() が aisle を !!c.aisle で真偽値化するため、通路でない列は ov:false になる
   assert.deepEqual(col.fills, [{ id: 0, count: 7, ov: false }]);
 });
+
+// at() は ri+1 の1行先読みで下端の太枠(bb)を決める。緊急用マス(通路)は
+// グリッド本体の行数(g.rows)に入っていないのに、at() が r>=g.endOf() を
+// 見ずに colCells の実在だけで判定すると、緊急用マスに荷物が入った日だけ
+// 「本体の最終行の下にまだ同じロットが続いている」と誤認して bb が消える
+test("最終行と緊急用マスが同じロットでも本体の最終行に太枠を引く", () => {
+  const gridRows = makeGridRows([
+    // rows 0-5 は別ロット(9)で埋め、rows 6-7(本体の最終行と緊急用マス)を
+    // 同じロット(0)にする。本体は endOf=7 なので表示される最終行は r=6
+    { h: 8, fills: [{ id: 9, count: 6 }, { id: 0, count: 2 }], aisleRows: [7] },
+  ], [{ c: 0 }]);
+  const out = gridRows(0, []);
+  const growRows = out.html.split("<tr").filter(r => r.includes('class="grow"'));
+  const lastRow = growRows[growRows.length - 1];
+  assert.match(lastRow, /<td class="[^"]*\bbb\b[^"]*">/);
+});

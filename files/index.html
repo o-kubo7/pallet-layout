@@ -4588,7 +4588,9 @@ function sheetGridAnchors(sp, order){
   const at=(ci,ri)=>{
     if(!sp.cols[ci]) return null;
     const r=ri-g.shiftOf(ci)+g.startOf(ci);
-    return (r>=0 && colCells[ci] && colCells[ci][r]) ? colCells[ci][r].id : null;
+    // 下端の緊急用マスは g.endOf() から先。ここを見てしまうと、緊急用マスに
+    // 荷物がある日だけ「本体の最終行の下にまだ続きがある」と誤認する
+    return (r>=0 && r<g.endOf(ci) && colCells[ci] && colCells[ci][r]) ? colCells[ci][r].id : null;
   };
   const anchorOf=id=>{
     const list=[]; let row=0;
@@ -4668,7 +4670,9 @@ function gridRows(pad, overflow){
     // 端の列で太枠の左右を見るとき、存在しない添字が来る
     if(!sp.cols[ci]) return null;
     const r=ri-g.shiftOf(ci)+g.startOf(ci);
-    return (r>=0 && colCells[ci] && colCells[ci][r]) ? colCells[ci][r].id : null;
+    // 下端の緊急用マスは g.endOf() から先。ここを見てしまうと、緊急用マスに
+    // 荷物がある日だけ「本体の最終行の下にまだ続きがある」と誤認して bb が消える
+    return (r>=0 && r<g.endOf(ci) && colCells[ci] && colCells[ci][r]) ? colCells[ci][r].id : null;
   };
   const circled=["①","②","③","④","⑤","⑥","⑦"];
 
@@ -4726,7 +4730,7 @@ function gridRows(pad, overflow){
   // メインに置かれている全ロットの終点を集める
   const anchors=sheetGridAnchors(sp, order)||[];
 
-  return {html: rows+`<tr>${nums}${sideCell(7)}</tr>`, anchors, warn, rows:g.rows};
+  return {html: rows+`<tr>${nums}${sideCell(g.rows)}</tr>`, anchors, warn, rows:g.rows};
 }
 
 /* 大きな配置図が出せない／欠けていることを伝える文。素のテキストを返す。
