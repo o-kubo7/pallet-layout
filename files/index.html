@@ -3854,6 +3854,9 @@ document.addEventListener("pointerdown",e=>{
   const c=e.target.closest(".cell");
   // 余白から始めることがあるので、マスが無くても #mapBody の中なら通す
   if(!e.target.closest || !e.target.closest("#mapBody")) return;
+  // 押すものの上では何も始めない。ドックの「⤢」「◀ 倉庫へ戻す」、
+  // 盤の上端に貼りつく帯、ドックの見出しを掴んでも選択が消えないようにする。
+  if(!c && e.target.closest("button, .toolflag, .sb-head")) return;
   const onSel = !!c && c.classList.contains("sel");
   const intent = pointerIntent(e.pointerType, !!c && c.dataset.lot!=null, onSel);
 

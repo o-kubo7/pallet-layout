@@ -258,6 +258,16 @@ test("盤の pointermove / pointerup / Escape は矩形選択を通す", () => {
   assert.match(source, /e\.key==="Escape" ?&& ?rubber/);
 });
 
+
+test("ボタンと帯と見出しの上では矩形を始めない", () => {
+  const start = source.indexOf('  if(sweep||drag||rubber) return;\n  if(!moveMode) return;');
+  assert.notEqual(start, -1);
+  const end = source.indexOf('document.addEventListener("pointermove",e=>{\n  if(blockedEditMode) return;', start);
+  const handler = source.slice(start, end);
+  assert.match(handler, /closest\("button, ?\.toolflag, ?\.sb-head"\)/);
+  // ドックの中だからという理由では除外しない（退避側でも矩形は引ける）
+  assert.doesNotMatch(handler, /closest\("#stashDock"\) return/);
+});
 function functionSource(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} must exist`);
