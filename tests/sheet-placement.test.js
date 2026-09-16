@@ -92,6 +92,68 @@ test("配置不可編集は指先直下のセルをなぞり対象にする", ()
   assert.match(source, /setPointerCapture\(e\.pointerId\)/);
 });
 
+test("rectsOverlap は辺が接するだけでは重なりとみなさない", () => {
+  const rectsOverlap = new Function("return " + functionSource("rectsOverlap"))();
+  const base = {left:0, right:10, top:0, bottom:10};
+  assert.equal(rectsOverlap(base, {left:5, right:15, top:5, bottom:15}), true);
+  assert.equal(rectsOverlap(base, {left:10, right:20, top:0, bottom:10}), false);
+  assert.equal(rectsOverlap(base, {left:0, right:10, top:10, bottom:20}), false);
+  assert.equal(rectsOverlap(base, {left:-5, right:5, top:-5, bottom:5}), true);
+  assert.equal(rectsOverlap(base, {left:20, right:30, top:20, bottom:30}), false);
+  assert.equal(rectsOverlap(base, {left:2, right:4, top:2, bottom:4}), true);
+});
+
+test("clickIntent はキーボード由来と指を従来どおりのトグルに倒す", () => {
+  const clickIntent = new Function("return " + functionSource("clickIntent"))();
+  assert.equal(clickIntent(false, 0, "mouse"), "toggle");
+  assert.equal(clickIntent(true, 0, "mouse"), "toggle");
+  assert.equal(clickIntent(false, 1, "touch"), "toggle");
+  assert.equal(clickIntent(true, 1, "touch"), "toggle");
+  assert.equal(clickIntent(false, 1, "pen"), "toggle");
+  assert.equal(clickIntent(false, 1, null), "toggle");
+  assert.equal(clickIntent(false, 1, "mouse"), "single");
+  assert.equal(clickIntent(true, 1, "mouse"), "toggle");
+});
+
+test("pointerIntent は指の経路を従来どおり残す", () => {
+  const pointerIntent = new Function("return " + functionSource("pointerIntent"))();
+  assert.equal(pointerIntent("touch", true, false), "sweepPick");
+  assert.equal(pointerIntent("touch", true, true), "sweepUndecided");
+  assert.equal(pointerIntent("touch", false, false), "none");
+  assert.equal(pointerIntent("pen", true, false), "sweepPick");
+  assert.equal(pointerIntent("mouse", true, true), "carry");
+  assert.equal(pointerIntent("mouse", true, false), "carryOne");
+  assert.equal(pointerIntent("mouse", false, false), "rubber");
+});
+
+test("cellsInRect は固定中のロットだけ拾い、抜けたら付け替える", () => {
+  const cellsInRect = new Function(
+    functionSource("rectsOverlap") + "; return " + functionSource("cellsInRect"))();
+  const cells = [
+    {key:"A|0|0", lotId:1, rect:{left:0, right:10, top:0, bottom:10}},
+    {key:"A|0|1", lotId:1, rect:{left:0, right:10, top:10, bottom:20}},
+    {key:"A|1|0", lotId:2, rect:{left:50, right:60, top:0, bottom:10}},
+  ];
+  const wide = {left:0, right:100, top:0, bottom:100};
+
+  const first = cellsInRect(cells, wide, null);
+  assert.equal(first.lotId, 1);
+  assert.deepEqual(first.keys, ["A|0|0", "A|0|1"]);
+
+  const locked = cellsInRect(cells, wide, 2);
+  assert.equal(locked.lotId, 2);
+  assert.deepEqual(locked.keys, ["A|1|0"]);
+
+  // ロット1に固定したまま、矩形をロット2だけに動かす → 固定が外れて null を返す
+  const movedAway = cellsInRect(cells, {left:45, right:65, top:0, bottom:10}, 1);
+  assert.equal(movedAway.lotId, null);
+  assert.deepEqual(movedAway.keys, []);
+
+  const empty = cellsInRect(cells, {left:500, right:600, top:500, bottom:600}, null);
+  assert.equal(empty.lotId, null);
+  assert.deepEqual(empty.keys, []);
+});
+
 function functionSource(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} must exist`);

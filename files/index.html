@@ -2836,6 +2836,53 @@ function cellKey(cellEl){
   const w=cellEl.closest(".colwrap");
   return w.dataset.space+"|"+w.dataset.col+"|"+cellEl.dataset.row;
 }
+
+/* ---------- 選択操作の判定 ----------
+   どの入力で、どこを掴んだかだけを見て「何を始めるか」を決める。
+   DOM に触れないので node:test から呼べる。 */
+
+// 2つの矩形が重なるか。辺が接するだけは重なりに数えない。
+// 数えると、マスとマスの隙間に矩形を置いただけで両側が選ばれてしまう。
+function rectsOverlap(a,b){
+  return a.left<b.right && b.left<a.right && a.top<b.bottom && b.top<a.bottom;
+}
+
+// click したとき何をするか。
+// detail===0 はキーボード（Enter / Space）由来で、pointerdown が先行しない。
+// 控えてある lastPointerType は前の操作のまま残っているので当てにしない。
+function clickIntent(shiftKey, detail, lastPointerType){
+  if(detail===0) return "toggle";                  // キーボード
+  if(lastPointerType!=="mouse") return "toggle";   // 指・ペン・不明
+  return shiftKey ? "toggle" : "single";
+}
+
+// pointerdown したとき何を始めるか。
+//   carry          … 選択中の全マスを運ぶ
+//   carryOne       … 掴んだ1マスだけを選んで運ぶ
+//   rubber         … 矩形選択
+//   sweepUndecided … 既存のなぞり（外すか運ぶか未定）
+//   sweepPick      … 既存のなぞり（拾う）
+//   none           … 何も始めない（余白。指はここで盤をスクロールする）
+function pointerIntent(pointerType, hasLot, onSel){
+  const mouse = pointerType==="mouse";
+  if(onSel) return mouse ? "carry" : "sweepUndecided";
+  if(mouse) return hasLot ? "carryOne" : "rubber";
+  return hasLot ? "sweepPick" : "none";
+}
+
+// 矩形に重なるマスを選ぶ。cells は {key, lotId, rect} の配列。
+// lockedLot に値があればそのロットだけを拾う。固定中のロットが1マスも
+// 入らなくなったら null を返し、呼び出し側が固定を解けるようにする
+// （次の pointermove で、そこに居る別のロットへ付け替わる）。
+function cellsInRect(cells, rect, lockedLot){
+  const hit=cells.filter(c=>rectsOverlap(c.rect, rect));
+  if(!hit.length) return {lotId:null, keys:[]};
+  const lot = lockedLot!=null ? lockedLot : hit[0].lotId;
+  const keys = hit.filter(c=>c.lotId===lot).map(c=>c.key);
+  if(!keys.length) return {lotId:null, keys:[]};
+  return {lotId:lot, keys:keys};
+}
+
 // 1マス目でロットが決まり、以降は同じロットのマスしか選べない。
 function toggleCell(cellEl){
   if(cellEl.dataset.lot==null) return;          // 空マスは選べない
