@@ -268,6 +268,11 @@ test("ボタンと帯と見出しの上では矩形を始めない", () => {
   // ドックの中だからという理由では除外しない（退避側でも矩形は引ける）
   assert.doesNotMatch(handler, /closest\("#stashDock"\) return/);
 });
+
+test("取り消しボタンはなぞり以外の選択にも使える文言にする", () => {
+  assert.match(source, /id="sweepUndoBtn"[\s\S]{0,200}↩ いまの選択を取り消す/);
+  assert.doesNotMatch(source, /↩ いまのなぞりを取り消す/);
+});
 function functionSource(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} must exist`);
