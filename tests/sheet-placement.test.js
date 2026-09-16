@@ -273,6 +273,17 @@ test("取り消しボタンはなぞり以外の選択にも使える文言に�
   assert.match(source, /id="sweepUndoBtn"[\s\S]{0,200}↩ いまの選択を取り消す/);
   assert.doesNotMatch(source, /↩ いまのなぞりを取り消す/);
 });
+test("矩形の側判定は退避の余白（ドックとフロア）も退避側とみなす", () => {
+  const start = functionSource("startRubber");
+  // #zone-stash / #zone-stash-mini はマスを並べる要素で、余白を含まない。
+  // ドックの .sb-body やフロアの .scroller から引いても退避側になること。
+  assert.match(start, /closest\("#zone-stash, ?#zone-stash-mini, ?#stashDock, ?\.floor\.stashfloor"\)/);
+  // マスの選別は従来どおり2つの spaces だけを見る
+  const cells = functionSource("rubberCells");
+  assert.match(cells, /#zone-stash, ?#zone-stash-mini/);
+  assert.doesNotMatch(cells, /#stashDock/);
+});
+
 function functionSource(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} must exist`);

@@ -3607,7 +3607,7 @@ function rubberCells(stashSide){
 }
 
 function startRubber(e){
-  const stashSide=!!e.target.closest("#zone-stash, #zone-stash-mini");
+  const stashSide=!!e.target.closest("#zone-stash, #zone-stash-mini, #stashDock, .floor.stashfloor");
   // clearSel は中で hideSweepUndo() を呼んで sweepUndo を捨てる。
   // 取り消し用の控えは、その前に取らないと空を復元することになる。
   const undo={lotId:sel.lotId, cells:[...sel.cells]};
