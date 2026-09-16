@@ -3578,6 +3578,8 @@ function drawStashBar(sp, lots){
 let tool="sweep";                // "sweep" が既定。将来ここに別の選び方が増える
 let sweep=null;                  // {id,x0,y0,started,target,mode,erased,lotId0}
 let sweepUndo=null;              // ひとなぞり前の選択（取り消し用）
+let rubber=null;                 // 矩形選択。中身は下の「矩形選択」節で作る
+function startRubber(e){}        // 仮。Task 3 で実装する
 
 function setTool(t){
   tool=t;
@@ -3742,18 +3744,32 @@ function setMoving(on){
 
 document.addEventListener("pointerdown",e=>{
   if(blockedEditMode) return;
-  if(sweep||drag) return;
+  if(sweep||drag||rubber) return;
   if(!moveMode) return;
   if(e.button!=null && e.button!==0) return;
-  const c=e.target.closest(".cell"); if(!c||!c.closest("#mapBody")) return;
-  if(c.dataset.lot==null) return;                 // 空マスからは始めない
-  const onSel=c.classList.contains("sel");
-  // 指のとき：tool はいまは常に "sweep" なので、この判定は素通りする。第2弾で配置不可
-  // エリアの設定が入り、別の選び方が増えたときに効かせるための条件である。
-  // 選択済みのマスには元から touch-action:none が付いているので、運ぶのはいつでもできる。
-  if(e.pointerType!=="mouse" && tool!=="sweep" && !onSel) return;
+  const c=e.target.closest(".cell");
+  // 余白から始めることがあるので、マスが無くても #mapBody の中なら通す
+  if(!e.target.closest || !e.target.closest("#mapBody")) return;
+  const onSel = !!c && c.classList.contains("sel");
+  const intent = pointerIntent(e.pointerType, !!c && c.dataset.lot!=null, onSel);
+
+  if(intent==="none") return;                   // 指の余白。盤のスクロールに譲る
+
+  if(intent==="rubber"){ startRubber(e); return; }
+
+  if(intent==="carry" || intent==="carryOne"){
+    // マウスは「外すか運ぶか」を迷わない。掴んだらそのまま運ぶ。
+    // carryOne の選択はしきい値を超えてから（pointermove 側）。ここで選ぶと
+    // 動かさずに離したときの click が「選択済みの同じマス」を見てしまう。
+    sweep={id:e.pointerId, x0:e.clientX, y0:e.clientY, started:false, target:c,
+           mode:null, erased:[], lotId0:sel.lotId,
+           straightToMove:true, carryOne:intent==="carryOne"};
+    return;
+  }
+
+  // 指のなぞり。従来どおり。
   sweep={id:e.pointerId, x0:e.clientX, y0:e.clientY, started:false, target:c,
-         mode: onSel ? null : "pick",             // null＝外すか運ぶか未定
+         mode: intent==="sweepPick" ? "pick" : null,
          erased:[], lotId0:sel.lotId};
 });
 document.addEventListener("pointermove",e=>{
@@ -3766,7 +3782,10 @@ document.addEventListener("pointermove",e=>{
     sweepUndo={lotId:sel.lotId, cells:[...sel.cells]};
     try{ sweep.target.setPointerCapture(sweep.id); }catch(err){}
     if(sweep.mode==="pick") selAdd(sweep.target);
+    if(sweep.carryOne){ clearSel(); selAdd(sweep.target); }
   }
+  // マウスで掴んだら、外すか運ぶかを迷わずそのまま運ぶ
+  if(sweep.straightToMove){ toMove(e.clientX,e.clientY); return; }
   const c=cellAt(e.clientX,e.clientY);
   const out=!inMap(e.clientX,e.clientY);
   // マスの上に無いまま1マス分以上離れたか。列と列の隙間（数px）で

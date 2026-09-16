@@ -175,6 +175,32 @@ test("直前の pointerdown の pointerType を控える", () => {
   assert.match(source, /lastPointerType=e\.pointerType;/);
 });
 
+test("盤の pointerdown は pointerIntent の判定で振り分ける", () => {
+  const start = source.indexOf('  if(sweep||drag||rubber) return;\n  if(!moveMode) return;');
+  assert.notEqual(start, -1);
+  const end = source.indexOf('document.addEventListener("pointermove",e=>{\n  if(blockedEditMode) return;', start);
+  assert.notEqual(end, -1);
+  const handler = source.slice(start, end);
+
+  assert.match(handler, /pointerIntent\(e\.pointerType, ?!!c ?&& ?c\.dataset\.lot!=null, ?onSel\)/);
+  assert.match(handler, /if\(intent==="none"\) return;/);
+  assert.match(handler, /if\(intent==="rubber"\)\{ ?startRubber\(e\); ?return; ?\}/);
+  // 指のなぞりは残っている
+  assert.match(handler, /mode: ?intent==="sweepPick" ?\? ?"pick" ?: ?null/);
+  // マウスはもう sweep の拾いに入らない
+  assert.doesNotMatch(handler, /e\.pointerType!=="mouse" ?&& ?tool!=="sweep"/);
+});
+
+test("掴んだ1マスの選択はしきい値を超えてから行う", () => {
+  const start = source.indexOf('document.addEventListener("pointermove",e=>{\n  if(blockedEditMode) return;');
+  assert.notEqual(start, -1);
+  const end = source.indexOf('function endSweep(){', start);
+  const handler = source.slice(start, end);
+  // started になった後のブロックの中で選ぶ
+  assert.match(handler, /if\(sweep\.mode==="pick"\) selAdd\(sweep\.target\);\s*\n\s*if\(sweep\.carryOne\)\{ ?clearSel\(\); ?selAdd\(sweep\.target\); ?\}/);
+  assert.match(handler, /if\(sweep\.straightToMove\)\{ ?toMove\(e\.clientX,e\.clientY\); ?return; ?\}/);
+});
+
 function functionSource(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} must exist`);
