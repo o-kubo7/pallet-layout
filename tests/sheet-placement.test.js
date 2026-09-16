@@ -284,6 +284,15 @@ test("矩形の側判定は退避の余白（ドックとフロア）も退避�
   assert.doesNotMatch(cells, /#stashDock/);
 });
 
+test("ネイティブのスクロールバーをつまんでも矩形を始めない", () => {
+  const start = source.indexOf('  if(sweep||drag||rubber) return;\n  if(!moveMode) return;');
+  assert.notEqual(start, -1);
+  const end = source.indexOf('document.addEventListener("pointermove",e=>{\n  if(blockedEditMode) return;', start);
+  assert.notEqual(end, -1);
+  const handler = source.slice(start, end);
+  assert.match(handler, /e\.offsetX>e\.target\.clientWidth \|\| e\.offsetY>e\.target\.clientHeight/);
+});
+
 function functionSource(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} must exist`);

@@ -3857,6 +3857,10 @@ document.addEventListener("pointerdown",e=>{
   // 押すものの上では何も始めない。ドックの「⤢」「◀ 倉庫へ戻す」、
   // 盤の上端に貼りつく帯、ドックの見出しを掴んでも選択が消えないようにする。
   if(!c && e.target.closest("button, .toolflag, .sb-head")) return;
+  // ネイティブのスクロールバーをつまんだときは何も始めない。ここで矩形に入ると
+  // 選択が消え、そのあとブラウザがポインタを奪うので pointermove も届かない。
+  if(!c && e.target instanceof Element &&
+     (e.offsetX>e.target.clientWidth || e.offsetY>e.target.clientHeight)) return;
   const onSel = !!c && c.classList.contains("sel");
   const intent = pointerIntent(e.pointerType, !!c && c.dataset.lot!=null, onSel);
 
