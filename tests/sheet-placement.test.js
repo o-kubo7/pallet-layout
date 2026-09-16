@@ -201,6 +201,63 @@ test("掴んだ1マスの選択はしきい値を超えてから行う", () => {
   assert.match(handler, /if\(sweep\.straightToMove\)\{ ?toMove\(e\.clientX,e\.clientY\); ?return; ?\}/);
 });
 
+test("矩形の対象は退避の2か所を1つのまとまりとして切り分ける", () => {
+  const cells = functionSource("rubberCells");
+  // #stashDock ではなく、退避が描かれる2つのコンテナで判定する
+  assert.match(cells, /#zone-stash, ?#zone-stash-mini/);
+  assert.doesNotMatch(cells, /closest\("#stashDock"\)/);
+  assert.match(cells, /getBoundingClientRect\(\)/);
+});
+
+test("矩形選択は取り消し用の控えを clearSel より前に取る", () => {
+  const start = functionSource("startRubber");
+  const undoAt = start.indexOf("undo=");
+  const clearAt = start.indexOf("clearSel()");
+  assert.notEqual(undoAt, -1);
+  assert.notEqual(clearAt, -1);
+  assert.ok(undoAt < clearAt, "clearSel() は sweepUndo を捨てるので控えを先に取る");
+  // ウィンドウ外で離しても取りこぼさない
+  assert.match(start, /setPointerCapture/);
+  // 盤と退避のあいだでは Shift でも足さない
+  assert.match(start, /stashSide/);
+});
+
+test("矩形選択はマスの位置を毎回測り直す", () => {
+  const move = functionSource("moveRubber");
+  assert.match(move, /rubberCells\(rubber\.stashSide\)/);
+  assert.match(move, /cellsInRect\(/);
+  assert.match(move, /userSelect/);
+  // repaintSel が showSelCount まで面倒を見るので afterSelChange は呼ばない
+  assert.doesNotMatch(move, /afterSelChange\(\)/);
+});
+
+test("矩形選択は枠と捕捉と user-select を必ず後始末する", () => {
+  const release = functionSource("releaseRubber");
+  assert.match(release, /box\.remove\(\)/);
+  assert.match(release, /releasePointerCapture/);
+  assert.match(release, /userSelect=""/);
+  // 終了も取り消しも同じ後始末を通す
+  const end = functionSource("endRubber");
+  assert.match(end, /releaseRubber\(\)/);
+  assert.match(end, /rubber=null/);
+  const cancel = functionSource("cancelRubber");
+  assert.match(cancel, /releaseRubber\(\)/);
+  assert.match(cancel, /repaintSel\(\)/);
+  assert.match(cancel, /rubber=null/);
+});
+
+test("矩形の枠は fixed で置き、mapBody に position を足さない", () => {
+  assert.match(source, /\.rubberbox\{[^}]*position:fixed/);
+  assert.match(source, /\.rubberbox\{[^}]*pointer-events:none/);
+  assert.doesNotMatch(source, /#mapBody\{[^}]*position:relative/);
+});
+
+test("盤の pointermove / pointerup / Escape は矩形選択を通す", () => {
+  assert.match(source, /if\(rubber && e\.pointerId===rubber\.id\)\{ ?moveRubber\(e\); ?return; ?\}/);
+  assert.match(source, /if\(rubber && e\.pointerId===rubber\.id\) endRubber\(\);/);
+  assert.match(source, /e\.key==="Escape" ?&& ?rubber/);
+});
+
 function functionSource(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} must exist`);

@@ -146,6 +146,10 @@
      ブラウザが先にパンを始めてしまい pointercancel で中断する。 */
   .cell.sel{box-shadow:inset 0 0 0 2px #fff, 0 0 0 2px #111827;border-color:#111827;
             touch-action:none}
+  /* 矩形選択の枠。position:fixed で画面座標のまま置く。
+     #mapBody に position を足すと stashDock の sticky と float に響くため。 */
+  .rubberbox{position:fixed;z-index:70;pointer-events:none;
+             border:1px solid #1d4ed8;background:rgba(29,78,216,.12);border-radius:2px}
   .colwrap.drop-ok .col,.colwrap.drop-ok .hrow{outline:3px solid #16a34a}
   .colwrap.drop-ng .col,.colwrap.drop-ng .hrow{outline:3px solid #dc2626}
   .dragghost{position:fixed;z-index:70;pointer-events:none;background:rgba(17,24,39,.9);color:#fff;
@@ -3578,8 +3582,108 @@ function drawStashBar(sp, lots){
 let tool="sweep";                // "sweep" が既定。将来ここに別の選び方が増える
 let sweep=null;                  // {id,x0,y0,started,target,mode,erased,lotId0}
 let sweepUndo=null;              // ひとなぞり前の選択（取り消し用）
-let rubber=null;                 // 矩形選択。中身は下の「矩形選択」節で作る
-function startRubber(e){}        // 仮。Task 3 で実装する
+/* ---------- 矩形選択（ラバーバンド） ----------
+   マウスでだけ動く。当たり判定は画面座標（getBoundingClientRect）の重なり。
+   論理座標（列 index × 行 index）は使えない。盤は .col が column-reverse で
+   row=0 が下端、PC横は flip と off で列位置を JS 側から反転しており、
+   論理の並びと画面の並びが一致しないため（設計書 §3-1）。 */
+let rubber=null;   // {id,x0,y0,started,box,lotId,base,stashSide,undo,capture}
+
+/* 矩形の対象になるマスを集める。
+   退避スペースは画面の2か所に描かれている（files/index.html:667, 697）。
+   #zone-stash-mini は右上のドックの中、#zone-stash は .floor.stashfloor の中で
+   #stashDock の外にある。cellKey は両方 "退避|…" で同じなので、
+   2つをまとめて「退避側」として扱う。#stashDock だけを見ると、
+   フロアに描かれたほうが倉庫のマスに混ざってしまう。 */
+function rubberCells(stashSide){
+  const out=[];
+  document.querySelectorAll("#mapBody .cell[data-lot]").forEach(el=>{
+    const stash=!!el.closest("#zone-stash, #zone-stash-mini");
+    if(stash!==stashSide) return;
+    out.push({key:cellKey(el), lotId:parseInt(el.dataset.lot),
+              rect:el.getBoundingClientRect(), el:el});
+  });
+  return out;
+}
+
+function startRubber(e){
+  const stashSide=!!e.target.closest("#zone-stash, #zone-stash-mini");
+  // clearSel は中で hideSweepUndo() を呼んで sweepUndo を捨てる。
+  // 取り消し用の控えは、その前に取らないと空を復元することになる。
+  const undo={lotId:sel.lotId, cells:[...sel.cells]};
+  // Shift を押していても、盤と退避のあいだでは足さない。混ざった選択は
+  // 運搬でも「倉庫へ戻す」でも成立しない（設計書 §3-3）。
+  const selSide = sel.cells.size ? [...sel.cells][0].split("|")[0]==="退避" : stashSide;
+  const keep = e.shiftKey && selSide===stashSide;
+  if(!keep) clearSel();
+  rubber={id:e.pointerId, x0:e.clientX, y0:e.clientY, started:false, box:null,
+          lotId:keep?sel.lotId:null, base:keep?[...sel.cells]:[],
+          baseLot:keep?sel.lotId:null, stashSide:stashSide, undo:undo, capture:null};
+  // 捕捉しないと、ウィンドウの外でボタンを離したとき pointerup が届かず、
+  // 枠が残ったまま rubber が居座って以後のクリックが全部無視される。
+  try{ e.target.setPointerCapture(e.pointerId); rubber.capture=e.target; }catch(err){}
+}
+
+function moveRubber(e){
+  if(!rubber.started){
+    // 既存のドラッグ判定と同じしきい値。超えなければクリック扱いのまま。
+    if(Math.abs(e.clientX-rubber.x0)<6 && Math.abs(e.clientY-rubber.y0)<6) return;
+    rubber.started=true;
+    dragMoved=true;                        // 直後の click で選択を戻さない
+    sweepUndo={lotId:rubber.undo.lotId, cells:rubber.undo.cells};
+    // .cell にしか user-select:none が無いので、余白から引くと見出しが反転する
+    document.body.style.userSelect="none";
+    rubber.box=document.createElement("div");
+    rubber.box.className="rubberbox";
+    document.body.appendChild(rubber.box);
+  }
+  const r={left:Math.min(rubber.x0,e.clientX), right:Math.max(rubber.x0,e.clientX),
+           top:Math.min(rubber.y0,e.clientY), bottom:Math.max(rubber.y0,e.clientY)};
+  rubber.box.style.left=r.left+"px";
+  rubber.box.style.top=r.top+"px";
+  rubber.box.style.width=(r.right-r.left)+"px";
+  rubber.box.style.height=(r.bottom-r.top)+"px";
+
+  // マスの位置は毎回測り直す。自動スクロールは入れていないが、ホイールや
+  // スクロールバーで盤は動くし、退避ドックは選択が生まれた瞬間に
+  // 「◀ 倉庫へ戻す」が出て中身が縮む（設計書 §3-4）。
+  const res=cellsInRect(rubberCells(rubber.stashSide), r, rubber.lotId);
+  // 固定中のロットが抜けたら null が返り、次の move でそこに居るロットへ移る。
+  rubber.lotId = res.lotId!=null ? res.lotId : rubber.baseLot;
+
+  sel.cells=new Set(rubber.base);
+  res.keys.forEach(k=>sel.cells.add(k));
+  sel.lotId = sel.cells.size ? rubber.lotId : null;
+  repaintSel();          // 中で showSelCount() → updateFlag() まで面倒を見る
+}
+
+function releaseRubber(){
+  if(rubber && rubber.box) rubber.box.remove();
+  if(rubber && rubber.capture){
+    try{ rubber.capture.releasePointerCapture(rubber.id); }catch(err){}
+  }
+  document.body.style.userSelect="";
+}
+
+function endRubber(){
+  if(!rubber) return;
+  const started=rubber.started;
+  releaseRubber();
+  rubber=null;
+  if(started && sweepUndo) showSweepUndo();
+}
+
+// 引き始めてからやめる逃げ道。Escape で引く前の選択に戻す。
+function cancelRubber(){
+  if(!rubber) return;
+  const undo=rubber.undo;
+  releaseRubber();
+  rubber=null;
+  sel.lotId=undo.lotId;
+  sel.cells=new Set(undo.cells);
+  repaintSel();
+  hideSweepUndo();
+}
 
 function setTool(t){
   tool=t;
@@ -3774,6 +3878,7 @@ document.addEventListener("pointerdown",e=>{
 });
 document.addEventListener("pointermove",e=>{
   if(blockedEditMode) return;
+  if(rubber && e.pointerId===rubber.id){ moveRubber(e); return; }
   if(!sweep || e.pointerId!==sweep.id) return;
   if(!sweep.started){
     if(Math.abs(e.clientX-sweep.x0)<6 && Math.abs(e.clientY-sweep.y0)<6) return;
@@ -3827,9 +3932,21 @@ function endSweep(){
   sweep=null;
   if(edge.raf){ cancelAnimationFrame(edge.raf); edge.raf=0; }
 }
-document.addEventListener("pointerup",e=>{ if(sweep && e.pointerId===sweep.id) endSweep(); });
-document.addEventListener("pointercancel",e=>{ if(sweep && e.pointerId===sweep.id) endSweep(); });
-document.addEventListener("lostpointercapture",e=>{ if(sweep && e.pointerId===sweep.id) endSweep(); });
+document.addEventListener("pointerup",e=>{
+  if(rubber && e.pointerId===rubber.id) endRubber();
+  if(sweep && e.pointerId===sweep.id) endSweep();
+});
+document.addEventListener("pointercancel",e=>{
+  if(rubber && e.pointerId===rubber.id) endRubber();
+  if(sweep && e.pointerId===sweep.id) endSweep();
+});
+document.addEventListener("lostpointercapture",e=>{
+  if(rubber && e.pointerId===rubber.id) endRubber();
+  if(sweep && e.pointerId===sweep.id) endSweep();
+});
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape" && rubber) cancelRubber();
+});
 
 // [試作] 保存してある「案内」と「退避の位置」を反映する。
 // なぞるは既定でオン。クラスは HTML に焼かず setTool() を通す（設計書 §4-1-1）
