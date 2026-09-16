@@ -154,6 +154,27 @@ test("cellsInRect は固定中のロットだけ拾い、抜けたら付け替�
   assert.deepEqual(empty.keys, []);
 });
 
+test("click は clickIntent の判定に従って単独選択とトグルを分ける", () => {
+  const toggle = functionSource("toggleCell");
+  assert.match(toggle, /function toggleCell\(cellEl, ?intent\)/);
+  assert.match(toggle, /intent==="single"/);
+  assert.match(toggle, /clearSel\(\)/);
+  // 同じマスの再クリックで外す仕掛けは入れない（Finder は選択を保つ）
+  assert.doesNotMatch(toggle, /sel\.cells\.size===1 ?&& ?sel\.cells\.has/);
+
+  const start = source.indexOf('document.addEventListener("click",e=>{');
+  assert.notEqual(start, -1);
+  const end = source.indexOf('document.addEventListener("pointerdown"', start);
+  const handler = source.slice(start, end);
+  assert.match(handler, /clickIntent\(e\.shiftKey, ?e\.detail, ?lastPointerType\)/);
+  assert.match(handler, /toggleCell\(c, ?intent\)/);
+});
+
+test("直前の pointerdown の pointerType を控える", () => {
+  assert.match(source, /let lastPointerType=null;/);
+  assert.match(source, /lastPointerType=e\.pointerType;/);
+});
+
 function functionSource(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} must exist`);

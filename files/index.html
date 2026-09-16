@@ -2822,6 +2822,10 @@ function runFromBlockedEdit(){
 // 書き換えずに済ませるため。定数なので、いまはどれも素通りする。
 const moveMode=true;
 let sel={lotId:null, cells:new Set()};
+// click イベントは pointerType を持たないので、直前の pointerdown で控えておく。
+// キーボード（Enter / Space）の click には pointerdown が先行せず、ここが
+// 前の操作のまま残る。clickIntent が e.detail===0 で弾く。
+let lastPointerType=null;
 // ドラッグの直後に飛んでくる click を無視するための印。Task 5 で立てる。
 let dragMoved=false;
 
@@ -2884,9 +2888,22 @@ function cellsInRect(cells, rect, lockedLot){
 }
 
 // 1マス目でロットが決まり、以降は同じロットのマスしか選べない。
-function toggleCell(cellEl){
+// 1マス目でロットが決まり、以降は同じロットのマスしか選べない。
+// intent="single" は前の選択を捨てて1マスだけ選ぶ（マウスの Shift 無しクリック）。
+//   同じマスをもう一度クリックしても外れない。外すのは Shift+クリック。
+// intent="toggle" は従来どおり足す／外す（指のタップ、Shift+クリック、キーボード）。
+function toggleCell(cellEl, intent){
   if(cellEl.dataset.lot==null) return;          // 空マスは選べない
   const id=parseInt(cellEl.dataset.lot);
+  if(intent==="single"){
+    clearSel();
+    sel.lotId=id;
+    sel.cells.add(cellKey(cellEl));
+    cellEl.classList.add("sel");
+    showSelCount();
+    hideSweepUndo();
+    return;
+  }
   if(sel.lotId==null) sel.lotId=id;
   else if(sel.lotId!==id) return;               // 別ロットのマスは無視する
   const k=cellKey(cellEl);
@@ -2912,10 +2929,12 @@ document.addEventListener("click",e=>{
   if(dragMoved){ dragMoved=false; return; }     // ドラッグ直後の click は選択を動かさない
   const c=e.target.closest(".cell"); if(!c) return;
   if(!c.closest("#mapBody")) return;
-  toggleCell(c);
+  const intent=clickIntent(e.shiftKey, e.detail, lastPointerType);
+  toggleCell(c, intent);
 });
 
 document.addEventListener("pointerdown",e=>{
+  lastPointerType=e.pointerType;
   if(!blockedEditMode || e.button!=null && e.button!==0) return;
   const c=cellAt(e.clientX,e.clientY); if(!c) return;
   blockedEditPointerId=e.pointerId;
