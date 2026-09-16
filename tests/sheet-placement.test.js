@@ -131,8 +131,9 @@ function makeGridRows(cols, order) {
   return new Function(
     "lastSp", "sheetAreas", "gridWarn", "SHEET_GRID_ORDER", "overflowTable", "lastLots", "tailAreaOf",
     functionSource("aisleRowCount") +
+    functionSource("fillOrder") +
     functionSource("gridShift") +
-    functionSource("sheetGridAnchors") +
+    functionSource("fillOrder") + functionSource("sheetGridAnchors") +
     functionSource("gridRows") + "; return gridRows;"
   )(
     [{ name: "メイン", cols }],
@@ -192,7 +193,7 @@ test("配置表のメイン配置不可セルには斜線用クラスを出力�
     // gridRows は内部で gridShift を呼ぶようになったため、依存元も注入する
     functionSource("aisleRowCount") +
     functionSource("gridShift") +
-    functionSource("sheetGridAnchors") + functionSource("gridRows") + "; return gridRows;"
+    functionSource("fillOrder") + functionSource("sheetGridAnchors") + functionSource("gridRows") + "; return gridRows;"
   )(
     [{ name: "メイン", cols: [{ h: 1, fills: [], blockedRows: new Set([0]) }] }],
     () => ["メイン"],
@@ -226,7 +227,7 @@ test("存在しない列または行の配置不可指定を除去する", () =>
 
 test("列途中の配置不可セルを飛ばしてロットを描画する", () => {
   const cellsOf = new Function(
-    functionSource("cellsOf") + "; return cellsOf;"
+    functionSource("fillOrder") + functionSource("cellsOf") + "; return cellsOf;"
   )();
   const cells = cellsOf({ h: 4, fills: [{ id: 7, count: 3 }] }, new Set([1]));
   assert.deepEqual(cells.map(cell => [cell.row, cell.id, cell.blocked]), [
@@ -279,7 +280,7 @@ test("手動移動は配置不可セルを飛ばして描画される", () => {
     functionSource("moveCells") + "; return moveCells;"
   )();
   const cellsOf = new Function(
-    functionSource("cellsOf") + "; return cellsOf;"
+    functionSource("fillOrder") + functionSource("cellsOf") + "; return cellsOf;"
   )();
   const next = [
     { name: "移動元", cols: [{ h: 2, fills: [{ id: 1, count: 1 }] }] },
@@ -432,7 +433,7 @@ test("sheetPlacementはグリッドセル中心に近い下段欄へメインロ
     "sheetSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas", "lastSp", "SHEET_GRID_ORDER",
     functionSource("aisleRowCount") +
     functionSource("gridShift") +
-    functionSource("sheetGridAnchors") +
+    functionSource("fillOrder") + functionSource("sheetGridAnchors") +
     functionSource("arrangeBottomSlots") +
     functionSource("arrangeOverflowSlots") +
     functionSource("sheetPlacement") + "; return sheetPlacement;"
@@ -767,7 +768,7 @@ test("自動配置は緊急用の通路マスの手前で止まる", () => {
 
 test("緊急用の通路マスには印を付け、荷物は飛ばさずに入れる", () => {
   const cellsOf = new Function(
-    functionSource("cellsOf") + "; return cellsOf;"
+    functionSource("fillOrder") + functionSource("cellsOf") + "; return cellsOf;"
   )();
   const cells = cellsOf({ h: 3, fills: [{ id: 5, count: 3 }], aisleRows: [2] });
   assert.deepEqual(cells.map(cell => [cell.row, cell.id, cell.aisleRow]), [
@@ -775,13 +776,15 @@ test("緊急用の通路マスには印を付け、荷物は飛ばさずに入�
   ]);
 });
 
-test("緊急用の通路マスは配置不可セルと違う見た目にする", () => {
-  assert.match(source, /\.cell\.aisle-cell\{background:#e5e7eb/);
-  assert.match(source, /\.cell\.aisle-cell\[data-lot\]\{box-shadow:inset 0 0 0 2px #9ca3af/);
+// 現場の要望で、緊急用マスの見た目は両サイドの通路（aisle-empty）と揃えた。
+// 空の間はグレーで通路だと分かり、荷物が入ればロットの色に変わって
+// 通常マスと同じに見える（aisle-empty と全く同じ考え方）
+test("緊急用の通路マスは両サイドの通路と同じグレーにする", () => {
+  assert.match(source, /\.cell\.aisle-cell\{background:#e5e7eb\}/);
 });
 
-test("盤のマスは緊急用の通路マスにクラスを付ける", () => {
-  assert.match(source, /if\(a\.aisleRow\)cls\.push\("aisle-cell"\)/);
+test("盤のマスは緊急用の通路マスが空の間だけクラスを付ける", () => {
+  assert.match(source, /if\(!filled&&a\.aisleRow\)cls\.push\("aisle-cell"\)/);
 });
 
 test("緊急用マスがある列の列キャップにも通の印を付ける", () => {
@@ -808,6 +811,13 @@ test("上に飛び出す列が無いエリアはどの列も下げない", () =>
 
 test("盤は飛び出さない列にマス1つ分のマージンを与える", () => {
   assert.match(source, /margin-top:calc\(\(var\(--cell\) \+ 2px\) \* \$\{topOff\}\)/);
+});
+
+// 使っている日だけずらす案も試したが、使っていない日は逆に「upの無い列の
+// 下端が浮く」形になり、下端が不揃いに見えた。up列を基準に他を下げる
+// 常時表示のほうが、使用の有無に関わらず下端が常に揃うので採用している
+test("盤は使用の有無に関わらず常にup基準でずらす", () => {
+  assert.match(source, /const topOff=topAlign\?colTopOffset\(sp,col\):0;/);
 });
 
 test("上に飛び出したマスに荷物がある日は8行になる", () => {
@@ -872,7 +882,8 @@ test("下端の緊急用マスはグリッド本体の行数に入れない", ()
 
 test("上に飛び出したマスに荷物がある日のグリッドは8行", () => {
   const gridRows = makeGridRows([
-    { h: 9, up: 1, fills: [{ id: 0, count: 2 }], aisleRows: [8] },
+    // 准緊急用マス(row0)は通常の7マスを使い切ってから埋まる。count:8で届く
+    { h: 9, up: 1, fills: [{ id: 0, count: 8 }], aisleRows: [8] },
     { h: 8, fills: [{ id: 0, count: 1 }], aisleRows: [7] },
   ], [{ c: 0 }, { c: 1 }]);
   const out = gridRows(0, []);
@@ -892,7 +903,7 @@ test("上に飛び出したマスが空の日のグリッドは7行", () => {
 
 test("上に飛び出したマスには段番号を振らない", () => {
   const gridRows = makeGridRows([
-    { h: 9, up: 1, fills: [{ id: 0, count: 2 }], aisleRows: [8] },
+    { h: 9, up: 1, fills: [{ id: 0, count: 8 }], aisleRows: [8] },
     { h: 8, fills: [{ id: 0, count: 1 }], aisleRows: [7] },
   ], [{ c: 0 }, { lab: true }, { c: 1 }]);
   const rows = gridRows(0, []).html.split("<tr");
@@ -927,14 +938,31 @@ test("緊急用マスに荷物があると○の中に列番号を出す", () =>
   const gridRows = makeGridRows([
     { h: 8, fills: [{ id: 0, count: 8 }], aisleRows: [7] },
   ], [{ c: 0 }]);
-  assert.match(gridRows(0, []).html, /<td class="colno aisle g"><span class="mk">0<\/span><\/td>/);
+  // 太枠の有無は別のテストで見る。ここは○表示だけを確かめる
+  assert.match(gridRows(0, []).html, /<td class="colno aisle g[^"]*"><span class="mk">0<\/span><\/td>/);
 });
 
-test("列番号行の緊急用マスは印刷でも灰色を出す", () => {
-  assert.match(
-    source,
-    /\.sheet td\.colno\.aisle\{[^}]*background:#d9d9d9[^}]*print-color-adjust:exact/s
-  );
+test("緊急用マスの直上と同じロットなら太枠でつなげる", () => {
+  const gridRows = makeGridRows([
+    { h: 8, fills: [{ id: 0, count: 8 }], aisleRows: [7] },
+  ], [{ c: 0 }]);
+  const html = gridRows(0, []).html;
+  // グリッド本体の最終行と同じロットが緊急用マスまで続くので、上辺は内側（bt無し）。
+  // 端の列なので左右は外側、最下段なので下辺は常に閉じる
+  assert.match(html, /<td class="colno aisle g bb bl br"><span class="mk">0<\/span><\/td>/);
+});
+
+test("緊急用マスが別のロットなら太枠を切る", () => {
+  const gridRows = makeGridRows([
+    { h: 8, fills: [{ id: 0, count: 7 }, { id: 1, count: 1 }], aisleRows: [7] },
+  ], [{ c: 0 }]);
+  const html = gridRows(0, []).html;
+  // ○の中身は列番号のまま（isHalf が無ければ o.c）。ロットが変わったことは太枠の有無で示す
+  assert.match(html, /<td class="colno aisle g bt bb bl br"><span class="mk">0<\/span><\/td>/);
+});
+
+test("緊急用マスの列番号行は常に通常の白背景にする（現場の要望でグレー表示を撤去）", () => {
+  assert.doesNotMatch(source, /\.sheet td\.colno\.aisle\{/);
 });
 
 test("引き出し線の行は紙の行番号で返す", () => {
@@ -942,11 +970,12 @@ test("引き出し線の行は紙の行番号で返す", () => {
     "lastLots",
     functionSource("aisleRowCount") +
     functionSource("gridShift") +
-    functionSource("sheetGridAnchors") + "; return sheetGridAnchors;"
+    functionSource("fillOrder") + functionSource("sheetGridAnchors") + "; return sheetGridAnchors;"
   )([]);
-  // 0列目は上に飛び出す列。1列目は飛び出さない列で、どちらも先頭に荷物がある
+  // 0列目は上に飛び出す列。准緊急用マス(row0)まで埋めるにはcount:8必要。
+  // 1列目は飛び出さない列で、先頭(row0)に荷物がある
   const sp = { name: "メイン", cols: [
-    { h: 9, up: 1, fills: [{ id: 0, count: 1 }], aisleRows: [8] },
+    { h: 9, up: 1, fills: [{ id: 0, count: 8 }], aisleRows: [8] },
     { h: 8, fills: [{ id: 1, count: 1 }], aisleRows: [7] },
   ] };
   const anchors = sheetGridAnchors(sp, [{ c: 0 }, { c: 1 }]);
@@ -962,7 +991,7 @@ test("上に飛び出したマスが空の日は行がずれない", () => {
     "lastLots",
     functionSource("aisleRowCount") +
     functionSource("gridShift") +
-    functionSource("sheetGridAnchors") + "; return sheetGridAnchors;"
+    functionSource("fillOrder") + functionSource("sheetGridAnchors") + "; return sheetGridAnchors;"
   )([]);
   const sp = { name: "メイン", cols: [
     { h: 9, up: 1, fills: [], aisleRows: [8] },
@@ -1104,11 +1133,11 @@ test("既定の配置マスから自動配置まで通すと緊急用マスが�
   assert.deepEqual(col.fills, [{ id: 0, count: 7, ov: false }]);
 });
 
-// at() は ri+1 の1行先読みで下端の太枠(bb)を決める。緊急用マス(通路)は
-// グリッド本体の行数(g.rows)に入っていないのに、at() が r>=g.endOf() を
-// 見ずに colCells の実在だけで判定すると、緊急用マスに荷物が入った日だけ
-// 「本体の最終行の下にまだ同じロットが続いている」と誤認して bb が消える
-test("最終行と緊急用マスが同じロットでも本体の最終行に太枠を引く", () => {
+// at() は endOf の外（緊急用マスの行）を見ない。本体の最終行の bb は、
+// 代わりに列番号行と共有する aisleId で緊急用マスの実際のロットと比べる。
+// 同じロットなら内側にして、緊急用マスの列番号行（常に bb を持つ）まで
+// 太枠をつなげる。でないと本体側だけ先に線が引かれ、枠が途中で途切れる
+test("最終行と緊急用マスが同じロットなら本体の最終行の太枠を内側にする", () => {
   const gridRows = makeGridRows([
     // rows 0-5 は別ロット(9)で埋め、rows 6-7(本体の最終行と緊急用マス)を
     // 同じロット(0)にする。本体は endOf=7 なので表示される最終行は r=6
@@ -1117,5 +1146,50 @@ test("最終行と緊急用マスが同じロットでも本体の最終行に�
   const out = gridRows(0, []);
   const growRows = out.html.split("<tr").filter(r => r.includes('class="grow"'));
   const lastRow = growRows[growRows.length - 1];
+  assert.doesNotMatch(lastRow, /<td class="[^"]*\bbb\b[^"]*">/);
+});
+
+test("最終行と緊急用マスが別ロットなら本体の最終行に太枠を引く", () => {
+  const gridRows = makeGridRows([
+    // row 6(本体の最終行)がロット0、row 7(緊急用マス)がロット9で別物
+    { h: 8, fills: [{ id: 0, count: 7 }, { id: 9, count: 1 }], aisleRows: [7] },
+  ], [{ c: 0 }]);
+  const out = gridRows(0, []);
+  const growRows = out.html.split("<tr").filter(r => r.includes('class="grow"'));
+  const lastRow = growRows[growRows.length - 1];
   assert.match(lastRow, /<td class="[^"]*\bbb\b[^"]*">/);
+});
+
+// up の列（准緊急用マス）は、通常の詰め方だと画面上いちばん上（row 0）から
+// 埋まってしまい、追加した分を最初に使ってしまう。現場の運用は逆で、
+// 元の7マスを使い切ってから准緊急用マスに手を伸ばしたいので、up がある
+// 列だけ「up の行を後回しにする」順番で詰める（表示位置そのものは変えない）
+test("up の列は通常マスを先に詰め、准緊急用マス(上端)は最後に埋める", () => {
+  const cellsOf = new Function(
+    functionSource("fillOrder") + functionSource("cellsOf") + "; return cellsOf;"
+  )();
+  // h9・up1・aisleRows[8]。7個入れても上端(row0)は空のまま
+  const cells7 = cellsOf({ h: 9, up: 1, fills: [{ id: 0, count: 7 }], aisleRows: [8] });
+  assert.equal(cells7[0].id, null);
+  assert.deepEqual(cells7.slice(1, 8).map(c => c.id), Array(7).fill(0));
+  // 8個目でようやく上端(row0)が埋まる
+  const cells8 = cellsOf({ h: 9, up: 1, fills: [{ id: 0, count: 8 }], aisleRows: [8] });
+  assert.equal(cells8[0].id, 0);
+});
+
+test("up が無い列は今までどおり row 0 から詰める", () => {
+  const cellsOf = new Function(
+    functionSource("fillOrder") + functionSource("cellsOf") + "; return cellsOf;"
+  )();
+  const cells = cellsOf({ h: 8, fills: [{ id: 0, count: 3 }], aisleRows: [7] });
+  assert.deepEqual(cells.slice(0, 3).map(c => c.id), [0, 0, 0]);
+  assert.equal(cells[3].id, null);
+});
+
+test("up の列で准緊急用マスまで埋まったら緊急用マスは使わない", () => {
+  const cellsOf = new Function(
+    functionSource("fillOrder") + functionSource("cellsOf") + "; return cellsOf;"
+  )();
+  const cells = cellsOf({ h: 9, up: 1, fills: [{ id: 0, count: 8 }], aisleRows: [8] });
+  assert.equal(cells[8].id, null); // 緊急用マス(row8)は自動配置の対象外、8個では届かない
 });

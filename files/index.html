@@ -131,10 +131,9 @@
         font-size:calc(var(--cell) * .46);line-height:1;
         user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
   .cell.aisle-empty{background:#e5e7eb}
-  /* 緊急用の通路マス。列全体が通路の .aisle-empty とは別で、
-     荷物が乗っても通路だと分かるように縁を残す */
+  /* 緊急用の通路マス。空の間は両サイドの通路（aisle-empty）と同じ見た目にし、
+     荷物が入ったら通常マスと同じ色になる。特別な縁取りは付けない */
   .cell.aisle-cell{background:#e5e7eb}
-  .cell.aisle-cell[data-lot]{box-shadow:inset 0 0 0 2px #9ca3af}
   /* 配置不可は斜線と文字で示す。ロットが残る場合は番号を消さず、再配置が必要なことを示す。 */
   .cell.blocked{background-color:#d1d5db !important;
                 background-image:repeating-linear-gradient(-45deg,rgba(71,85,105,.28) 0 4px,transparent 4px 8px) !important;
@@ -542,8 +541,6 @@
   .sheet td.g.bb.bl::after{border-bottom-left-radius:var(--lot-corner)}
   .sheet td.g.bb.br::after{border-bottom-right-radius:var(--lot-corner)}
   .sheet td.colno{border:0;font-size:11px;height:20px}
-  /* 下端の緊急用マス。既存の通路列と同じ灰色にし、背景色を印刷でも出す */
-  .sheet td.colno.aisle{background:#d9d9d9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 
   @media print{
     @page{size:A4 landscape;margin:8mm}
@@ -2411,6 +2408,21 @@ function colTopOffset(sp,col){
   return maxUp-up;
 }
 // row は列内の行番号（0始まり）。選択とドラッグでマスを特定するために持たせる。
+/* 詰める順番。up の分（准緊急用マス、row 0〜up-1）は現場では最後に
+   使いたいので後回しにする。表示位置（どの行が画面上どこに来るか）は
+   変えず、埋まる順番だけを変える。up が無ければ今までどおり0から。
+   緊急用マス（aisleRows）はさらにその後ろ、常に最後。
+   盤（cellsOf）と紙（gridRows/sheetGridAnchors の colCells 生成）が
+   同じ順番を使わないと、盤と紙で埋まり方の見え方がずれる */
+function fillOrder(col){
+  const aisleRows=Array.isArray(col.aisleRows)?col.aisleRows:[];
+  const up=Number.isFinite(col.up)?col.up:0;
+  const order=[];
+  for(let i=up;i<col.h;i++) if(!aisleRows.includes(i)) order.push(i);
+  for(let i=0;i<up;i++) order.push(i);
+  for(let i=0;i<col.h;i++) if(aisleRows.includes(i)) order.push(i);
+  return order;
+}
 function cellsOf(col,blockedRows){
   const blocked=blockedRows instanceof Set ? blockedRows : col.blockedRows;
   // 緊急用の通路マスは印を付けるだけ。blocked と違って飛ばさない。
@@ -2419,11 +2431,12 @@ function cellsOf(col,blockedRows){
   const arr=Array.from({length:col.h},(_,i)=>({id:null,seg:false,row:i,
     blocked:blocked instanceof Set && blocked.has(i),
     aisleRow:aisleRows.includes(i)}));
-  let r=0;
+  const order=fillOrder(col);
+  let oi=0;
   col.fills.forEach((f,fi)=>{
     for(let k=0;k<f.count;k++){
-      while(r<col.h && arr[r].blocked) r++;
-      if(r<col.h){ arr[r]={id:f.id,seg:(k===0&&fi>0),row:r,blocked:false,aisleRow:aisleRows.includes(r)}; r++; }
+      while(oi<order.length && arr[order[oi]].blocked) oi++;
+      if(oi<order.length){ const r=order[oi]; arr[r]={id:f.id,seg:(k===0&&fi>0),row:r,blocked:false,aisleRow:aisleRows.includes(r)}; oi++; }
     }
   });
   return arr;
@@ -2463,7 +2476,7 @@ function drawZone(elId, spaces, colorOf){
         const bg=filled?colorOf[a.id]:"";
         const cls=["cell"];
         if(!filled&&col.aisle)cls.push("aisle-empty");
-        if(a.aisleRow)cls.push("aisle-cell");
+        if(!filled&&a.aisleRow)cls.push("aisle-cell");
         const blocked=a.blocked || activeShift().blocked.includes(blockedCellKey(sp.name,ci,a.row));
         if(blocked){
           cls.push("blocked");
@@ -4578,8 +4591,9 @@ function gridShift(sp,colCells){
 function sheetGridAnchors(sp, order){
   if(!sp || !sp.cols || order.some(o=>!o.lab && !sp.cols[o.c])) return null;
   const colCells=sp.cols.map(col=>{
-    const arr=Array(col.h).fill(null); let r=0;
-    (col.fills||[]).forEach(f=>{ for(let k=0;k<f.count;k++){ if(r<col.h) arr[r++]={id:f.id}; } });
+    const arr=Array(col.h).fill(null);
+    const ord=fillOrder(col); let oi=0;
+    (col.fills||[]).forEach(f=>{ for(let k=0;k<f.count;k++){ if(oi<ord.length) arr[ord[oi++]]={id:f.id}; } });
     return arr;
   });
   const g=gridShift(sp,colCells);
@@ -4635,10 +4649,11 @@ function gridRows(pad, overflow){
   if(warn && warn.kind!=="extra") return {html:"", anchors:[], warn};
   // 以降は order という名前で参照する（本体を書き換えないため）
   const order=SHEET_GRID_ORDER;
-  // 各列の中身（上詰め）
+  // 各列の中身（上詰め。up の准緊急用マスは fillOrder() で後回しにする）
   const colCells=sp.cols.map(col=>{
-    const arr=Array(col.h).fill(null); let r=0;
-    col.fills.forEach(f=>{ for(let k=0;k<f.count;k++){ if(r<col.h) arr[r++]={id:f.id}; } });
+    const arr=Array(col.h).fill(null);
+    const ord=fillOrder(col); let oi=0;
+    col.fills.forEach(f=>{ for(let k=0;k<f.count;k++){ if(oi<ord.length) arr[ord[oi++]]={id:f.id}; } });
     return arr;
   });
   // 荷物ごとのマス一覧（通常列と通路列を分ける）
@@ -4674,6 +4689,14 @@ function gridRows(pad, overflow){
     // 荷物がある日だけ「本体の最終行の下にまだ続きがある」と誤認して bb が消える
     return (r>=0 && r<g.endOf(ci) && colCells[ci] && colCells[ci][r]) ? colCells[ci][r].id : null;
   };
+  // 列ごとの緊急用マスのロット（無ければ null）。本体の最終行の bb 判定と
+  // 列番号行の bt 判定が、どちらもここを見て同じロットどうしを繋げる。
+  // at() は endOf の外を見ないので、この2つの判定だけは別に計算がいる
+  const aisleId=sp.cols.map((col,ci)=>{
+    if(!aisleRowCount(col,col.blockedRows)) return null;
+    const row=col.h-1;
+    return (colCells[ci]&&colCells[ci][row])?colCells[ci][row].id:null;
+  });
   const circled=["①","②","③","④","⑤","⑥","⑦"];
 
   let rows="";
@@ -4700,7 +4723,11 @@ function gridRows(pad, overflow){
       if(col.blockedRows && col.blockedRows.has(r)) cls.push("blocked");
       if(id!=null){
         if(at(o.c,ri-1)!==id) cls.push("bt");
-        if(at(o.c,ri+1)!==id) cls.push("bb");
+        // 最終表示行は次の行(g.rows)が endOf の外を指すため at() は必ず null になる。
+        // 緊急用マスに同じロットが続く日はそこも内側にして、列番号行の bb で閉じる
+        // （でないと本体側だけ先に線を引いてしまい、緊急用マスとの間で枠が途切れる）
+        const belowId=(ri===g.rows-1)?aisleId[o.c]:at(o.c,ri+1);
+        if(belowId!==id) cls.push("bb");
         if(at(o.c-1,ri)!==id) cls.push("bl");
         if(at(o.c+1,ri)!==id) cls.push("br");
       }
@@ -4720,11 +4747,18 @@ function gridRows(pad, overflow){
     const col=sp.cols[o.c];
     if(!aisleRowCount(col,col.blockedRows)){ nums+=`<td class="colno">${o.c}</td>`; return; }
     const row=col.h-1;                      // 緊急用マスは列の下端
-    const id=(colCells[o.c]&&colCells[o.c][row])?colCells[o.c][row].id:null;
+    const id=aisleId[o.c];
     if(id==null){ nums+=`<td class="colno aisle">${o.c}</td>`; return; }
     // 半が来た日は列番号より半を優先する。半は現物の数に関わる
     const mark=isHalf[o.c+"_"+row]?"半":o.c;
-    nums+=`<td class="colno aisle g"><span class="mk">${mark}</span></td>`;
+    // グリッド本体の最終行と同じロットが続くなら上辺は内側。
+    // この行が最下段なので下辺は常に閉じる
+    const cls=["colno","aisle","g"];
+    if(at(o.c,g.rows-1)!==id) cls.push("bt");
+    cls.push("bb");
+    if((o.c>0?aisleId[o.c-1]:null)!==id) cls.push("bl");
+    if((o.c<aisleId.length-1?aisleId[o.c+1]:null)!==id) cls.push("br");
+    nums+=`<td class="${cls.join(" ")}"><span class="mk">${mark}</span></td>`;
   });
 
   // メインに置かれている全ロットの終点を集める
