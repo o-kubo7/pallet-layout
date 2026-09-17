@@ -90,3 +90,39 @@ test("まとめ欄の注記は重複を畳む", () => {
   const fn = functionSource("overflowTable");
   assert.match(fn, /new Set\(/);
 });
+
+test("あふれた分を退避スペースへ入れる", () => {
+  const fn = functionSource("run");
+  assert.match(fn, /l\.rem>0/);
+  assert.match(fn, /putToStash\(lastSp,\s*l\.id,/);
+  // 前回の退避を積み戻したあとに置く（先に置くと前回分の居場所を食う）
+  const back = fn.indexOf("l.stashed");
+  const auto = fn.indexOf("l.rem>0");
+  assert.ok(back !== -1 && auto !== -1 && back < auto,
+    "あふれの投入は退避の積み戻しより後に置くこと");
+});
+
+test("退避の実効容量は列数×列高から数える", () => {
+  const fn = functionSource("stashFreeRoom");
+  // 初期列は h:7 だが repackStash() が h:4 で積み直すので、実効は 14×4=56P
+  assert.match(fn, /STASH_MAX_COLS\s*\*\s*STASH_COL_H/);
+  assert.match(fn, /stashTotal\(/);
+});
+
+test("退避にも入りきらない分は知らせる", () => {
+  const fn = functionSource("run");
+  assert.match(fn, /noRoom/);
+  const render = functionSource("renderResult");
+  assert.match(render, /退避スペースに入りきらない荷物があります/);
+});
+
+test("退避に荷物が残る日は「すべてのパレットを配置しました」を出さない", () => {
+  const fn = functionSource("renderResult");
+  assert.match(fn, /倉庫に置く分はすべて配置しました/);
+});
+
+test("退避の知らせは紙に載ることを伝える", () => {
+  const fn = functionSource("renderResult");
+  assert.match(fn, /置き場未定として配置図に載ります/);
+  assert.doesNotMatch(fn, /配置図の表には出ません。倉庫内・倉庫外へ戻してください/);
+});

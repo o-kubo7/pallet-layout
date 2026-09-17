@@ -697,7 +697,7 @@
         <!-- [試作] 第3のゾーン。倉庫に実在しないので、フロア図の枠の外に別立てで置く -->
         <div class="floor stashfloor">
           <div class="zone-title zone-stash">退避スペース</div>
-          <p class="stashlead">倉庫には無い、画面の上だけの置き場。編集のあいだ荷物を逃がして、倉庫の側を空けるために使います。</p>
+          <p class="stashlead">倉庫には無い、画面の上だけの置き場。編集のあいだ荷物を逃がして、倉庫の側を空けるために使います。ここに残った荷物は、配置図に「置き場未定」として載ります。</p>
           <div class="scroller"><div class="spaces" id="zone-stash"></div></div>
           <div class="stashbar" id="stashBar"></div>
           <button class="btn btn-ghost" id="stashBackBtn" style="display:none;margin-top:8px"
@@ -2312,17 +2312,29 @@ function renderResult(lots, unknown, typeMix){
     warnHtml+=`<div class="msg warn">⚠ 次のエリアには荷物が残っています（配置図の表には出ません）：${overStillFilled.join("・")}。「▶ 自動配置を作成」をもう一度押すか、掲載先を戻してください。</div>`;
   }
 
-  // [試作] 退避に残ったままだと配置図の表（紙）に出ない。既存の
-  // 「over エリアに荷物が残っています」と同じ趣旨の知らせを退避にも出す。
+  // 退避に残っている荷物は「置き場未定」として紙に載る（stashSlots）。
+  // 現物がどこにあるか決まっていないので、残っていること自体は知らせ続ける。
   const stashN=stashTotal(sp);
   if(stashN>0){
-    warnHtml+=`<div class="msg warn">⚠ 退避スペースに ${stashN}P 残っています。配置図の表には出ません。倉庫内・倉庫外へ戻してください。</div>`;
+    warnHtml+=`<div class="msg warn">⚠ 退避スペースに ${stashN}P 残っています。置き場未定として配置図に載ります。倉庫に空きができたら戻してください。</div>`;
+  }
+  // 退避にも入らなかった分は盤にも紙にも出ない。ここでしか知らせる場所がない
+  const noRoom=lots.filter(l=>l.noRoom>0);
+  if(noRoom.length){
+    warnHtml+=`<div class="msg warn">⚠ 退避スペースに入りきらない荷物があります：${
+      noRoom.map(l=>`${l.name}(${l.code}) ${l.noRoom}P`).join(" / ")}。配置図にも出ません。</div>`;
   }
   if(over.length){
-    m.innerHTML=warnHtml+`<div class="msg warn">⚠ 入りきらない荷物があります：${over.map(l=>`${l.name}(${l.code}) 残${l.rem}P`).join(" / ")}</div>`;
+    m.innerHTML=warnHtml+`<div class="msg warn">⚠ 入りきらない荷物があります：${
+      over.map(l=>`${l.name}(${l.code}) ${l.rem}P`).join(" / ")
+    }。退避スペースへ移し、置き場未定として配置図に載せます。</div>`;
   }else{
     let notes=[]; if(usedAisle)notes.push("通路へのはみ出しあり"); if(usedMix)notes.push("混載あり");
-    m.innerHTML=warnHtml+`<div class="msg ok">✅ すべてのパレットを配置しました。${notes.length?"（"+notes.join("・")+"）":""}</div>`;
+    const tail=notes.length?"（"+notes.join("・")+"）":"";
+    // 退避に残っている日は「すべて配置した」と言えない。倉庫に置いた分の話だと明示する
+    m.innerHTML=warnHtml+(stashN>0
+      ? `<div class="msg ok">✅ 倉庫に置く分はすべて配置しました。${tail}</div>`
+      : `<div class="msg ok">✅ すべてのパレットを配置しました。${tail}</div>`);
   }
 
   document.getElementById("legend").innerHTML=lots.map(l=>
@@ -2390,6 +2402,16 @@ function run(goMap,deferSave=false){
   // 倉庫へ置く分だけを place() に渡したので、退避分をここで積み戻し、
   // 合計表示のためにパレット数も元に戻す。
   lots.forEach(l=>{ if(l.stashed){ putToStash(lastSp,l.id,l.stashed); l.pallets+=l.stashed; } });
+  // あふれた分は退避スペースへ逃がす。倉庫に置き場所が無い荷物は
+  // 紙に「置き場未定」として載せる必要があり、退避がその受け皿になる。
+  // 前回の退避を積み戻したあとに置くこと。先に置くと前回分の居場所を食う。
+  lots.forEach(l=>{
+    l.noRoom=0;
+    if(!(l.rem>0)) return;
+    const put=Math.min(l.rem, stashFreeRoom(lastSp));
+    if(put>0) putToStash(lastSp,l.id,put);
+    l.noRoom=l.rem-put;                 // 退避にも入らなかった分。紙にも出ない
+  });
   lastFp=inputFingerprint();
   activeShift().slips=readSlips();
   activeShift().result={fp:lastFp,lots:clone(lastLots),sp:snapshotSpaces(lastSp)};
@@ -3295,6 +3317,14 @@ function stashTotal(sp){
   let n=0;
   stashSpaces(sp||lastSp).forEach(s=>s.cols.forEach(c=>{ n+=used(c); }));
   return n;
+}
+/* 退避にあと何枚積めるか。
+   DEFAULT_SPACES の退避は初期3列が h:7 なので putToStash() だけなら 65P 入るが、
+   描画の前に走る ensureStashRoom() → repackStash() が全部の列を h:4 で積み直し、
+   そのとき列数の上限を見ない。65P を入れると 17 列になって STASH_MAX_COLS(14) を超え、
+   隅の小さな盤の描画が崩れる。したがって実効の上限は 14×4=56P で数える。 */
+function stashFreeRoom(sp){
+  return Math.max(0, STASH_MAX_COLS*STASH_COL_H - stashTotal(sp));
 }
 // 退避スペースへ直に積む。自動配置のあとから呼ぶ
 function putToStash(sp,lotId,count){
