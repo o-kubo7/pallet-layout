@@ -38,3 +38,33 @@ test("掲載先 over のラベルは実態に合わせて「掲載しない」�
   assert.match(source, /over＝掲載しない/);
   assert.match(source, /掲載先を「掲載しない」にした次のエリアには、新しく荷物を置きません/);
 });
+
+test("退避スペースの中身から紙の欄を作る", () => {
+  const fn = functionSource("stashSlots");
+  // 退避エリアだけを見る
+  assert.match(fn, /stashSpaces\(/);
+  // 注釈はエリア名ではなく固定の文言
+  assert.match(fn, /※置き場未定/);
+  // 後続の分岐が見る目印
+  assert.match(fn, /stash:\s*true/);
+  // 通常の欄と同じくまとめる。まとめない設定にも従う
+  assert.match(fn, /mergeLots/);
+  assert.match(fn, /mergeEntries\(/);
+});
+
+test("退避の欄を上段の欄の末尾に連結する", () => {
+  const fn = functionSource("sheetPlacement");
+  assert.match(fn, /sheetSlots\("top"\)\.concat\(stashSlots\(\)\)/);
+});
+
+test("下段へ回した退避の欄は注釈を作り直さない", () => {
+  // slotAreaNote() を通すと ※退避 に化ける
+  const fn = functionSource("sheetPlacement");
+  assert.match(fn, /e\.stash\s*\?\s*e\.note\s*:\s*slotAreaNote\(e\.areas\)/);
+});
+
+test("追記欄には欄数超過を先に入れ、退避の欄を後ろへ回す", () => {
+  const fn = functionSource("sheetPlacement");
+  assert.match(fn, /filter\(e=>!e\.stash\)\.concat\(/);
+  assert.match(fn, /filter\(e=>e\.stash\)/);
+});

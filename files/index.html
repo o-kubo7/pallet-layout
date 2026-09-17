@@ -4425,6 +4425,38 @@ function lotsIn(slots){ return slots.reduce((a,g)=>a+(g.members?g.members.length
    areas が空になることは sheetEntries() の作り上ありえない（欄は必ず1つ以上のエリアに置かれる）。
    空文字を返す分岐は保険で、ここが空のまま回ると注釈のない欄が紙に出る。 */
 function slotAreaNote(areas){ return (areas && areas.length) ? "※"+areas.join("・") : ""; }
+/* 退避スペースの中身を配置図の欄にする。
+   退避は倉庫に実在しないので掲載先（sheet）を持たず、sheetAreas() には出てこない。
+   欄を作る経路だけをここに分けてある。sheet:"top" に変えて既存経路へ乗せると、
+   sheetEntries() がエリア名を注釈に出し、mergeEntries() の基準エリア判定にも
+   退避が混ざるため、分岐がかえって増える。
+   注釈は「※置き場未定」で固定する。現場にとって「退避」は場所の名前ではない。 */
+function stashSlots(){
+  if(!lastSp || !lastLots) return [];
+  const order=[], byId={};
+  stashSpaces(lastSp).forEach(s=>s.cols.forEach(c=>c.fills.forEach(f=>{
+    let e=byId[f.id];
+    if(!e){
+      const lot=lastLots.find(l=>l.id===f.id);
+      if(!lot) return;
+      e=byId[f.id]={lot, pallets:0};
+      order.push(e);
+    }
+    e.pallets+=f.count;
+  })));
+  const entries=order.map(e=>{
+    // 「半」はロットの末尾のマスに付く。tailAreaOf() は lastSp の並びで
+    // 最後にそのロットを持つスペースを返し、退避は DEFAULT_SPACES の末尾にある。
+    // したがって退避に1枚でもあるロットの「半」はこの欄に出る（設計書 §7(f)）
+    const half = (tailAreaOf(e.lot.id)==="退避") ? Math.min(e.lot.half||0, e.pallets) : 0;
+    return {lot:e.lot, pallets:e.pallets, half, areas:["退避"],
+            note:"※置き場未定", stash:true};
+  });
+  if(!mergeLots) return entries;
+  // 退避の欄はメイン（下段の基準エリア）に乗っていないので、まとめてよい。
+  // 基準エリアを渡さないことで、まとめの除外条件に引っかからない
+  return mergeEntries(entries, null).map(g=>({...g, note:"※置き場未定", stash:true}));
+}
 /* 下段はメイン欄をグリッドに近い位置へ、PC横・EV横だけの欄を右端から埋める。
    配置表は左から配列を描く。PC横の次にEV横が並ぶため、EV横が右端になる。 */
 function arrangeBottomSlots(entries, count, positions){
@@ -4492,13 +4524,16 @@ function arrangeOverflowSlots(entries){
      どちらも書き換えないこと。元の欄（top の中身）自体も書き換えない
    ・fromTop は renderSheet() が引き出し線の id を落とすのに使う目印 */
 function sheetPlacement(){
-  const top=sheetSlots("top");
+  // 退避スペースの中身を上段の欄の末尾に足す。エリアの欄が先、退避の欄が後になり、
+  // 「欄が足りないぶんを回す」既存の階段（下段の空き → 追記欄 → 警告）にそのまま乗る
+  const top=sheetSlots("top").concat(stashSlots());
   const base=sheetSlots("bottom");
   const lay=sheetLayout(top, base);
   const free=Math.max(0, lay.bottom-base.length);
   const over=Math.max(0, top.length-lay.top);
+  // 退避の欄は注釈が唯一の情報なので、slotAreaNote() で作り直さない（※退避 に化ける）
   const moved=top.slice(lay.top, lay.top+Math.min(free, over))
-    .map(e=>({...e, fromTop:true, note:slotAreaNote(e.areas)}));
+    .map(e=>({...e, fromTop:true, note: e.stash ? e.note : slotAreaNote(e.areas)}));
   const bottomAll=base.concat(moved);
   let positions=null;
   if(typeof lastSp!=="undefined" && typeof SHEET_GRID_ORDER!=="undefined" &&
@@ -4509,7 +4544,11 @@ function sheetPlacement(){
   }
   const arranged=arrangeBottomSlots(bottomAll, lay.bottom, positions);
   const omittedTop=top.slice(lay.top+moved.length);
-  const overflowed=arrangeOverflowSlots(omittedTop.concat(arranged.dropped));
+  // 追記欄は欄数超過を先に載せる。退避の欄は top の末尾に居るので、
+  // 並べ直さないと下段の欄数超過（arranged.dropped）を押し出してしまう
+  const rest=omittedTop.concat(arranged.dropped);
+  const ordered=rest.filter(e=>!e.stash).concat(rest.filter(e=>e.stash));
+  const overflowed=arrangeOverflowSlots(ordered);
   return {lay, top, bottom:arranged.slots, bottomAll, droppedBottom:arranged.dropped,
           overflow:overflowed.overflow, unlisted:overflowed.unlisted, moved};
 }
