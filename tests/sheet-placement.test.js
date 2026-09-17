@@ -568,7 +568,7 @@ test("配置不可で有効容量を超えたsnapshotは復元候補にしない
 
 test("PC横・EV横ではEV横を右端に配置する", () => {
   const placement = new Function(
-    "sheetSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas",
+    "sheetSlots", "stashSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas",
     functionSource("arrangeBottomSlots") +
     functionSource("arrangeOverflowSlots") +
     functionSource("sheetPlacement") + "; return sheetPlacement;"
@@ -578,6 +578,7 @@ test("PC横・EV横ではEV横を右端に配置する", () => {
   const ev = { lot: { id: 3 }, areas: ["EV横"] };
   const computeSheetPlacement = placement(
     tier => tier === "top" ? [] : [main, pc, ev],
+    () => [],
     () => ({ top: 4, bottom: 7 }),
     areas => `※${areas.join("・")}`,
     false,
@@ -631,7 +632,7 @@ test("右端を予約してもメインロットは物理的に最短の下段�
 
 test("sheetPlacementはグリッドセル中心に近い下段欄へメインロットを置く", () => {
   const placement = new Function(
-    "sheetSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas", "lastSp", "SHEET_GRID_ORDER",
+    "sheetSlots", "stashSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas", "lastSp", "SHEET_GRID_ORDER",
     functionSource("aisleRowCount") +
     functionSource("gridShift") +
     functionSource("fillOrder") + functionSource("sheetGridAnchors") +
@@ -642,6 +643,7 @@ test("sheetPlacementはグリッドセル中心に近い下段欄へメインロ
   const main = { lot: { id: 1 }, areas: ["メイン"] };
   const computeSheetPlacement = placement(
     tier => tier === "top" ? [] : [main],
+    () => [],
     () => ({ top: 4, bottom: 7 }),
     areas => `※${areas.join("・")}`,
     false,
@@ -707,7 +709,7 @@ test("グリッド座標がない場合はメイン項目を左から順に置�
 
 test("配置表からあふれた先頭2項目をあふれブロックへ記載する", () => {
   const placement = new Function(
-    "sheetSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas",
+    "sheetSlots", "stashSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas",
     functionSource("arrangeBottomSlots") +
     functionSource("arrangeOverflowSlots") +
     functionSource("sheetPlacement") + "; return sheetPlacement;"
@@ -716,6 +718,7 @@ test("配置表からあふれた先頭2項目をあふれブロックへ記載�
   const bottom = Array.from({ length: 8 }, (_, index) => ({ lot: { id: index + 101 }, areas: ["メイン"] }));
   const computeSheetPlacement = placement(
     tier => tier === "top" ? top : bottom,
+    () => [],
     () => ({ top: 5, bottom: 8 }),
     areas => `※${areas.join("・")}`,
     false,
@@ -728,7 +731,7 @@ test("配置表からあふれた先頭2項目をあふれブロックへ記載�
 
 test("3項目以上のあふれでは3項目目以降を警告対象にする", () => {
   const placement = new Function(
-    "sheetSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas",
+    "sheetSlots", "stashSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas",
     functionSource("arrangeBottomSlots") +
     functionSource("arrangeOverflowSlots") +
     functionSource("sheetPlacement") + "; return sheetPlacement;"
@@ -737,6 +740,7 @@ test("3項目以上のあふれでは3項目目以降を警告対象にする", 
   const bottom = Array.from({ length: 8 }, (_, index) => ({ lot: { id: index + 101 }, areas: ["メイン"] }));
   const computeSheetPlacement = placement(
     tier => tier === "top" ? top : bottom,
+    () => [],
     () => ({ top: 5, bottom: 8 }),
     areas => `※${areas.join("・")}`,
     false,
