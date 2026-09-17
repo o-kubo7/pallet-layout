@@ -68,3 +68,25 @@ test("追記欄には欄数超過を先に入れ、退避の欄を後ろへ回�
   assert.match(fn, /filter\(e=>!e\.stash\)\.concat\(/);
   assert.match(fn, /filter\(e=>e\.stash\)/);
 });
+
+test("追記欄は3件以上あるとき2枠目にまとめて記載する", () => {
+  const fn = functionSource("arrangeOverflowSlots");
+  // 2件以内は従来どおり
+  assert.match(fn, /entries\.length<=2/);
+  // 3件以上は2枠目を group にする
+  assert.match(fn, /group:\s*entries\.slice\(1\)/);
+  // 紙に出ない項目は出さない
+  assert.match(fn, /unlisted:\s*\[\]/);
+});
+
+test("まとめ欄は品名・ロット・パレット数を縦積みで書く", () => {
+  const fn = functionSource("overflowTable");
+  assert.match(fn, /e\.group\s*\|\|\s*\[e\]/);
+  assert.match(fn, /fitcol/);
+});
+
+test("まとめ欄の注記は重複を畳む", () => {
+  // 置き場未定が3件あっても ※置き場未定 は1回だけ書く
+  const fn = functionSource("overflowTable");
+  assert.match(fn, /new Set\(/);
+});

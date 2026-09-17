@@ -4507,10 +4507,13 @@ function arrangeBottomSlots(entries, count, positions){
     .concat(rescuedEntries.slice(keptRescued.length), rightEntries.slice(keptRight.length));
   return {slots, dropped};
 }
-// 通常欄から漏れた項目は、追記欄に先頭2項目だけ記載する。
-// 3項目目以降は紙に記載できないため、画面の警告対象として分けて返す。
+/* 通常欄から漏れた項目は追記欄に記載する。枠は2つしかないので、
+   3件以上ある日は2枠目を「まとめ欄」にして残り全部を縦積みする。
+   置き場所の無い荷物を紙から落とすと現場に伝わらないため、
+   文字が小さくなっても載せるほうを選ぶ（設計書 §4-5）。 */
 function arrangeOverflowSlots(entries){
-  return {overflow:entries.slice(0,2), unlisted:entries.slice(2)};
+  if(entries.length<=2) return {overflow:entries, unlisted:[]};
+  return {overflow:[entries[0], {group:entries.slice(1)}], unlisted:[]};
 }
 /* 上段・下段の欄と様式を1回で決める。欄数超過の警告と renderSheet() の両方がここを通る。
    2か所で別々に数えると、警告の件数と実際に紙へ出る欄がずれる。
@@ -4769,19 +4772,36 @@ function slotCells(entries,count,kind,extra){
 }
 
 // 追記欄の1項目は、右端2列の中で品名・ロット・P数・注記を縦に記載する。
+// まとめ欄（{group:[...]}）は、その4種それぞれを件数ぶん縦積みにする。
 function overflowTable(entries){
   if(!entries.length) return "";
   const span=v=>v?`<span class="fit">${esc(v)}</span>`:"";
   const cell=(e,kind)=>{
-    const l=e.lot, ms=e.members||[e];
-    let inner="", cls="slot";
-    if(kind==="name") inner=span(l.name);
-    else if(kind==="lot"){
-      const lots=ms.map(m=>m.lot.lot).filter(Boolean);
-      inner=lots.length>=3?`<span class="fitcol">${lots.map(span).join("")}</span>`:span(lots.join("/"));
-    }else if(kind==="pallet") inner=span(palSlotTextOf(ms));
-    else { inner=span(e.note||slotAreaNote(e.areas)); cls+=" c-note"; }
-    if(kind!=="note") cls+=" c-"+({name:"name",lot:"lot",pallet:"pal"}[kind]);
+    const gs=e.group||[e];
+    const textOf=(g)=>{
+      const l=g.lot, ms=g.members||[g];
+      if(kind==="name")   return l.name||"";
+      if(kind==="lot")    return ms.map(m=>m.lot.lot).filter(Boolean).join("/");
+      if(kind==="pallet") return palSlotTextOf(ms);
+      return g.note||slotAreaNote(g.areas);
+    };
+    let cls="slot";
+    let inner;
+    if(e.group){
+      // まとめ欄。注記は同じ文言が並ぶので重複を畳む
+      const texts=gs.map(textOf).filter(Boolean);
+      const vals=(kind==="note") ? [...new Set(texts)] : texts;
+      inner=`<span class="fitcol">${vals.map(span).join("")}</span>`;
+    }else{
+      // 1項目の欄。ロット番号が3つ以上あるときだけ従来どおり縦積みにする
+      const ms=gs[0].members||[gs[0]];
+      const lots=(kind==="lot") ? ms.map(m=>m.lot.lot).filter(Boolean) : null;
+      inner=(lots && lots.length>=3)
+        ? `<span class="fitcol">${lots.map(span).join("")}</span>`
+        : span(textOf(gs[0]));
+    }
+    if(kind==="note") cls+=" c-note";
+    else cls+=" c-"+({name:"name",lot:"lot",pallet:"pal"}[kind]);
     const edge=kind==="name"?"bt2 bb2 bl2 br2":kind==="note"?"bl2 br2 bb2":"bl2 br2";
     const fit={name:"name",lot:"lot",pallet:"pal",note:"note"}[kind];
     return `<tr><td class="${cls} ${edge}" data-fit="${fit}">${inner}</td></tr>`;

@@ -747,8 +747,12 @@ test("3項目以上のあふれでは3項目目以降を警告対象にする", 
     tier => tier === "bottom" ? ["メイン", "PC横", "EV横"] : []
   );
   const result = computeSheetPlacement();
-  assert.deepEqual(result.overflow.map(entry => entry.lot.id), [6, 7]);
-  assert.deepEqual(result.unlisted.map(entry => entry.lot.id), [8]);
+  // 3件以上あふれた日は、2枠目がまとめ欄（{group:[...]}）になり、
+  // 紙から荷物が消えないよう unlisted は常に空になる（Task 3 の仕様変更）
+  assert.equal(result.overflow.length, 2);
+  assert.equal(result.overflow[0].lot.id, 6);
+  assert.deepEqual(result.overflow[1].group.map(entry => entry.lot.id), [7, 8]);
+  assert.deepEqual(result.unlisted, []);
 });
 
 test("あふれブロックの2項目の間に6pxの隙間を入れる", () => {
