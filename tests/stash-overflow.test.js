@@ -96,10 +96,41 @@ test("あふれた分を退避スペースへ入れる", () => {
   assert.match(fn, /l\.rem>0/);
   assert.match(fn, /putToStash\(lastSp,\s*l\.id,/);
   // 前回の退避を積み戻したあとに置く（先に置くと前回分の居場所を食う）
-  const back = fn.indexOf("l.stashed");
+  const back = fn.indexOf("putToStash(lastSp,l.id,l.stashed)");
   const auto = fn.indexOf("l.rem>0");
   assert.ok(back !== -1 && auto !== -1 && back < auto,
     "あふれの投入は退避の積み戻しより後に置くこと");
+});
+
+test("まとめ欄は値が空でも4列の行数をそろえる", () => {
+  // ロット番号の無い荷物が混ざると、その列だけ行が繰り上がって
+  // 品名と別の件のロット番号が横並びになる。空欄でも1行を残すこと
+  const renderOverflow = new Function(
+    "esc", "palSlotTextOf", "slotAreaNote",
+    functionSource("overflowTable") + "; return overflowTable;"
+  );
+  const entry = (name, lot) => ({ lot: { name, lot }, areas: ["退避"], note: "※置き場未定" });
+  const html = renderOverflow(
+    value => String(value),
+    () => "3P",
+    () => "※置き場未定"
+  )([
+    { group: [entry("部品A", "L1"), entry("部品B", ""), entry("部品C", "L3")] },
+  ]);
+  const cellOf = kind => {
+    const m = html.match(new RegExp(`<td class="[^"]*c-${kind}[^"]*"[^>]*>([\\s\\S]*?)</td>`));
+    assert.ok(m, `${kind} の欄があること`);
+    return m[1];
+  };
+  const rowsOf = kind => cellOf(kind).match(/<span class="fit">([\s\S]*?)<\/span>/g) || [];
+  const names = rowsOf("name"), lots = rowsOf("lot");
+  assert.equal(names.length, 3);
+  assert.equal(lots.length, 3);
+  // 3件目どうしが同じ行に来る＝列が対応している
+  assert.match(names[2], /部品C/);
+  assert.match(lots[2], /L3/);
+  // 2件目のロットは空だが行は残る
+  assert.doesNotMatch(lots[1], /L3/);
 });
 
 test("退避の実効容量は列数×列高から数える", () => {

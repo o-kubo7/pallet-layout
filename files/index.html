@@ -2293,6 +2293,9 @@ function renderResult(lots, unknown, typeMix){
   // 配置図の表の欄数は様式で決まり、上段のあふれは下段の空き欄へ回る（sheetPlacement）。
   // renderSheet() も同じ sheetPlacement() を通すので、警告の件数と実際に紙へ出る欄数がずれない。
   // 回しきれずに紙から落ちる分だけを知らせる。
+  // いまは arrangeOverflowSlots() がまとめ欄に何件でも積むので unlisted は常に空で、
+  // この分岐は通らない。荷物が紙から落ちないのが現状であって、落ちる余地が
+  // 残っているわけではない。欄数に上限が戻ったときの備えとして文言ごと残す。
   const pl=sheetPlacement();
   if(pl.unlisted.length){
     warnHtml+=`<div class="msg warn">⚠ 配置図の追記欄にも記載できない項目があります：`
@@ -4216,7 +4219,7 @@ function showCapacity(){
   const live=SPACES.filter(s=>!overNames.has(s.name) && s.zone!=="stash");
   // 緊急用の通路マスは日常的に数える置き場ではないので、収容能力から外す
   const sum=(z,f)=>live.filter(s=>s.zone===z).reduce((a,s)=>a+s.cols.filter(f).reduce((x,c)=>x+c.h-aisleRowCount(c),0),0);
-  const excluded=overNames.size?`　（あふれ指定のため除外：${[...overNames].join("・")}）`:"";
+  const excluded=overNames.size?`　（掲載しないため除外：${[...overNames].join("・")}）`:"";
   document.getElementById("capacity").textContent=
     `収容能力 — 倉庫内: 通常${sum("near",c=>!c.aisle)}P＋通路${sum("near",c=>c.aisle)}P ／ `+
     `倉庫外: 通常${sum("far",c=>!c.aisle)}P＋通路${sum("far",c=>c.aisle)}P`+excluded;
@@ -4680,10 +4683,13 @@ function fitSheetText(pl){
     const h=t.getBoundingClientRect().height/z;
     if(h>0 && h*PRINT_ZOOM>PRINT_H_LIMIT){
       const pct=Math.round(h*PRINT_ZOOM/PRINT_H_PX*100);
-      // 原因を断定しない。文字サイズのほかに、まとめた欄のロット番号が縦に積まれて
-      // 伸びる場合がある。ロット 6 件を積むと欄の高さが 26px から 97px になる
+      // 原因を断定しない。いまいちばん多いのは追記欄のまとめ欄の件数で、
+      // 実測では5件までは収まり、6件で用紙の約104%に達してここへ来る。
+      // ほかに文字サイズや、まとめた欄のロット番号が縦に積まれて伸びる場合がある
+      // （ロット 6 件を積むと欄の高さが 26px から 97px になる）
       html+=`<div class="msg warn">⚠ 表が縦に伸びて印刷が1ページに収まりません`
-          + `（用紙の高さの${pct}%）。設定タブの「表示設定」で文字を小さくするか、`
+          + `（用紙の高さの${pct}%）。追記欄にまとめた項目の数（6件以上は収まりません）、`
+          + `設定タブの「表示設定」の文字の大きさ、`
           + `同じ品名にまとめたロットの数を確認してください。</div>`;
     }
   }
@@ -4838,9 +4844,13 @@ function overflowTable(entries){
     let cls="slot";
     let inner;
     if(e.group){
-      // まとめ欄。注記は同じ文言が並ぶので重複を畳む
-      const texts=gs.map(textOf).filter(Boolean);
-      const vals=(kind==="note") ? [...new Set(texts)] : texts;
+      // まとめ欄。注記は ※置き場未定 が何件も並ぶだけなので、空欄と重複を畳んで1行にする。
+      // 品名・ロット・P数は別々の td に縦積みされ、行の位置だけで件が対応しているので、
+      // 値が空の件を落とすとその列だけ行が繰り上がり、品名と別の件のロット番号が並ぶ。
+      // 空でも「—」で1行を残す（span() は空文字を包まないので、そのままでは行が消える）
+      const texts=gs.map(textOf);
+      const vals=(kind==="note") ? [...new Set(texts.filter(Boolean))]
+                                 : texts.map(v=>v||"—");
       inner=`<span class="fitcol">${vals.map(span).join("")}</span>`;
       cls+=" roll";
     }else{
