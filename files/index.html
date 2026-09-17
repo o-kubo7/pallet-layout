@@ -580,10 +580,10 @@
 </header>
 
 <div class="tabs">
-  <button class="tab active" id="tabbtn-input" onclick="switchTab('input')">入力</button>
-  <button class="tab" id="tabbtn-edit" onclick="switchTab('edit')">配置編集</button>
-  <button class="tab" id="tabbtn-sheet" onclick="switchTab('sheet')">配置図</button>
-  <button class="tab" id="tabbtn-settings" onclick="switchTab('settings')">設定<span class="dot" id="regDot">0</span></button>
+  <button class="tab active" id="tabbtn-input" onclick="leaveEdit('input')">入力</button>
+  <button class="tab" id="tabbtn-edit" onclick="leaveEdit('edit')">配置編集</button>
+  <button class="tab" id="tabbtn-sheet" onclick="leaveEdit('sheet')">配置図</button>
+  <button class="tab" id="tabbtn-settings" onclick="leaveEdit('settings')">設定<span class="dot" id="regDot">0</span></button>
 </div>
 
 <div class="wrap">
@@ -2568,6 +2568,19 @@ function drawZone(elId, spaces, colorOf){
 }
 
 /* ---------- タブ / 表示状態 ---------- */
+/* タブを人が押したときの入口。退避に荷物が残っているなら一度止めて聞く。
+   switchTab() の側には置かないこと。printSheet() と beforeprint のハンドラが
+   switchTab('sheet') を直に呼んでおり、そこに confirm を挟むと
+   タブが切り替わらないまま印刷が走って白紙になる。
+   beforeprint の中の confirm はブラウザに抑止されることもある。 */
+function leaveEdit(name){
+  const edit=document.getElementById("tab-edit");
+  const onEdit=edit && edit.style.display!=="none";
+  const n=stashTotal(lastSp);
+  if(onEdit && name!=="edit" && n>0 &&
+     !confirm(`退避スペースに ${n}P 残っています。\n置き場未定として配置図に載ります。このまま移動しますか？`)) return;
+  switchTab(name);
+}
 function switchTab(name){
   refreshFreshness();
   ["input","edit","sheet","settings"].forEach(t=>{

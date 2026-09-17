@@ -126,3 +126,28 @@ test("退避の知らせは紙に載ることを伝える", () => {
   assert.match(fn, /置き場未定として配置図に載ります/);
   assert.doesNotMatch(fn, /配置図の表には出ません。倉庫内・倉庫外へ戻してください/);
 });
+
+test("タブボタンは leaveEdit を通す", () => {
+  assert.match(source, /id="tabbtn-input" onclick="leaveEdit\('input'\)"/);
+  assert.match(source, /id="tabbtn-edit" onclick="leaveEdit\('edit'\)"/);
+  assert.match(source, /id="tabbtn-sheet" onclick="leaveEdit\('sheet'\)"/);
+  assert.match(source, /id="tabbtn-settings" onclick="leaveEdit\('settings'\)"/);
+});
+
+test("印刷の経路には確認を挟まない", () => {
+  // printSheet() と beforeprint は switchTab を直に呼ぶ。
+  // ここに confirm が入ると紙が白紙になる
+  const fn = functionSource("printSheet");
+  assert.match(fn, /switchTab\('sheet'\)/);
+  assert.doesNotMatch(fn, /leaveEdit/);
+  const sw = functionSource("switchTab");
+  assert.doesNotMatch(sw, /confirm\(/);
+});
+
+test("退避に荷物が残る日だけ確認する", () => {
+  const fn = functionSource("leaveEdit");
+  assert.match(fn, /stashTotal\(lastSp\)/);
+  assert.match(fn, /name!=="edit"/);
+  assert.match(fn, /confirm\(/);
+  assert.match(fn, /置き場未定として配置図に載ります/);
+});
