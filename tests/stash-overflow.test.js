@@ -151,3 +151,15 @@ test("退避に荷物が残る日だけ確認する", () => {
   assert.match(fn, /confirm\(/);
   assert.match(fn, /置き場未定として配置図に載ります/);
 });
+
+test("まとめ欄の td には roll クラスを付ける", () => {
+  const fn = functionSource("overflowTable");
+  // 1項目の欄には付けない。まとめ欄だけを縮める目印
+  assert.match(fn, /e\.group.*roll|roll.*e\.group/s);
+});
+
+test("まとめ欄だけ文字と行間を詰める CSS がある", () => {
+  // 件数だけ縦に伸びるのはまとめ欄だけなので、通常の欄の見た目は変えない
+  assert.match(source, /\.sheet \.overflow-table td\.roll\{padding:0\}/);
+  assert.match(source, /\.sheet \.overflow-table td\.roll \.fit\{font-size:55%;line-height:1\.05\}/);
+});
