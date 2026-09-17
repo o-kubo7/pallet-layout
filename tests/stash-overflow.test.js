@@ -154,8 +154,14 @@ test("退避に荷物が残る日だけ確認する", () => {
 
 test("まとめ欄の td には roll クラスを付ける", () => {
   const fn = functionSource("overflowTable");
-  // 1項目の欄には付けない。まとめ欄だけを縮める目印
-  assert.match(fn, /e\.group.*roll|roll.*e\.group/s);
+  // 1項目の欄には付けない。まとめ欄だけを縮める目印。
+  // if(e.group){...}else{ の中、まとめ欄の inner を組み立てた直後に
+  // cls+=" roll"; が来ることを見る（else 側に付いても素通りしないように
+  // 順序つきで、if(e.group) のブロック内に限定して照合する）
+  assert.match(
+    fn,
+    /if\(e\.group\)\{[\s\S]*?inner=`<span class="fitcol">\$\{vals\.map\(span\)\.join\(""\)\}<\/span>`;\s*cls\+=" roll";\s*\}else\{/
+  );
 });
 
 test("まとめ欄だけ文字と行間を詰める CSS がある", () => {

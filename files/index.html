@@ -501,7 +501,9 @@
   .sheet .overflow-table tr.overflow-gap td{height:6px;min-height:6px;padding:0;border:0;line-height:0}
   /* まとめ欄は件数のぶんだけ縦に伸びるので、ここだけ文字と行間を詰める。
      詰めないと3件で用紙の高さの106%、5件で128%になり紙が2ページに割れる
-     （実測。詰めれば5件で99%に収まる）。1項目の欄は従来の大きさのままにする */
+     （実測。詰めれば5件で99%に収まる）。1項目の欄は従来の大きさのままにする。
+     fitSheetText() は td の左右 padding を 1px ずつと決め打ちしているので、
+     padding:0 のこの欄では有効幅を実際より2px少なく見積もる。縮む方向なので実害は無い */
   .sheet .overflow-table td.roll{padding:0}
   .sheet .overflow-table td.roll .fit{font-size:55%;line-height:1.05}
   /* 上段の注記行は左5列が空セル。td の既定の 26px が行を押し上げるので合わせる */
