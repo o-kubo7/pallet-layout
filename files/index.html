@@ -492,7 +492,7 @@
   .sheet td.snote{display:table-cell;text-align:center;vertical-align:top;
                   font-size:var(--fs-note);font-weight:var(--fw-note);color:#333;height:16px;line-height:1.2;
                   border:0;background:transparent}
-  /* あふれブロックは wide 様式の右端2列に縦積みする。外側のセルはグリッドの行をまたぎ、
+  /* 追記欄は wide 様式の右端2列に縦積みする。外側のセルはグリッドの行をまたぎ、
      内側の表だけが項目ごとの罫線を持つ。 */
   .sheet td.overflow-host{border:0;padding:0;vertical-align:top}
   .sheet table.overflow-table{width:100%;min-width:0;max-width:none}
@@ -771,7 +771,7 @@
       <div class="card cfg">
         <h2>スペース設定 <span class="badge" id="cfgBadge">この端末に保存</span></h2>
         <div class="hint" id="cfgNote" style="margin-bottom:8px;color:#b45309" hidden></div>
-        <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路) | 掲載先(top/bottom/over)</b><br>掲載先は配置図の表のどこに欄を書くかです。top＝上段、bottom＝下段、over＝あふれブロック。省略すると今の設定を引き継ぎます。<b>あふれブロックは未実装</b>なので、over にしたエリアには新しく荷物を置きません。すでにそのエリアにある荷物は残り、配置図の表には出ません。<br><b>行の順番には意味があります。</b>上の行から順に自動配置で試します。また上段・下段それぞれの先頭の行が配置図の表の基準になり、その欄には注釈が付きません。大きなグリッドは下段の基準エリアを描きます。並べ替えると配置のしかたが変わり、手動で調整した配置は破棄されます。</div>
+        <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路) | 掲載先(top/bottom/over)</b><br>掲載先は配置図の表のどこに欄を書くかです。top＝上段、bottom＝下段、over＝掲載しない。省略すると今の設定を引き継ぎます。<b>「掲載しない」にしたエリアには新しく荷物を置きません。</b>すでにそのエリアにある荷物は残り、配置図の表には出ません。<br><b>行の順番には意味があります。</b>上の行から順に自動配置で試します。また上段・下段それぞれの先頭の行が配置図の表の基準になり、その欄には注釈が付きません。大きなグリッドは下段の基準エリアを描きます。並べ替えると配置のしかたが変わり、手動で調整した配置は破棄されます。</div>
         <textarea id="cfgText"></textarea>
         <div class="row-actions">
           <button class="btn btn-ghost" onclick="applyConfig()">設定を反映</button>
@@ -840,7 +840,7 @@ const DEFAULT_SPACES = [
   // 配置図の表では、上段・下段それぞれの先頭にあたるエリアが基準になる
   // （注釈を付けない。下段の基準はグリッドも描く）。
   // zone はブロック図の倉庫内／外の並べ分けにだけ使う。
-  // sheet は配置図の表のどのブロックに欄を書くか（top＝上段 / bottom＝下段 / over＝あふれブロック）。
+  // sheet は配置図の表のどのブロックに欄を書くか（top＝上段 / bottom＝下段 / over＝掲載しない）。
   // row / off は描画専用（row＝ブロック図の何行目、off＝行内の何マス目から）。
   // 2026-08-30 の現場実測（配置図の表/配置マス.xlsx）に合わせてある。
   // 省略した列は「順に積む・左端から」の意味になる。
@@ -908,7 +908,7 @@ function sheetAreas(tier){ return SPACES.filter(s=>(s.sheet||"bottom")===tier).m
    総幅 672px は両方で同じ。672÷14=48、672÷16=42 でどちらも割り切れる。
    ・normal … 現行の紙。左ブロック5列(240px)＋すき間1列(48px)＋上段4欄×2列(96px)＝14列
    ・wide   … 左ブロック5列(210px)＋すき間1列(42px)＋上段5欄×2列(84px)＝16列
-              メインは14列×42px=588px で、右に2列(84px)余る。後日あふれブロックが入る用地。
+              メインは14列×42px=588px で、右に2列(84px)余る。あふれた項目を書く追記欄に使う。
    左ブロックが両方とも5列なのは、曜日セルが5個並ぶため。5列未満にはできない。
    wide の1列42pxは、あさ／ひるの丸印に要る36px（文字11px×2＋padding6＋border4＋tdの4）を満たす。
    cols は SHEET_GRID_ORDER の要素数（メインの列数）以上でなければならない。
@@ -2131,7 +2131,7 @@ function snapshotFitsBlocked(sp,blocked){
    「メインを使い切ったら軒下より先にメインの通路を使う」が成立する。
    AREA_GROUPS のエリアは列を連結して1つの候補にする（軒下①が埋まったら②へ）。 */
 function areaCandidates(sp){
-  // 掲載先が「あふれブロック」のエリアは配置図の表に欄が無い。
+  // 掲載先が「掲載しない」のエリアは配置図の表に欄が無い。
   // 荷物を置くと「倉庫にはあるのに紙のどこにも無い」ロットになるので、配置の対象から外す。
   // buildWork() ではなくここで外すのは、エリア自体は倉庫に実在するのでブロック図には
   // 空のまま残したいため。AREA_GROUPS の連結も byName に入らないことで自然に外れる。
@@ -2288,16 +2288,16 @@ function renderResult(lots, unknown, typeMix){
   // 回しきれずに紙から落ちる分だけを知らせる。
   const pl=sheetPlacement();
   if(pl.unlisted.length){
-    warnHtml+=`<div class="msg warn">⚠ 配置図のあふれブロックにも記載できない項目があります：`
+    warnHtml+=`<div class="msg warn">⚠ 配置図の追記欄にも記載できない項目があります：`
       + `${lotsIn(pl.unlisted)}件。ブロック図で確認してください。</div>`;
   }
-  // 掲載先 over のエリアは、表の欄数超過で使う「あふれブロック」とは別の設定値。
+  // 掲載先 over のエリアは、表の欄数超過で使う「追記欄」とは別の設定値。
   // 自動配置の対象外なので、使えない場所があることを知らせる。
   // 「置きません」は新規配置の話であって、既にそこにある荷物が消えるわけではない
   // （下の「荷物が残っています」参照）。両方を満たす言い方にする。
   const overAreas=sheetAreas("over");
   if(overAreas.length){
-    warnHtml+=`<div class="msg warn">⚠ 掲載先を「あふれブロック」にした次のエリアには、新しく荷物を置きません：${overAreas.join("・")}</div>`;
+    warnHtml+=`<div class="msg warn">⚠ 掲載先を「掲載しない」にした次のエリアには、新しく荷物を置きません：${overAreas.join("・")}</div>`;
   }
   // 掲載先だけの変更は applyConfig() が redraw() を呼び run() を呼ばないので、
   // 既存の荷物は消えない（clearManual() を避けるため）。そのため、あるエリアの
@@ -4475,7 +4475,7 @@ function arrangeBottomSlots(entries, count, positions){
     .concat(rescuedEntries.slice(keptRescued.length), rightEntries.slice(keptRight.length));
   return {slots, dropped};
 }
-// 通常欄から漏れた項目は、あふれブロックに先頭2項目だけ記載する。
+// 通常欄から漏れた項目は、追記欄に先頭2項目だけ記載する。
 // 3項目目以降は紙に記載できないため、画面の警告対象として分けて返す。
 function arrangeOverflowSlots(entries){
   return {overflow:entries.slice(0,2), unlisted:entries.slice(2)};
@@ -4729,7 +4729,7 @@ function slotCells(entries,count,kind,extra){
   return out;
 }
 
-// あふれブロックの1項目は、右端2列の中で品名・ロット・P数・注記を縦に記載する。
+// 追記欄の1項目は、右端2列の中で品名・ロット・P数・注記を縦に記載する。
 function overflowTable(entries){
   if(!entries.length) return "";
   const span=v=>v?`<span class="fit">${esc(v)}</span>`:"";
@@ -4846,7 +4846,7 @@ function sheetGridAnchors(sp, order){
 // ここを固定名にしておくと、基準エリアの掲載先を変えたときに
 // 欄とグリッドが別のエリアを指し、引き出し線が的外れになる。
 /* pad: 表の右に余る列数。wide の様式ではメイン14列の右に2列（84px）余る。
-   あふれた項目がある日は、この2列を縦2項目のあふれブロックに使う。 */
+   あふれた項目がある日は、この2列を縦2項目の追記欄に使う。 */
 function gridRows(pad, overflow){
   const useOverflow=pad>=2 && overflow && overflow.length;
   const padCell = pad>0 ? `<td class="none" colspan="${pad}"></td>` : "";
