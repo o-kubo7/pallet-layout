@@ -473,8 +473,10 @@ wide は既存の様式で、欄数が増えても表の総幅 672px と行数�
 - 「あふれブロック」が `files/index.html` に1つも残っていないこと
 
 ```bash
-node --test tests/
+node --test tests/sheet-placement.test.js tests/stash-overflow.test.js
 ```
+
+`node --test tests/` は Node v22.15.0 ではディレクトリを解決できず失敗するので使わない。
 
 ### 10-2. ブラウザでの手動確認
 
