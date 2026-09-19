@@ -4529,10 +4529,14 @@ function arrangeBottomSlots(entries, count, positions){
   const rescuedEntries=entries.filter(entry=>entry.fromTop);
   const rightEntries=entries.filter(entry=>
     !entry.fromTop && (!baseArea || !entry.areas.includes(baseArea)));
-  // PC横・EV横が両方ある場合は、EV横を最も右に置く。欄超過時も右側の先頭から残す。
-  const keptRight=rightEntries.slice(0, Math.min(rightEntries.length, count));
+  // 下段の欄は基準エリアのロットが先に取る（設計書 2026-09-19 §3-1）。盤に描かれるのは
+  // 基準エリアだけで、どのロットが盤のどこにあるかは下段の欄から引く引き出し線でしか
+  // 分からない。基準エリア以外は盤に無いので、下段の欄を取っても線の価値を使わない。
+  // 残った欄を基準エリア以外に右詰めで配る。並び順の先頭から残すので、
+  // 1欄しか残らない日は PC横 が残り、「EV横 が最右」は両方入る日だけ成り立つ。
+  const keptMain=mainEntries.slice(0, Math.min(mainEntries.length, count));
+  const keptRight=rightEntries.slice(0, Math.max(0, count-keptMain.length));
   const mainCap=Math.max(0, count-keptRight.length);
-  const keptMain=mainEntries.slice(0, mainCap);
   const allPositions=positions && keptMain.every(entry=>
     Object.prototype.hasOwnProperty.call(positions, entry.lot.id));
   const orderedMain=allPositions
@@ -4610,14 +4614,27 @@ function sheetPlacement(){
     if(anchors) positions=Object.fromEntries(anchors.map(anchor=>[anchor.id, anchor.k+.5]));
   }
   const arranged=arrangeBottomSlots(bottomAll, lay.bottom, positions);
+  // 下段に入りきらなかった欄のうち、基準エリア以外は上段に空きがあればそこへ回す
+  // （設計書 2026-09-19 §3-3）。基準エリアの欄は回さない。上段には引き出し線が引けないので、
+  // 回しても盤のどこにあるか分からないまま「軒下」の見出しの下に並ぶことになり、
+  // 追記欄に落とすのと情報量が変わらない。
+  // 退避は除く。退避はもともと top の末尾に居て、上段に空きがあるなら降りてきていない。
+  const baseArea=sheetAreas("bottom")[0]||null;
+  const topFree=Math.max(0, lay.top-top.length);
+  const backable=arranged.dropped.filter(e=>
+    !e.stash && baseArea && !e.areas.includes(baseArea));
+  const movedBottom=backable.slice(0, topFree);
+  const backSet=new Set(movedBottom);
+  // 回した欄は注釈を作り直す（基準エリアを省かない）。元の欄は書き換えず浅く複製する
+  const topAll=top.concat(movedBottom.map(e=>({...e, note:slotAreaNote(e.areas)})));
   const omittedTop=top.slice(lay.top+moved.length);
   // 追記欄は欄数超過を先に載せる。退避の欄は top の末尾に居るので、
   // 並べ直さないと下段の欄数超過（arranged.dropped）を押し出してしまう
-  const rest=omittedTop.concat(arranged.dropped);
+  const rest=omittedTop.concat(arranged.dropped.filter(e=>!backSet.has(e)));
   const ordered=rest.filter(e=>!e.stash).concat(rest.filter(e=>e.stash));
   const overflowed=arrangeOverflowSlots(ordered);
-  return {lay, top, bottom:arranged.slots, bottomAll, droppedBottom:arranged.dropped,
-          overflow:overflowed.overflow, unlisted:overflowed.unlisted, moved};
+  return {lay, top:topAll, bottom:arranged.slots, bottomAll, droppedBottom:arranged.dropped,
+          overflow:overflowed.overflow, unlisted:overflowed.unlisted, moved, movedBottom};
 }
 /* 欄に入りきらない文字を水平に縮めて1行に収める。
    ・自然幅は .sheet の zoom で割って CSS px に直してから比を取る。
@@ -4681,6 +4698,12 @@ function fitSheetText(pl){
   if(pl.moved.length){
     html+=`<div class="msg ok">※ 上段に入りきらない ${lotsIn(pl.moved)} 件を`
         + `下段の空き欄に回しています。</div>`;
+  }
+  // 下段から上段へ回した日も同じように知らせる。紙の上では PC横・EV横 が「軒下」の
+  // 見出しの下に注釈つきで現れるので、画面で理由を言わないと不具合と疑われる
+  if(pl.movedBottom && pl.movedBottom.length){
+    html+=`<div class="msg ok">※ 下段に入りきらない ${lotsIn(pl.movedBottom)} 件を`
+        + `上段の空き欄に回しています。</div>`;
   }
   const parts=Object.keys(over).map(k=>`${FIT_LABEL[k]||k} ${over[k].size}件`);
   if(parts.length){

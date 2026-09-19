@@ -66,7 +66,7 @@ test("Service Workerは版付きキャッシュ名を使う", () => {
   const sw = fs.readFileSync("files/sw.js", "utf8");
   assert.match(sw, /const CACHE_VERSION = "v\d+"/);
   assert.match(sw, /const CACHE_NAME = "pallet-layout-" \+ CACHE_VERSION/);
-  assert.match(sw, /const CACHE_VERSION = "v53"/);
+  assert.match(sw, /const CACHE_VERSION = "v54"/);
 });
 
 test("配置編集には配置不可編集と再配置の操作がある", () => {
@@ -657,7 +657,7 @@ test("sheetPlacementはグリッドセル中心に近い下段欄へメインロ
     [null, 1, null, null, null, null, null]);
 });
 
-test("右端予約で欄数が減ってもあふれたメイン項目は入力順を保つ", () => {
+test("右端予約で欄数が減ってもメイン項目はグリッド順に並ぶ", () => {
   const arrange = new Function(
     "sheetAreas",
     functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
@@ -668,8 +668,10 @@ test("右端予約で欄数が減ってもあふれたメイン項目は入力�
   const pc = { lot: { id: 4 }, areas: ["PC横"] };
   const ev = { lot: { id: 5 }, areas: ["EV横"] };
   const result = arrange([right, left, middle, pc, ev], 4, { 1: 9, 2: 1, 3: 5 });
-  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id), [2, 1, 4, 5]);
-  assert.deepEqual(result.dropped.map(entry => entry.lot.id), [3]);
+  // 基準エリア優先にしたのでメイン3件が先に欄を取り、右詰めに残るのは1欄。
+  // 並び順の先頭の PC横 が残り、EV横 がこぼれる（設計書 2026-09-19 §3-2）
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id), [2, 3, 1, 4]);
+  assert.deepEqual(result.dropped.map(entry => entry.lot.id), [5]);
 });
 
 test("入力順が逆でもメイン項目はグリッドの左から右へ並ぶ", () => {
@@ -1409,4 +1411,140 @@ test("up の列で准緊急用マスまで埋まったら緊急用マスは使�
   )();
   const cells = cellsOf({ h: 9, up: 1, fills: [{ id: 0, count: 8 }], aisleRows: [8] });
   assert.equal(cells[8].id, null); // 緊急用マス(row8)は自動配置の対象外、8個では届かない
+});
+
+test("下段の欄は基準エリアのロットが先に取る", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const pc = n => ({ lot: { id: "P" + n }, areas: ["PC横"] });
+  const ev = n => ({ lot: { id: "E" + n }, areas: ["EV横"] });
+  const result = arrange(
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
+     pc(1), pc(2), pc(3), ev(1)], 9, null);
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
+    ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "P1", "P2"]);
+  assert.deepEqual(result.dropped.map(entry => entry.lot.id), ["P3", "E1"]);
+});
+
+test("右詰めに1欄しか残らない日は並び順の先頭を残す", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const result = arrange(
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7), main(8),
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }],
+    9, null);
+  assert.equal(result.slots[8].lot.id, "P1");
+  assert.deepEqual(result.dropped.map(entry => entry.lot.id), ["E1"]);
+});
+
+test("基準エリアが欄数を超えたら基準エリア以外は全部こぼれる", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const result = arrange(
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7), main(8), main(9),
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }],
+    9, null);
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
+    ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9"]);
+  assert.deepEqual(result.dropped.map(entry => entry.lot.id), ["P1", "E1"]);
+});
+
+test("両方が下段に残る日は右詰めとEV横最右を保つ", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const result = arrange(
+    [main(1), main(2), main(3), main(4), main(5), main(6),
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }],
+    9, null);
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
+    ["M1", "M2", "M3", "M4", "M5", "M6", null, "P1", "E1"]);
+  assert.deepEqual(result.dropped, []);
+});
+
+test("上段からの救済は基準エリア以外より後ろに置く", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const rescued = { lot: { id: "R1" }, areas: ["軒下①"], fromTop: true };
+  const result = arrange(
+    [{ lot: { id: "M1" }, areas: ["メイン"] }, { lot: { id: "M2" }, areas: ["メイン"] },
+     rescued,
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }],
+    7, null);
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
+    ["M1", "M2", "R1", null, null, "P1", "E1"]);
+});
+
+function buildPlacementForTier(topSlots, bottomSlots) {
+  return new Function(
+    "sheetSlots", "stashSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas",
+    functionSource("arrangeBottomSlots") +
+    functionSource("arrangeOverflowSlots") +
+    functionSource("sheetPlacement") + "; return sheetPlacement;"
+  )(
+    tier => tier === "top" ? topSlots : bottomSlots,
+    () => [],
+    () => ({ top: 6, bottom: 9 }),
+    areas => "※" + areas.join("・"),
+    false,
+    tier => tier === "bottom" ? ["メイン", "PC横", "EV横"] : ["軒下①"]
+  );
+}
+
+test("下段のこぼれのうち基準エリア以外は上段の空き欄へ回る", () => {
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const placement = buildPlacementForTier(
+    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" }],
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "P2" }, areas: ["PC横"] },
+     { lot: { id: "P3" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }]
+  );
+  const result = placement();
+  assert.deepEqual(result.top.map(entry => entry.lot.id), ["T1", "P3", "E1"]);
+  // 回した欄は基準エリアを省かない注釈に作り直す
+  assert.deepEqual(result.top.slice(1).map(entry => entry.note), ["※PC横", "※EV横"]);
+});
+
+test("基準エリアのこぼれは上段へ回さず追記欄へ行く", () => {
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const placement = buildPlacementForTier(
+    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" }],
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7), main(8), main(9), main(10),
+     { lot: { id: "P1" }, areas: ["PC横"] }]
+  );
+  const result = placement();
+  // 上段へ回るのは PC横 だけ。メインのこぼれは追記欄へ直行する
+  assert.deepEqual(result.top.map(entry => entry.lot.id), ["T1", "P1"]);
+  assert.deepEqual(result.overflow.map(entry => entry.lot.id), ["M10"]);
+});
+
+test("下段があふれた日は上段から下段への救済が起きない", () => {
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const placement = buildPlacementForTier(
+    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" }],
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "P2" }, areas: ["PC横"] },
+     { lot: { id: "P3" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }]
+  );
+  assert.deepEqual(placement().moved, []);
+});
+
+test("下段から上段へ回した欄を画面にだけ知らせる", () => {
+  const fit = functionSource("fitSheetText");
+  assert.match(fit, /pl\.movedBottom\s*&&\s*pl\.movedBottom\.length/);
+  assert.match(fit, /下段に入りきらない \$\{lotsIn\(pl\.movedBottom\)\} 件を/);
+  assert.match(fit, /上段の空き欄に回しています。/);
 });
