@@ -2452,3 +2452,37 @@ test("確認は欄を開くときに出す。確定の経路には置かない",
   assert.doesNotMatch(functionSource("saveSheetMark"), /ensureSheetEditSig/);
   assert.doesNotMatch(functionSource("flushSheetEdit"), /confirm\(/);
 });
+
+test("紙に出ていない書き足しの件数を画面に知らせる", () => {
+  // #sheetMsg は印刷CSSで display:none なので紙には出ない
+  const fn = functionSource("fitSheetText");
+  assert.match(fn, /前の配置に対する書き足し/);
+  assert.match(fn, /dropHiddenMarks\(\)/);
+});
+
+test("案内は innerHTML への代入より前で組む", () => {
+  // fitSheetText は末尾で box.innerHTML = html と上書きし、applyDisplay からも
+  // 呼ばれる。renderSheet の末尾で後から足すと、表示設定を触った瞬間に消える
+  const fn = functionSource("fitSheetText");
+  const assignAt = fn.lastIndexOf("box.innerHTML=html");
+  const noticeAt = fn.indexOf("前の配置に対する書き足し");
+  assert.notEqual(assignAt, -1);
+  assert.notEqual(noticeAt, -1);
+  assert.ok(noticeAt < assignAt);
+});
+
+test("書き足しであふれたときは書き足しを短くするよう案内する", () => {
+  // 既存の「品名を短くしてください」「エリア名を短くしてください」は
+  // 書き足し由来のあふれには当てはまらない
+  const fn = functionSource("fitSheetText");
+  assert.match(fn, /書き足した文字を短くしてください/);
+  // 既存の2つの文言と条件には触れない
+  assert.match(fn, /品名を短くしてください/);
+  assert.match(fn, /エリア名を短くしてください/);
+});
+
+test("自分で押す破棄は設定にかかわらず確認する", () => {
+  const fn = functionSource("dropHiddenMarks");
+  assert.match(fn, /confirm\(/);
+  assert.doesNotMatch(fn, /sheetEditSilent/);
+});

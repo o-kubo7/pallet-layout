@@ -4831,8 +4831,9 @@ const PRINT_H_PX = 733.2;               // A4横・余白8mm の印刷領域の�
 const PRINT_H_LIMIT = PRINT_H_PX*0.98;  // ブラウザごとの余白差を見込んで 98% を上限にする
 /* pl: sheetPlacement() の戻り値（様式と、下段へ回した欄）。
    renderSheet() からは求め済みのものを渡す。
-   applyDisplay() など配置を持たない呼び出し元のために省略可にしてある。 */
-function fitSheetText(pl){
+   applyDisplay() など配置を持たない呼び出し元のために省略可にしてある。
+   hidden: hiddenMarkCount(pl) の結果。省略時（applyDisplay() 経由など）は自分で数える。 */
+function fitSheetText(pl,hidden){
   if(!pl) pl=sheetPlacement();
   const lay=pl.lay;
   const box=document.getElementById("sheetMsg");
@@ -4895,7 +4896,17 @@ function fitSheetText(pl){
     let how="";
     if(hasSlot) how+="設定タブの「表示設定」で文字を小さくするか、品名を短くしてください。";
     if(hasHead) how+="見出しは設定タブの「配置マス」でエリア名を短くしてください。";
+    // 書き足した欄があふれているときは対処が違う。既存の2つの条件には触れない
+    const hasEdited=Object.keys(over).some(k=>[...over[k]].some(td=>td.classList.contains("edited")));
+    if(hasEdited) how+="書き足した文字を短くしてください。";
     html+=`<div class="msg warn">⚠ 文字が入りきらない欄があります：${parts.join(" / ")}。${how}</div>`;
+  }
+  // 紙に出ていない書き足し。#sheetMsg は印刷CSSで display:none なので紙には出ない。
+  // 引数で渡されない経路（applyDisplay 経由など）では自分で数える
+  const hid=(hidden==null) ? (typeof hiddenMarkCount==="function"?hiddenMarkCount():0) : hidden;
+  if(hid>0){
+    html+=`<div class="msg ok">※ 前の配置に対する書き足しが ${hid} 件あります。紙には出ません。`
+        + ` <button class="btn btn-ghost" onclick="dropHiddenMarks()">捨てる</button></div>`;
   }
   // 縦のはみ出し。autoSheetZoom() は Math.max(1,...) で 1 倍を下回らないので、
   // 文字を大きくして表が伸びても自動では救われない
@@ -4954,6 +4965,18 @@ function hiddenMarkCount(pl){
   const ed=activeShift().sheetEdits;
   if(!ed || !ed.sig || ed.sig===currentSheetSig(pl)) return 0;
   return Object.keys(ed.marks||{}).length;
+}
+// 利用者が自分で押す破棄。sheetEditSilent は見ない。
+// 押した破棄まで黙って実行すると、誤タップで書き足しが消える
+function dropHiddenMarks(){
+  const n=hiddenMarkCount();
+  if(!n) return;
+  if(!confirm(`前の配置に対する書き足し ${n} 件を捨てますか？`)) return;
+  const ed=activeShift().sheetEdits;
+  ed.marks={};
+  ed.sig="";
+  saveSchedule();
+  renderSheet();
 }
 /* ---------- 配置図の編集モード ---------- */
 // 画面の状態。保存しない。タブを離れたら OFF に戻す
@@ -5305,7 +5328,7 @@ function renderSheet(){
     ${rows}</table></div></div>`;
   const now=document.querySelector("#sheetView .sheet");
   if(now && keepLeft) now.scrollLeft=keepLeft;
-  fitSheetText(pl);               // 折り返しは行の高さを変えるので線より先に確定させる
+  fitSheetText(pl, hiddenMarkCount(pl)); // 折り返しは行の高さを変えるので線より先に確定させる
   // 救済で下段へ回した欄には線を引かない。同じロットがメインと軒下に分割配置された日、
   // アンカーの有無に任せると救済欄からメインの同じマスへ2本目の線が伸びて誤読させる
   drawLeaders(grid.anchors, bottom.map(e=>e && !e.fromTop ? e.lot.id : null));
