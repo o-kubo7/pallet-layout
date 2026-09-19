@@ -313,6 +313,20 @@ function functionSource(name) {
   throw new Error(`${name} has no closing brace`);
 }
 
+// @media print{...} だけを切り出す。固定長で切ると閉じ括弧の外まで含み、
+// 印刷CSSの外に書いた指定でも印刷CSSのテストが緑になってしまう
+function printBlock() {
+  const start = source.indexOf("@media print{");
+  assert.notEqual(start, -1, "@media print must exist");
+  const brace = source.indexOf("{", start);
+  let depth = 0;
+  for (let i = brace; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    if (source[i] === "}" && --depth === 0) return source.slice(start, i + 1);
+  }
+  throw new Error("@media print has no closing brace");
+}
+
 // DEFAULT_SPACES は配列リテラルなので、宣言ごと切り出して評価する
 function defaultSpaces() {
   const start = source.indexOf("const DEFAULT_SPACES = [");
@@ -2190,4 +2204,53 @@ test("追記欄にも書き足しを差し込める。余り欄には付けな�
   const plain = renderOverflow([entry("部品A")]);
   assert.match(plain, />部品A</);
   assert.doesNotMatch(plain, /data-ek/);
+});
+
+test("配置表のツールバーに文字を編集するトグルを置く", () => {
+  const sheetStart = source.indexOf('<div id="tab-sheet"');
+  const sheetEnd = source.indexOf('<!-- ===== 設定タブ', sheetStart);
+  const sheetTab = source.slice(sheetStart, sheetEnd);
+  assert.match(sheetTab, /id="sheetEditBtn"[^>]*onclick="toggleSheetEditMode\(\)"/);
+  assert.match(sheetTab, /✏ 文字を編集/);
+});
+
+test("編集モードの印は画面だけに出し、紙には出さない", () => {
+  // 背景色はブラウザが既定で印刷しないので print-color-adjust を付けないことが
+  // 紙に出さない手段になる。念のため @media print でも消す
+  assert.match(source, /\.sheet td\.edited\{background:#fffbe6\}/);
+  assert.match(printBlock(), /\.sheet td\.edited\{background:transparent/);
+  assert.doesNotMatch(source, /td\.edited\{[^}]*print-color-adjust/);
+});
+
+test("表を描き直しても横スクロール位置を戻す", () => {
+  // .sheet ごと作り直すので、確定のたびに紙が左端へ飛ぶと
+  // 右側の欄を続けて直せない（実機は幅412px・表672pxで必ず横スクロール）
+  assert.match(functionSource("renderSheet"), /scrollLeft/);
+});
+
+test("表を描き直す前に編集中の入力を保存する。早期returnでも後始末する", () => {
+  // onHeadChange / setArrowHead / applyDisplay / showMapState はいずれも
+  // 編集中でも走り、開いている入力欄を無言で捨てる。
+  // 早期 return の経路では末尾の applySheetEditMode() に届かない
+  const fn = functionSource("renderSheet");
+  const flushAt = fn.indexOf("flushSheetEdit()");
+  const guardAt = fn.indexOf("!isActiveFresh()");
+  assert.notEqual(flushAt, -1);
+  assert.notEqual(guardAt, -1);
+  assert.ok(flushAt < guardAt, "保存は早期 return より前に置くこと");
+  assert.match(fn, /applySheetEditMode\(\)/);
+  // commitSheetEdit() は renderSheet() を呼ぶので、ここから呼ぶと
+  // 1回の確定で表を2回組み立てることになる
+  assert.doesNotMatch(fn, /commitSheetEdit\(\)/);
+});
+
+test("あさとひるを切り替える前に編集を閉じる", () => {
+  // setActiveTiming は activeTiming を切り替えた後に showMapState →
+  // renderSheet を呼びうる。そこで確定すると、あさで開いていた入力が
+  // ひるの marks に保存される
+  const fn = functionSource("setActiveTiming");
+  const exitAt = fn.indexOf("exitSheetEditMode()");
+  const switchAt = fn.indexOf("activeTiming=key");
+  assert.notEqual(exitAt, -1);
+  assert.ok(exitAt < switchAt, "確定は activeTiming を変える前に置くこと");
 });

@@ -560,6 +560,13 @@
   .sheet td.g.bb.br::after{border-bottom-right-radius:var(--lot-corner)}
   .sheet td.colno{border:0;font-size:11px;height:20px}
 
+  /* 書き足した欄。画面だけの印。print-color-adjust を付けないので紙には出ない */
+  .sheet td.edited{background:#fffbe6}
+  /* 編集モードの間だけ、触れる欄がどこか分かるようにする。空欄も対象なので
+     この印がないと押せる場所が見えない */
+  .sheet.editing td[data-ek]{background:#eef6ff;cursor:text}
+  .sheet.editing td.edited{background:#fff3c4}
+
   @media print{
     @page{size:A4 landscape;margin:8mm}
     header,.tabs,.actionbar,#updateBar,.sizectl,.timing-switch,#messages,#sheetMsg,#regInfo,#saveStatus,.note,.hint{display:none !important}
@@ -578,6 +585,8 @@
        表示設定の文字サイズを上げると表の高さが変わる
        （用紙の98%を超えたら #sheetMsg に警告が出る） */
     .sheet{padding:0;overflow:visible;max-width:none;zoom:1.4;page-break-inside:avoid}
+    .sheet td.edited{background:transparent !important}
+    .sheet.editing td[data-ek]{background:transparent !important}
     body{background:#fff}
   }
   #updateBar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:#111827;color:#fff;
@@ -735,6 +744,7 @@
     <div class="card" id="sheetCard">
       <div class="sheet-toolbar">
         <div class="timing-switch" data-timing-switch></div>
+        <button class="btn btn-ghost" id="sheetEditBtn" onclick="toggleSheetEditMode()">✏ 文字を編集</button>
         <button class="btn btn-ghost sheet-print" id="printBtn" onclick="printSheet()" disabled>🖨 印刷</button>
       </div>
 
@@ -2634,6 +2644,8 @@ function switchTab(name){
   // 選択は配置編集タブの中だけの状態。他のタブへ移ったら捨てる。
   // 残すと、戻ってきたとき「なぜか選ばれている」状態になる
   if(name!=="edit") clearSel();
+  // 編集モードは配置図タブの中だけの状態。他のタブへ移ったら OFF に戻す
+  if(name!=="sheet" && sheetEditMode) exitSheetEditMode();
   // 表は表示されて初めて幅が測れるので、タブに来たタイミングで再描画・倍率決定する
   // （結果があるときは renderSheet() が末尾で applySheetZoom() も呼ぶ）
   if(name==="sheet"){
@@ -3115,6 +3127,10 @@ function captureActiveShift(){
 function setActiveTiming(key){
   if(!TIMING_KEYS.includes(key)) return;
   if(key!==activeTiming){
+    // 切り替える前に確定する。activeTiming を変えたあとに showMapState() →
+    // renderSheet() → commitSheetEdit() が走ると、あさで開いていた入力が
+    // ひるの marks に保存される
+    exitSheetEditMode();
     acClose();
     clearSel();
     captureActiveShift();
@@ -4893,9 +4909,61 @@ function hiddenMarkCount(pl){
   if(!ed || !ed.sig || ed.sig===currentSheetSig(pl)) return 0;
   return Object.keys(ed.marks||{}).length;
 }
+/* ---------- 配置図の編集モード ---------- */
+// 画面の状態。保存しない。タブを離れたら OFF に戻す
+let sheetEditMode=false;
+
+function toggleSheetEditMode(){
+  if(sheetEditMode){ exitSheetEditMode(); return; }
+  sheetEditMode=true;
+  applySheetEditMode();
+}
+// 開いている入力欄の値を保存する。描き直さない。Task 5 で中身を入れる。
+// 保存と描き直しを分けるのは、renderSheet() の冒頭から呼ぶため。
+// ここで renderSheet() を呼ぶと、外側の renderSheet() が続行して
+// 1回の確定で表を2回組み立てることになる。
+// 保存したら true
+function flushSheetEdit(){ return false; }
+// 保存して描き直す。入力欄の blur やボタンから呼ぶ。
+// 印刷の経路（printSheet / beforeprint）からも辿り着くので、
+// ここから confirm() を出してはならない。紙が白紙になる
+function commitSheetEdit(){ if(flushSheetEdit()) renderSheet(); }
+function exitSheetEditMode(){
+  const had=flushSheetEdit();
+  sheetEditMode=false;
+  // renderSheet() の末尾で applySheetEditMode() が走るので、
+  // 描き直すときは二重に呼ばない
+  if(had) renderSheet();
+  else    applySheetEditMode();
+}
+// renderSheet() は #sheetView の中身を丸ごと入れ替えるので、
+// クラスは描き直すたびに貼り直す。呼び出し元は setArrowHead / onHeadChange /
+// applyDisplay / showMapState と複数あるので、renderSheet() の末尾で行う
+function applySheetEditMode(){
+  const sheet=document.querySelector("#sheetView .sheet");
+  if(sheet) sheet.classList.toggle("editing", sheetEditMode);
+  const btn=document.getElementById("sheetEditBtn");
+  if(btn){
+    btn.classList.toggle("on", sheetEditMode);
+    btn.setAttribute("aria-pressed", sheetEditMode ? "true" : "false");
+  }
+}
 function renderSheet(){
+  // 描き直す前に、開いている入力欄の値を保存する。onHeadChange / setArrowHead /
+  // applyDisplay / showMapState はいずれも編集中でも走るので、
+  // ここで保存しないと入力が無言で捨てられる。早期 return より前に置く。
+  // commitSheetEdit ではなく flushSheetEdit()。commitSheetEdit は renderSheet() を
+  // 呼ぶので、この下の組み立てと合わせて表を2回作ることになる
+  flushSheetEdit();
   const host=document.getElementById("sheetView");
-  if(!isActiveFresh() || !lastSp){ host.innerHTML=""; return; }
+  if(!isActiveFresh() || !lastSp){
+    host.innerHTML="";
+    // ここで抜けると末尾の applySheetEditMode() に届かない。
+    // トグルが ON のまま残るので、自分で戻す
+    sheetEditMode=false;
+    applySheetEditMode();
+    return;
+  }
 
   // 上段・下段に出すエリアは掲載先の属性から引く。下段の先頭エリアは注釈を付けない基準にする。
   // 上段も下段と同じ流儀で、先頭のエリアが基準になる。上段が軒下だけだったころは
@@ -4990,14 +5058,21 @@ function renderSheet(){
   // wide は総幅が normal より広いので、CSS 側で幅を切り替えるための印も付ける
   const gridCls = ((grid.rows>7) ? " grid8" : "")
                 + ((lay.cols>SHEET_LAYOUTS.normal.cols) ? " wide" : "");
+  // 横スクロールのコンテナは .sheet 自身（overflow-x:auto）で、この関数が
+  // それごと作り直す。実機は幅412px・表672pxで必ず横スクロールしているので、
+  // 控えておかないと確定のたびに紙が左端へ飛ぶ
+  const keepLeft=(document.querySelector("#sheetView .sheet")||{}).scrollLeft||0;
   host.innerHTML=`<div class="sheet${gridCls}"><div class="sheetbox"><table>
     <colgroup>${Array(lay.cols).fill(`<col style="width:${lay.colW}px">`).join("")}</colgroup>
     ${rows}</table></div></div>`;
+  const now=document.querySelector("#sheetView .sheet");
+  if(now && keepLeft) now.scrollLeft=keepLeft;
   fitSheetText(pl);               // 折り返しは行の高さを変えるので線より先に確定させる
   // 救済で下段へ回した欄には線を引かない。同じロットがメインと軒下に分割配置された日、
   // アンカーの有無に任せると救済欄からメインの同じマスへ2本目の線が伸びて誤読させる
   drawLeaders(grid.anchors, bottom.map(e=>e && !e.fromTop ? e.lot.id : null));
   applySheetZoom();
+  applySheetEditMode();
 }
 
 // 区画のパレット数の表示。入力タブの「端数を「半」で表示」に追従する。
