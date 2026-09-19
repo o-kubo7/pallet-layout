@@ -1548,3 +1548,13 @@ test("下段から上段へ回した欄を画面にだけ知らせる", () => {
   assert.match(fit, /下段に入りきらない \$\{lotsIn\(pl\.movedBottom\)\} 件を/);
   assert.match(fit, /上段の空き欄に回しています。/);
 });
+
+test("上段から下段へ回した欄の通知も pl.moved のガードごと固定する", () => {
+  // pl.moved.length だけを見る検査では、ガードが外れても通ってしまう。
+  // fitSheetText(pl) は外から配置オブジェクトを受け取る署名なので、
+  // moved / movedBottom のどちらも同じ形で守られていることを固定する
+  const fit = functionSource("fitSheetText");
+  assert.match(fit, /pl\.moved\s*&&\s*pl\.moved\.length/);
+  assert.match(fit, /上段に入りきらない \$\{lotsIn\(pl\.moved\)\} 件を/);
+  assert.match(fit, /下段の空き欄に回しています。/);
+});

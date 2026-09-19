@@ -4695,7 +4695,7 @@ function fitSheetText(pl){
   }
   // 上段に入りきらない荷物を下段の空き欄へ回した日も、画面にだけ知らせる。
   // 件数は欄の数ではなく荷物の数（まとめた欄は複数のロットを含む）
-  if(pl.moved.length){
+  if(pl.moved && pl.moved.length){
     html+=`<div class="msg ok">※ 上段に入りきらない ${lotsIn(pl.moved)} 件を`
         + `下段の空き欄に回しています。</div>`;
   }
