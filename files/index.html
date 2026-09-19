@@ -566,6 +566,12 @@
      この印がないと押せる場所が見えない */
   .sheet.editing td[data-ek]{background:#eef6ff;cursor:text}
   .sheet.editing td.edited{background:#fff3c4}
+  /* いま直している欄。スマホ（600px以下）は表の外のバーで打ち、td の中身は
+     差し替えないので、この背景だけが「どこを直しているか」の手掛かりになる。
+     すでに書き足した欄（#fff3c4）を直すときも見分けたいので、
+     .sheet.editing td.edited と詳細度を揃えて後ろに置く。
+     print-color-adjust は付けないので紙には出ない */
+  .sheet.editing td.editing-cell{background:#ffd6e7}
   /* セル内編集。圧縮を外して等倍にする。追記欄のまとめ欄は font-size:55%
      ≒7px なので、編集中だけ 13px を下限にする（確定したら元に戻る） */
   .sheet td.editing-cell .fit{transform:none !important}
@@ -575,7 +581,12 @@
     background:#fff;color:#000;resize:none}
 
   /* スマホの編集バー。.sheet の外なので zoom も scaleX も掛からない */
-  #sheetEditBar{position:fixed;left:8px;right:8px;z-index:60;display:flex;gap:6px;
+  /* flex-wrap で2段にする。1段だと見出し（約96px）と確定・取り消し（約148px）が
+     flex:0 0 auto で幅を取り切り、入力欄は 375px 幅で外寸 80px・打てる幅 70px ＝全角4.4文字しか
+     残らない。これでは in-place（5.6文字）より狭く、バーにした意味が無い。
+     z-index は #updateBar（60）より上。同値だと後ろの DOM が勝ち、
+     更新バーが編集バーを覆う */
+  #sheetEditBar{position:fixed;left:8px;right:8px;z-index:61;display:flex;flex-wrap:wrap;gap:6px;
                 align-items:center;background:#fff;border:1px solid #06f;border-radius:8px;
                 padding:6px 8px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
   /* display:flex は ID セレクタの作者スタイルなので UA の [hidden]{display:none}
@@ -583,7 +594,9 @@
      （.ac-list[hidden] などと同じ回避） */
   #sheetEditBar[hidden]{display:none}
   #sheetEditBar .lbl{flex:0 0 auto;font-size:12px;color:#333;white-space:nowrap}
-  #sheetEditBar input,#sheetEditBar textarea{flex:1 1 auto;min-width:0;font-size:16px;
+  /* order:1 で見出しとボタン（既定の 0）より後ろへ回し、flex:1 1 100% で
+     2段目を丸ごと使う。1段目は見出し＋確定＋取り消し */
+  #sheetEditBar input,#sheetEditBar textarea{flex:1 1 100%;order:1;min-width:0;font-size:16px;
                 padding:4px;border:1px solid #bbb;border-radius:4px;font-family:inherit;resize:none}
   #sheetEditBar button{flex:0 0 auto}
 
@@ -607,6 +620,7 @@
     .sheet{padding:0;overflow:visible;max-width:none;zoom:1.4;page-break-inside:avoid}
     .sheet td.edited{background:transparent !important}
     .sheet.editing td[data-ek]{background:transparent !important}
+    .sheet.editing td.editing-cell{background:transparent !important}
     /* セル内編集の入力欄。青い枠は背景ではないのでブラウザの「背景を印刷しない」では
        消えず、transform:none が残ると圧縮が外れて欄からあふれる */
     .sheet td.editing-cell input,.sheet td.editing-cell textarea{border:0 !important;font-size:inherit !important}
@@ -2756,6 +2770,11 @@ function showMapState(){
   }else{
     document.getElementById("sheetView").innerHTML="";
     document.getElementById("sheetMsg").innerHTML="";
+    // renderSheet() を通らない後始末の経路。ここを抜けると表が消えるのに
+    // sheetEditMode が立ったままになり、aria-pressed と
+    // #sheetClearBtn の件数表示が古いまま残る
+    sheetEditMode=false;
+    applySheetEditMode();
   }
 }
 function setCellSize(px){
@@ -5031,7 +5050,9 @@ function applySheetEditMode(){
   if(sheet) sheet.classList.toggle("editing", sheetEditMode);
   const btn=document.getElementById("sheetEditBtn");
   if(btn){
-    btn.classList.toggle("on", sheetEditMode);
+    // .btn.on を当てる CSS は無い（.sizebtn.on / .subtab.on だけ）。
+    // ボタンの ON は既存の .btn-on で表す
+    btn.classList.toggle("btn-on", sheetEditMode);
     btn.setAttribute("aria-pressed", sheetEditMode ? "true" : "false");
   }
   // 「書き足しを全部戻す」は編集モードの間だけ、書き足しがあるときだけ出す

@@ -312,6 +312,15 @@ test("書き足しを全部戻すボタンは編集モードの間だけ出す",
   assert.match(fn, /hidden/);
 });
 
+test("編集モードのボタンは既存の .btn-on で ON を表す", () => {
+  // .btn.on を当てる CSS はこのリポジトリに無い（.sizebtn.on / .subtab.on /
+  // .ac-item.on だけ）。"on" のままだと押しても見た目が変わらない
+  const fn = functionSource("applySheetEditMode");
+  assert.match(fn, /classList\.toggle\("btn-on", sheetEditMode\)/);
+  assert.doesNotMatch(fn, /classList\.toggle\("on"/);
+  assert.match(source, /\.btn-on\{background:/);
+});
+
 test("書き足しを全部戻すときは設定にかかわらず確認する", () => {
   const fn = functionSource("clearAllMarks");
   assert.match(fn, /confirm/);
@@ -2184,6 +2193,13 @@ test("改行を含む書き足しは縦積みに組み立てる", () => {
   assert.doesNotMatch(one, /fitcol/);
 });
 
+test("data-auto は esc() を通して組み立てる", () => {
+  // テストは esc を v => String(v) で差し替えるので、本物の esc() を外しても
+  // 全部緑のまま通る。品名に " が1つ入るだけで属性が壊れ、表が崩れる
+  assert.match(functionSource("slotCells"), /data-auto="\$\{esc\(/);
+  assert.match(functionSource("overflowTable"), /data-auto="\$\{esc\(/);
+});
+
 test("書き足しを渡さなければ従来どおりの出力になる", () => {
   // slotCells を実行しているテストは位置引数で呼ぶので、tier と marks は
   // undefined になる。この経路が従来どおりであることを回帰として残す
@@ -2224,6 +2240,7 @@ test("追記欄にも書き足しを差し込める。余り欄には付けな�
   // 余り欄（blank）は荷物の欄ではないのでキーを与えない。
   // 与えると件数が1つ増えたとき埋め草が本物の欄に変わり、書き足しがずれる
   const blanks = html.match(/<td class="none"[^>]*>/g) || [];
+  assert.ok(blanks.length, "余り欄が出るサンプルであること");
   blanks.forEach(td => assert.doesNotMatch(td, /data-ek/));
 
   // 2件目にも正しい index が付く
@@ -2253,6 +2270,15 @@ test("編集モードの印は画面だけに出し、紙には出さない", ()
   assert.doesNotMatch(source, /td\.edited\{[^}]*print-color-adjust/);
 });
 
+test("いま直している欄は他と違う背景にする。紙には出さない", () => {
+  // スマホは td の中身を入力欄に差し替えないので、この背景だけが
+  // 「どこを直しているか」の手掛かりになる。#eef6ff（触れる欄）や
+  // #fff3c4（書き足し済み）と同じ色だと見分けが付かない
+  assert.match(source, /\.sheet\.editing td\.editing-cell\{background:#ffd6e7\}/);
+  assert.doesNotMatch(source, /td\.editing-cell\{[^}]*print-color-adjust/);
+  assert.match(printBlock(), /\.sheet\.editing td\.editing-cell\{background:transparent/);
+});
+
 test("表を描き直しても横スクロール位置を戻す", () => {
   // .sheet ごと作り直すので、確定のたびに紙が左端へ飛ぶと
   // 右側の欄を続けて直せない（実機は幅412px・表672pxで必ず横スクロール）
@@ -2273,6 +2299,19 @@ test("表を描き直す前に編集中の入力を保存する。早期return�
   // commitSheetEdit() は renderSheet() を呼ぶので、ここから呼ぶと
   // 1回の確定で表を2回組み立てることになる
   assert.doesNotMatch(fn, /commitSheetEdit\(\)/);
+});
+
+test("盤を消す経路でも編集モードを畳む", () => {
+  // showMapState の !fresh 側は renderSheet() を通らずに #sheetView を空にする。
+  // ここで畳まないと sheetEditMode が立ったまま残り、aria-pressed と
+  // #sheetClearBtn の件数が古いままになる。編集モードを抜ける経路は4つあり、
+  // ここだけ抜けていた
+  const fn = functionSource("showMapState");
+  const elseAt = fn.indexOf('getElementById("sheetView").innerHTML=""');
+  assert.notEqual(elseAt, -1);
+  const tail = fn.slice(elseAt);
+  assert.match(tail, /sheetEditMode=false/);
+  assert.match(tail, /applySheetEditMode\(\)/);
 });
 
 test("あさとひるを切り替える前に編集を閉じる", () => {
@@ -2330,12 +2369,14 @@ test("書き足しは空文字か自動計算値と同じならキーを消す",
   const norm = new Function(
     functionSource("normalizeMarkValue") + "; return normalizeMarkValue;"
   )();
+  // ensureSheetEditSig は渡さない。saveSheetMark が呼び始めたら
+  // ReferenceError で落ちてほしい（確定の経路に confirm を混ぜないための守り）
   const save = new Function(
-    "activeShift", "saveSchedule", "normalizeMarkValue", "ensureSheetEditSig",
+    "activeShift", "saveSchedule", "normalizeMarkValue",
     functionSource("saveSheetMark") + "; return saveSheetMark;"
   );
   const shift = { sheetEdits: { sig: "s1", marks: { "top|0|name": "既存" } } };
-  const run = save(() => shift, () => {}, norm, () => true);
+  const run = save(() => shift, () => {}, norm);
 
   run("top|0|name", "", "自動値");
   assert.equal(shift.sheetEdits.marks["top|0|name"], undefined);
@@ -2409,8 +2450,28 @@ test("編集バーはソフトキーボードの上に留まる", () => {
   assert.match(fn, /height/);
 });
 
+test("編集バーは2段。入力欄は2段目を丸ごと使う", () => {
+  // 1段に並べると、見出し（約95px）と確定（60px）・取り消し（88px）が
+  // flex:0 0 auto で幅を取り切り、375px 幅で入力欄は 80px＝全角4.4文字しか
+  // 残らない。in-place の 5.6 文字より狭く、バーにした意味が消える。
+  // 実測は 2026-09-20 に 20.7 文字（375px）／23.0 文字（412px）
+  const bar = source.match(/#sheetEditBar\{[^}]*\}/);
+  assert.ok(bar, "#sheetEditBar の規則が要る");
+  assert.match(bar[0], /flex-wrap:wrap/);
+  // #updateBar も position:fixed で下端・z-index:60。同値だと後ろの DOM が
+  // 勝ち、更新バーが編集バーを覆う
+  assert.match(bar[0], /z-index:61/);
+
+  const input = source.match(/#sheetEditBar input,#sheetEditBar textarea\{[^}]*\}/);
+  assert.ok(input, "#sheetEditBar の入力欄の規則が要る");
+  assert.match(input[0], /flex:1 1 100%/);
+  assert.match(input[0], /order:1/);
+});
+
 test("編集バーは印刷しない", () => {
-  assert.match(printBlock(), /#sheetEditBar/);
+  // 宣言まで固定する。/#sheetEditBar/ だけだと
+  // #sheetEditBar{display:block} でも緑になる
+  assert.match(printBlock(), /#sheetEditBar\{display:none/);
 });
 
 test("幅で方式を分け、両方の入力欄を同時に置かない", () => {

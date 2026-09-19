@@ -403,8 +403,9 @@ topHeadGroups(entries, count, baseArea)        // 引数は変えない。キー
 ```
 
 `#sheetMsg` は印刷CSSで `display:none`（`files/index.html:565`）なので紙には出ない。
-「捨てる」を押したら件数を添えて `confirm()` し、`marks` を空にする
-（`sheetEditSilent` が ON なら確認なし）。
+「捨てる」を押したら件数を添えて `confirm()` し、`marks` を空にする。
+**`sheetEditSilent` は見ない。** この設定が効くのは §3-4 の自動破棄だけで、
+利用者が自分で押す破棄は設定にかかわらず必ず確認する（§3-4）。
 
 **組み立てる場所は `fitSheetText()` の中。** `fitSheetText()` は末尾で
 `box.innerHTML = html` と上書きする（`files/index.html:4796`）ため、
@@ -446,8 +447,17 @@ ON の間、`.sheet` に `editing` クラスを付ける。CSS で `data-ek` を
 欄をタップすると、`.sheet-toolbar` の直下に編集バーを出す。
 
 - バーには「いま直している欄の名前（例: 上段3番目の品名）」「入力欄」「確定」「取り消し」を置く
-- 入力欄は画面幅いっぱい。Pixel 9a（412px）で約25文字が見える
-- タップされた `<td>` は背景色でハイライトし、どこを直しているか分かるようにする
+- バーは2段。1段目に「欄の名前」「確定」「取り消し」、2段目に入力欄を丸ごと置く
+  （`flex-wrap:wrap` ＋ 入力欄に `flex:1 1 100%; order:1`）。
+  1段に並べると見出しとボタンが幅を取り切り、入力欄は 375px 幅で
+  全角4.4文字しか残らず、in-place（5.6文字）より狭くなる（§6-3）
+- 入力欄は2段目の幅いっぱい。実測で 375px 幅のとき全角20.7文字、
+  Pixel 9a（412px）で全角23.0文字が見える（§6-3）
+- タップされた `<td>` は背景色でハイライトし、どこを直しているか分かるようにする。
+  `.sheet.editing td.editing-cell{background:#ffd6e7}`。触れる欄（`#eef6ff`）とも
+  書き足し済みの欄（`#fff3c4`）とも違う色にする。`.sheet.editing td.edited` と
+  詳細度を揃えて後ろに置かないと、書き足し済みの欄を直すときに色が変わらない。
+  `print-color-adjust` は付けず、`@media print` でも消す（§4 の印刷CSS）
 - バーは `position: fixed`。`visualViewport.offsetTop / height` を見て
   ソフトキーボードの上に留める。計算は既存の `acPosition()`（`files/index.html:1903`）
   と同じパターンを使う（`#actionBar` は配置図タブでは非表示なので `barH` は 0）。
@@ -461,6 +471,7 @@ ON の間、`.sheet` に `editing` クラスを付ける。CSS で `data-ek` を
   `.editcfg[hidden]`（`:170`））
 
 in-place にしない理由: 欄の実測幅は 95px で、品名（16px）は**5.6文字しか見えない**（§6-3）。
+（バーを1段に並べると入力欄が 4.4 文字まで縮み、この理由が成り立たなくなる。上記のとおり2段にする）
 `.sheet table` は `table-layout: fixed` の 672px 固定なので入力欄を広げても列は広がらない。
 加えて Pixel 9a に Escape キーが無く、ソフトキーボードの戻るボタンは `blur` = 確定になるため、
 in-place だと実機に取り消し手段が存在しない。バーなら「取り消し」ボタンを置ける。
@@ -800,6 +811,26 @@ input の内幅    = 91px
 
 入力欄を入れると、その行の高さが一時的に +12px 増える（`input` の border と line-height）。
 編集中だけなので印刷には影響しない。
+
+#### 編集バーの入力欄（2026-09-20 実測）
+
+バーの幅は `left:8px; right:8px` なので「画面幅 − 16px」。
+Chrome（headless）で実際の CSS とマークアップを切り出して測った値。
+
+| 画面幅 | バー幅 | 入力欄の外寸 | 打てる幅（padding/border を除く） | 全角文字数 |
+|---|---|---|---|---|
+| 375px | 359px | 341px | 331px | 20.7 |
+| 412px（Pixel 9a） | 396px | 378px | 368px | 23.0 |
+
+1段に並べた場合（当初の実装）は、見出し「上段 3番目の品名」が 94.9px、
+「確定」が 60px、「取り消し」が 88px を `flex:0 0 auto` で取り切るため、
+375px 幅で入力欄は外寸 80px・打てる幅 70px ＝ **全角4.4文字**しか残らなかった。
+in-place の 5.6 文字より狭く、バーにした意味が無くなる。
+2段にして解消した（§3-9）。
+
+バーの高さは1段 58px から2段 92px に増えるが、`positionSheetEditBar()` は
+`getBoundingClientRect().height` を毎回測ってから `top` を決めるので、
+可視領域の下端には変わらず貼り付く。
 
 ### 6-4. 縦積み（`<textarea>` で行を増やしたとき）
 
