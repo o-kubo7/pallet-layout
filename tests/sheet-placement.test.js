@@ -1619,3 +1619,39 @@ test("上段があふれる日は退避が下段へ救済され、下段から�
   // 救済された退避は下段の欄に入るので、追記欄には残らない
   assert.deepEqual(result.overflow, []);
 });
+
+test("lotsIn は欄の数ではなくまとめ欄の中のロット数を数える", () => {
+  const lotsIn = new Function(functionSource("lotsIn") + "; return lotsIn;")();
+  assert.equal(lotsIn([]), 0);
+  assert.equal(lotsIn([{ lot: { id: "A" } }, { lot: { id: "B" } }]), 2);
+  // まとめ欄は1欄で複数のロットを持つ。画面通知の件数は荷物の数で言う
+  assert.equal(lotsIn([{ members: [1, 2, 3] }]), 3);
+  assert.equal(lotsIn([{ members: [1, 2] }, { lot: { id: "A" } }]), 3);
+});
+
+test("まとめ欄が上段へ回っても movedBottom はその欄をそのまま持つ", () => {
+  // 回送の件数は lotsIn() で数えるので、欄が複数のロットをまとめている日に
+  // 「1件」と言ってしまわないことを、movedBottom の中身の側から固定する
+  const lotsIn = new Function(functionSource("lotsIn") + "; return lotsIn;")();
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const merged = {
+    lot: { id: "P1" }, areas: ["PC横"], note: "元の注釈",
+    members: [{ lot: { id: "P1" } }, { lot: { id: "P2" } }]
+  };
+  const placement = buildPlacementForTier(
+    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" }],
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
+     main(8), main(9), merged]
+  );
+  const result = placement();
+  // movedBottom は元の欄をそのまま持つ。注釈を作り直した複製が入るのは top のほう
+  assert.equal(result.movedBottom.length, 1);
+  assert.equal(result.movedBottom[0], merged);
+  assert.equal(merged.note, "元の注釈");
+  const placed = result.top[result.top.length - 1];
+  assert.notEqual(placed, merged);
+  assert.equal(placed.note, "※PC横");
+  assert.equal(placed.members, merged.members);
+  // 1欄だが荷物は2件。画面通知はこちらの数で言う
+  assert.equal(lotsIn(result.movedBottom), 2);
+});
