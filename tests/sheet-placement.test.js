@@ -2254,3 +2254,97 @@ test("あさとひるを切り替える前に編集を閉じる", () => {
   assert.notEqual(exitAt, -1);
   assert.ok(exitAt < switchAt, "確定は activeTiming を変える前に置くこと");
 });
+
+test("セル内編集は圧縮を外し、文字の大きさに下限を置く", () => {
+  // 追記欄のまとめ欄は font-size:55% ≒ 7px でそのままでは打てない。
+  // 編集中だけ実用サイズに上げ、確定したら元に戻す
+  assert.match(source, /\.sheet td\.editing-cell \.fit\{transform:none/);
+  assert.match(source, /\.sheet td\.editing-cell (input|textarea)/);
+  assert.match(source, /font-size:max\(13px,/);
+});
+
+test("セル内編集の印も画面だけに出し、紙には出さない", () => {
+  // 入力欄の青い枠は背景ではないので、ブラウザの「背景を印刷しない」では消えない。
+  // transform:none も残ると圧縮が外れて欄からあふれる。
+  // 印刷時に editing-cell が残らないのは印刷の経路の実装頼みなので、CSS 側で断つ
+  const print = printBlock();
+  assert.match(print, /\.sheet td\.editing-cell input,\.sheet td\.editing-cell textarea\{border:0 !important/);
+  assert.match(print, /\.sheet td\.editing-cell \.fit\{transform:revert !important\}/);
+  assert.doesNotMatch(source, /td\.editing-cell[^{]*\{[^}]*print-color-adjust/);
+});
+
+test("IMEの変換確定のEnterで欄を閉じない", () => {
+  // Android Chrome では変換確定の Enter が keydown に届く。
+  // e.key === "Enter" だけで判定すると変換しただけで閉じる
+  assert.match(functionSource("openInlineEditor"), /isComposing/);
+});
+
+test("欄は mousedown で開く", () => {
+  // click を待つと、前の欄の blur → commitSheetEdit → renderSheet で
+  // DOM が総入れ替えになり、mouseup の時点でクリック対象が消えている。
+  // 別の欄へ移るのに2タップ必要になる
+  assert.match(source, /addEventListener\("mousedown",[\s\S]{0,400}?data-ek/);
+});
+
+test("自動計算の値は data-auto から読む", () => {
+  // 表を描き直して読もうとすると、タップされた td が DOM から切り離されて
+  // 入力欄が出ず、focus() も効かない。しかもこれが起きるのは
+  // 「すでに書き足した欄をもう一度直す」＝最も普通の用途
+  const fn = functionSource("openInlineEditor");
+  assert.match(fn, /dataset\.auto/);
+  assert.doesNotMatch(fn, /renderSheet\(\)/);
+});
+
+test("書き足しは空文字か自動計算値と同じならキーを消す", () => {
+  const norm = new Function(
+    functionSource("normalizeMarkValue") + "; return normalizeMarkValue;"
+  )();
+  const save = new Function(
+    "activeShift", "saveSchedule", "normalizeMarkValue", "ensureSheetEditSig",
+    functionSource("saveSheetMark") + "; return saveSheetMark;"
+  );
+  const shift = { sheetEdits: { sig: "s1", marks: { "top|0|name": "既存" } } };
+  const run = save(() => shift, () => {}, norm, () => true);
+
+  run("top|0|name", "", "自動値");
+  assert.equal(shift.sheetEdits.marks["top|0|name"], undefined);
+
+  shift.sheetEdits.marks["top|1|name"] = "何か";
+  run("top|1|name", "  自動値  ", "自動値");
+  assert.equal(shift.sheetEdits.marks["top|1|name"], undefined);
+
+  run("top|2|name", "  手書き  ", "自動値");
+  assert.equal(shift.sheetEdits.marks["top|2|name"], "手書き");
+});
+
+test("確定の経路に確認を挟まない", () => {
+  // printSheet と beforeprint が exitSheetEditMode → flushSheetEdit →
+  // saveSheetMark と辿る。ここで confirm を出すと紙が白紙になる
+  assert.doesNotMatch(functionSource("saveSheetMark"), /confirm\(/);
+  assert.doesNotMatch(functionSource("flushSheetEdit"), /confirm\(/);
+  assert.doesNotMatch(functionSource("exitSheetEditMode"), /confirm\(/);
+});
+
+test("欄を開くときは、描き直したあとの td をキーで引き直す", () => {
+  // openSheetEditor は先頭で commitSheetEdit() を呼ぶ。そこで renderSheet() が
+  // 走ると、引数で受け取った td は DOM から切り離される
+  // （isConnected===false）。切り離されたノードに入力欄を差し込んでも
+  // 画面に出ず focus() も効かない。編集中に別の欄をタップする＝最も普通の
+  // 操作で必ず起きる
+  const fn = functionSource("openSheetEditor");
+  const keyAt = fn.indexOf("td.dataset.ek");
+  const commitAt = fn.indexOf("commitSheetEdit()");
+  assert.notEqual(keyAt, -1);
+  assert.notEqual(commitAt, -1);
+  assert.ok(keyAt < commitAt, "キーは描き直す前に控えること");
+  assert.match(fn, /querySelector\('#sheetView td\[data-ek="'\s*\+\s*key/);
+  // 引数の td をそのまま渡していないこと
+  assert.doesNotMatch(fn, /open(Bar|Inline)Editor\(td\)/);
+});
+
+test("見出しの欄キーは sheetHeadKey と同じ形にする", () => {
+  // renderSheet は見出しのキーをその場で組み立てる（文字列照合されるだけの
+  // 関数なので sheetHeadKey() を呼んでもよいが、Task 3 はインラインで書いた）。
+  // sheetHeadKey 側だけ変えても誰も落ちず、見出しの編集が静かに効かなくなる
+  assert.match(functionSource("renderSheet"), /\["top","g"\+i,"head"\]\.join\("\|"\)/);
+});

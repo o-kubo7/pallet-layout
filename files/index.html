@@ -566,6 +566,13 @@
      この印がないと押せる場所が見えない */
   .sheet.editing td[data-ek]{background:#eef6ff;cursor:text}
   .sheet.editing td.edited{background:#fff3c4}
+  /* セル内編集。圧縮を外して等倍にする。追記欄のまとめ欄は font-size:55%
+     ≒7px なので、編集中だけ 13px を下限にする（確定したら元に戻る） */
+  .sheet td.editing-cell .fit{transform:none !important}
+  .sheet td.editing-cell input,.sheet td.editing-cell textarea{
+    width:100%;box-sizing:border-box;border:1px solid #06f;padding:0;margin:0;
+    font-family:inherit;font-size:max(13px,1em);line-height:1.2;text-align:center;
+    background:#fff;color:#000;resize:none}
 
   @media print{
     @page{size:A4 landscape;margin:8mm}
@@ -587,6 +594,10 @@
     .sheet{padding:0;overflow:visible;max-width:none;zoom:1.4;page-break-inside:avoid}
     .sheet td.edited{background:transparent !important}
     .sheet.editing td[data-ek]{background:transparent !important}
+    /* セル内編集の入力欄。青い枠は背景ではないのでブラウザの「背景を印刷しない」では
+       消えず、transform:none が残ると圧縮が外れて欄からあふれる */
+    .sheet td.editing-cell input,.sheet td.editing-cell textarea{border:0 !important;font-size:inherit !important}
+    .sheet td.editing-cell .fit{transform:revert !important}
     body{background:#fff}
   }
   #updateBar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:#111827;color:#fff;
@@ -4918,12 +4929,18 @@ function toggleSheetEditMode(){
   sheetEditMode=true;
   applySheetEditMode();
 }
-// 開いている入力欄の値を保存する。描き直さない。Task 5 で中身を入れる。
+// 開いている入力欄の値を保存する。描き直さない。
 // 保存と描き直しを分けるのは、renderSheet() の冒頭から呼ぶため。
 // ここで renderSheet() を呼ぶと、外側の renderSheet() が続行して
 // 1回の確定で表を2回組み立てることになる。
 // 保存したら true
-function flushSheetEdit(){ return false; }
+function flushSheetEdit(){
+  if(!sheetEditing) return false;
+  const {key, el, auto}=sheetEditing;
+  sheetEditing=null;                 // 再入を止める
+  saveSheetMark(key, el.value, auto);
+  return true;
+}
 // 保存して描き直す。入力欄の blur やボタンから呼ぶ。
 // 印刷の経路（printSheet / beforeprint）からも辿り着くので、
 // ここから confirm() を出してはならない。紙が白紙になる
@@ -4947,6 +4964,108 @@ function applySheetEditMode(){
     btn.classList.toggle("on", sheetEditMode);
     btn.setAttribute("aria-pressed", sheetEditMode ? "true" : "false");
   }
+}
+// いま開いている編集の状態。1つだけ開く
+let sheetEditing=null;   // {key, td, el, auto}
+
+// click ではなく mousedown で開く。click を待つと、前の欄の blur →
+// commitSheetEdit() → renderSheet() で DOM が総入れ替えになり、
+// mouseup の時点でクリック対象が消えていて別の欄へ移るのに2タップ要る。
+// これはスマホの入口も兼ねる。タッチでも touchstart のあと合成の mousedown が
+// 発火するので、touchstart を別に登録してはいけない（二重に開いて
+// 開いたばかりの入力欄が blur ＝確定する）。方式の分岐は openSheetEditor の中
+document.addEventListener("mousedown", e=>{
+  if(!sheetEditMode) return;
+  const host=document.getElementById("sheetView");
+  if(!host || !host.contains(e.target)) return;
+  const td=e.target.closest("td[data-ek]");
+  if(!td) return;
+  if(sheetEditing && sheetEditing.td===td) return;   // 開いている欄そのもの
+  e.preventDefault();                                 // 既定のフォーカス移動を止める
+  openSheetEditor(td);
+});
+
+// 幅で方式を分ける。両方の入力欄を同時に DOM へ置かない。
+// 非表示側の要素に focus() を呼んでも何も起きない（2026-08-27 の教訓）
+function openSheetEditor(td){
+  // キーを先に控える。この下で表が描き直されると、引数で受け取った td は
+  // DOM から切り離される（isConnected===false）。切り離されたノードに
+  // 入力欄を差し込んでも画面に出ず focus() も効かない。
+  // 編集中に別の欄をタップする＝最も普通の操作で必ず起きる
+  const key=td.dataset.ek;
+  const hadHidden=hiddenMarkCount()>0;
+  // 前の欄を確定する。中で renderSheet() が走りうる
+  commitSheetEdit();
+  // 署名が合わないときはここで古い書き足しを捨てる（Task 7）。
+  // 確定側ではなく開く側に置くのは、印刷の経路に confirm を出さないため
+  if(!ensureSheetEditSig()) return;
+  // 捨てたなら #sheetMsg の「前の配置に対する書き足しが N 件」も消す
+  if(hadHidden) renderSheet();
+  // 描き直されたあとの欄をキーで引き直す。
+  // 属性セレクタは引用符で囲めばキーの "|" をそのまま書ける
+  const fresh=document.querySelector('#sheetView td[data-ek="'+key+'"]');
+  if(!fresh) return;
+  if(compactInputMq.matches) openBarEditor(fresh);
+  else                       openInlineEditor(fresh);
+}
+// 署名を合わせる。Task 7 で中身を入れる
+function ensureSheetEditSig(){ return true; }
+// 欄の中の文字。縦積み（.fitcol）は行を改行で連結する
+function sheetCellText(td){
+  const col=td.querySelector(".fitcol");
+  if(col) return [...col.querySelectorAll(".fit")].map(s=>s.textContent).join("\n");
+  const one=td.querySelector(".fit");
+  return one?one.textContent:"";
+}
+// 書き足しを保存する。空文字か自動計算の値と同じならキーを消す
+// （これが「欄ごとの取り消し」になる。紙の上に×ボタンを増やさない）。
+// 印刷の経路から呼ばれるので confirm() を出さないこと
+function saveSheetMark(key,raw,autoText){
+  const ed=activeShift().sheetEdits;
+  const value=normalizeMarkValue(raw);
+  const auto=normalizeMarkValue(autoText);
+  if(value==="" || value===auto){
+    if(Object.prototype.hasOwnProperty.call(ed.marks,key)){ delete ed.marks[key]; saveSchedule(); }
+    return false;
+  }
+  ed.marks[key]=value;
+  saveSchedule();
+  return true;
+}
+// PC（601px 以上）。欄の中身を入力欄に差し替える。
+// 欄の実測幅は 95px しかないが、PC は Escape があり、表示倍率ボタンで
+// 拡大でき、マウスで横スクロールできるので実用になる
+function openInlineEditor(td){
+  const key=td.dataset.ek;
+  // 自動計算の値は描画時に data-auto へ入れてある。
+  // ここで表を描き直して読もうとすると、この td が DOM から切り離されて
+  // 入力欄が出ず focus() も効かない（書き足し済みの欄を直すとき必ず起きる）
+  const auto=td.dataset.auto||"";
+  const cur=sheetCellText(td);
+  const multi=cur.indexOf("\n")>=0 || !!td.querySelector(".fitcol");
+  const el=document.createElement(multi?"textarea":"input");
+  if(!multi) el.type="text";
+  el.value=cur;
+  if(multi) el.rows=Math.max(1,cur.split("\n").length);
+  td.classList.add("editing-cell");
+  td.innerHTML="";
+  td.appendChild(el);
+  sheetEditing={key, td, el, auto};
+  el.focus();
+  if(el.select) el.select();
+
+  el.addEventListener("keydown", ev=>{
+    if(ev.key==="Escape"){ ev.preventDefault(); cancelSheetEdit(); return; }
+    // Android Chrome は IME の変換確定の Enter も keydown に届ける。
+    // isComposing を見ないと、変換しただけで欄が閉じる
+    if(ev.key==="Enter" && !multi && ev.isComposing===false){ ev.preventDefault(); el.blur(); }
+  });
+  el.addEventListener("blur", ()=>{ commitSheetEdit(); });
+}
+function cancelSheetEdit(){
+  if(!sheetEditing) return;
+  sheetEditing=null;
+  renderSheet();
 }
 function renderSheet(){
   // 描き直す前に、開いている入力欄の値を保存する。onHeadChange / setArrowHead /
