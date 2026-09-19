@@ -1488,7 +1488,7 @@ test("上段からの救済は基準エリア以外より後ろに置く", () =>
     ["M1", "M2", "R1", null, null, "P1", "E1"]);
 });
 
-function buildPlacementForTier(topSlots, bottomSlots) {
+function buildPlacementForTier(topSlots, bottomSlots, stashed) {
   return new Function(
     "sheetSlots", "stashSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas",
     functionSource("arrangeBottomSlots") +
@@ -1496,7 +1496,7 @@ function buildPlacementForTier(topSlots, bottomSlots) {
     functionSource("sheetPlacement") + "; return sheetPlacement;"
   )(
     tier => tier === "top" ? topSlots : bottomSlots,
-    () => [],
+    () => stashed || [],
     () => ({ top: 6, bottom: 9 }),
     areas => "※" + areas.join("・"),
     false,
@@ -1557,4 +1557,65 @@ test("上段から下段へ回した欄の通知も pl.moved のガードごと�
   assert.match(fit, /pl\.moved\s*&&\s*pl\.moved\.length/);
   assert.match(fit, /上段に入りきらない \$\{lotsIn\(pl\.moved\)\} 件を/);
   assert.match(fit, /下段の空き欄に回しています。/);
+});
+
+test("退避が先に上段の欄を取り、残った空きにだけ下段のこぼれが入る", () => {
+  // 設計書 2026-09-19 §3-3。退避は sheetPlacement() の冒頭で top の末尾に連結されるので、
+  // 下段のこぼれ（手順3）が来る前に上段の欄を取る
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const stash = n => ({ lot: { id: "S" + n }, areas: ["退避"], note: "※未定", stash: true });
+  const placement = buildPlacementForTier(
+    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" },
+     { lot: { id: "T2" }, areas: ["軒下①"], note: "※軒下①" }],
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "P2" }, areas: ["PC横"] },
+     { lot: { id: "P3" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }],
+    [stash(1), stash(2), stash(3)]
+  );
+  const result = placement();
+  // 上段6欄のうち5欄を 軒下2件＋退避3件 が埋め、残る1欄に下段のこぼれの先頭が入る
+  assert.deepEqual(result.top.map(entry => entry.lot.id),
+    ["T1", "T2", "S1", "S2", "S3", "P3"]);
+  assert.deepEqual(result.movedBottom.map(entry => entry.lot.id), ["P3"]);
+  assert.deepEqual(result.overflow.map(entry => entry.lot.id), ["E1"]);
+});
+
+test("退避が上段の空きを使い切る日は下段のこぼれが回らない", () => {
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const stash = n => ({ lot: { id: "S" + n }, areas: ["退避"], note: "※未定", stash: true });
+  const placement = buildPlacementForTier(
+    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" },
+     { lot: { id: "T2" }, areas: ["軒下①"], note: "※軒下①" }],
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "P2" }, areas: ["PC横"] },
+     { lot: { id: "P3" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }],
+    [stash(1), stash(2), stash(3), stash(4)]
+  );
+  const result = placement();
+  assert.deepEqual(result.top.map(entry => entry.lot.id),
+    ["T1", "T2", "S1", "S2", "S3", "S4"]);
+  assert.deepEqual(result.movedBottom, []);
+  // 回せなかった分は追記欄へ。退避そのものは上段に収まっているので追記欄には出ない
+  assert.deepEqual(result.overflow.map(entry => entry.lot.id), ["P3", "E1"]);
+});
+
+test("上段があふれる日は退避が下段へ救済され、下段からの回送は起きない", () => {
+  // 退避は arrangeBottomSlots() の救済対象にはなるが、下段のこぼれを上段へ回す経路の
+  // 対象外（!e.stash）。この2つを取り違えないよう、上段があふれる側も固定する
+  const stash = n => ({ lot: { id: "S" + n }, areas: ["退避"], note: "※未定", stash: true });
+  const top = n => ({ lot: { id: "T" + n }, areas: ["軒下①"], note: "※軒下①" });
+  const placement = buildPlacementForTier(
+    [top(1), top(2), top(3), top(4), top(5), top(6)],
+    [{ lot: { id: "M1" }, areas: ["メイン"] }],
+    [stash(1), stash(2)]
+  );
+  const result = placement();
+  // top は欄数で切らずに全件返る。紙に出るのは先頭 lay.top 欄だけで、
+  // そこから溢れた退避2件は下段の空き欄へ救済される
+  assert.deepEqual(result.top.slice(0, result.lay.top).map(entry => entry.lot.id),
+    ["T1", "T2", "T3", "T4", "T5", "T6"]);
+  assert.deepEqual(result.moved.map(entry => entry.lot.id), ["S1", "S2"]);
+  assert.deepEqual(result.movedBottom, []);
+  // 救済された退避は下段の欄に入るので、追記欄には残らない
+  assert.deepEqual(result.overflow, []);
 });
