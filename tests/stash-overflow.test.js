@@ -69,12 +69,12 @@ test("追記欄には欄数超過を先に入れ、退避の欄を後ろへ回�
   assert.match(fn, /filter\(e=>e\.stash\)/);
 });
 
-test("追記欄は3件以上あるとき2枠目にまとめて記載する", () => {
+test("追記欄は4件までそのまま載せ、5件以上で4枠目にまとめる", () => {
   const fn = functionSource("arrangeOverflowSlots");
-  // 2件以内は従来どおり
-  assert.match(fn, /entries\.length<=2/);
-  // 3件以上は2枠目を group にする
-  assert.match(fn, /group:\s*entries\.slice\(1\)/);
+  // 追記欄を2列にしたので枠は4つある。4件以内は1件ずつ通常の欄に載る
+  assert.match(fn, /entries\.length<=4/);
+  // 5件以上は4枠目を group にする
+  assert.match(fn, /group:\s*entries\.slice\(3\)/);
   // 紙に出ない項目は出さない
   assert.match(fn, /unlisted:\s*\[\]/);
 });
@@ -199,4 +199,58 @@ test("まとめ欄だけ文字と行間を詰める CSS がある", () => {
   // 件数だけ縦に伸びるのはまとめ欄だけなので、通常の欄の見た目は変えない
   assert.match(source, /\.sheet \.overflow-table td\.roll\{padding:0\}/);
   assert.match(source, /\.sheet \.overflow-table td\.roll \.fit\{font-size:55%;line-height:1\.05\}/);
+});
+
+test("荷物が多い日の様式は18列×39pxで上段6欄・下段9欄", () => {
+  // 紙の総幅を 672→702px に広げ、欄を1列ぶん増やす。
+  // 1欄は2列ぶんなので、18列なら下段9欄、日付ブロック5列と空1列を除いた上段は6欄
+  assert.match(source, /wide:\s*\{cols:18,\s*colW:39,\s*top:6,\s*bottom:9\}/);
+  assert.match(source, /width:702px;min-width:702px;max-width:702px/);
+});
+
+test("追記欄は1行に2欄ずつ並べる", () => {
+  // 18列だと追記欄は4列ぶん（156px）取れる。78px×2列に割ると
+  // 1欄の幅が下段の通常欄と同じになり、まとめ欄へ落ちる件数が減る
+  const renderOverflow = new Function(
+    "esc", "palSlotTextOf", "slotAreaNote",
+    functionSource("overflowTable") + "; return overflowTable;"
+  );
+  const entry = (name, lot) => ({ lot: { name, lot }, areas: ["メイン"] });
+  const html = renderOverflow(
+    value => String(value),
+    () => "4P",
+    areas => `※${areas.join("・")}`
+  )([entry("品目1", "L-1"), entry("品目2", "L-2"), entry("品目3", "L-3"), entry("品目4", "L-4")]);
+
+  const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
+  const nameRows = rows.filter(r => /c-name/.test(r));
+  assert.equal(nameRows.length, 2, "4欄なら品名の行は2本（1行に2欄ずつ）");
+  for (const row of nameRows) {
+    assert.equal((row.match(/<td/g) || []).length, 2, "1行に td が2つ並ぶこと");
+  }
+  // 1行目に1件目と2件目、2行目に3件目と4件目が来る
+  assert.match(nameRows[0], /品目1[\s\S]*品目2/);
+  assert.match(nameRows[1], /品目3[\s\S]*品目4/);
+  // 2行のあいだに隙間の行が入る
+  assert.match(html, /class="overflow-gap"/);
+});
+
+test("追記欄の欄数が奇数なら右側を空欄にする", () => {
+  // 空の td を置かないと、表が崩れて残り1件が横に広がる
+  const renderOverflow = new Function(
+    "esc", "palSlotTextOf", "slotAreaNote",
+    functionSource("overflowTable") + "; return overflowTable;"
+  );
+  const entry = (name, lot) => ({ lot: { name, lot }, areas: ["メイン"] });
+  const html = renderOverflow(
+    value => String(value),
+    () => "4P",
+    areas => `※${areas.join("・")}`
+  )([entry("品目1", "L-1"), entry("品目2", "L-2"), entry("品目3", "L-3")]);
+
+  const nameRows = (html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || []).filter(r => /c-name/.test(r));
+  assert.equal(nameRows.length, 2);
+  assert.equal((nameRows[1].match(/<td/g) || []).length, 2, "3件目の行にも td が2つあること");
+  assert.match(nameRows[1], /品目3/);
+  assert.match(nameRows[1], /class="none"/, "余った側は罫線の無い空欄にすること");
 });

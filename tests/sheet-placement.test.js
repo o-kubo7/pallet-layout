@@ -66,7 +66,7 @@ test("Service Workerは版付きキャッシュ名を使う", () => {
   const sw = fs.readFileSync("files/sw.js", "utf8");
   assert.match(sw, /const CACHE_VERSION = "v\d+"/);
   assert.match(sw, /const CACHE_NAME = "pallet-layout-" \+ CACHE_VERSION/);
-  assert.match(sw, /const CACHE_VERSION = "v52"/);
+  assert.match(sw, /const CACHE_VERSION = "v53"/);
 });
 
 test("配置編集には配置不可編集と再配置の操作がある", () => {
@@ -729,14 +729,14 @@ test("配置表からあふれた先頭2項目をあふれブロックへ記載�
   assert.deepEqual(result.unlisted, []);
 });
 
-test("3項目以上のあふれでは3項目目以降を警告対象にする", () => {
+test("5項目以上のあふれでは4枠目をまとめ欄にする", () => {
   const placement = new Function(
     "sheetSlots", "stashSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas",
     functionSource("arrangeBottomSlots") +
     functionSource("arrangeOverflowSlots") +
     functionSource("sheetPlacement") + "; return sheetPlacement;"
   );
-  const top = Array.from({ length: 8 }, (_, index) => ({ lot: { id: index + 1 }, areas: ["軒下①"] }));
+  const top = Array.from({ length: 10 }, (_, index) => ({ lot: { id: index + 1 }, areas: ["軒下①"] }));
   const bottom = Array.from({ length: 8 }, (_, index) => ({ lot: { id: index + 101 }, areas: ["メイン"] }));
   const computeSheetPlacement = placement(
     tier => tier === "top" ? top : bottom,
@@ -747,28 +747,34 @@ test("3項目以上のあふれでは3項目目以降を警告対象にする", 
     tier => tier === "bottom" ? ["メイン", "PC横", "EV横"] : []
   );
   const result = computeSheetPlacement();
-  // 3件以上あふれた日は、2枠目がまとめ欄（{group:[...]}）になり、
-  // 紙から荷物が消えないよう unlisted は常に空になる（Task 3 の仕様変更）
-  assert.equal(result.overflow.length, 2);
-  assert.equal(result.overflow[0].lot.id, 6);
-  assert.deepEqual(result.overflow[1].group.map(entry => entry.lot.id), [7, 8]);
+  // 追記欄は 78px×2列×2段の4枠。5件以上あふれた日だけ4枠目がまとめ欄（{group:[...]}）になり、
+  // 紙から荷物が消えないよう unlisted は常に空になる
+  assert.equal(result.overflow.length, 4);
+  assert.deepEqual(result.overflow.slice(0, 3).map(entry => entry.lot.id), [6, 7, 8]);
+  assert.deepEqual(result.overflow[3].group.map(entry => entry.lot.id), [9, 10]);
   assert.deepEqual(result.unlisted, []);
 });
 
-test("あふれブロックの2項目の間に6pxの隙間を入れる", () => {
+test("追記欄の段と段の間に6pxの隙間を入れる", () => {
   const renderOverflow = new Function(
     "esc", "palSlotTextOf", "slotAreaNote",
     functionSource("overflowTable") + "; return overflowTable;"
   );
+  const entry = (name, lot) => ({ lot: { name, lot }, areas: ["軒下①"] });
+  // 追記欄は1行に2欄ずつ並ぶので、隙間が入るのは3件目以降＝2段目ができる日
   const html = renderOverflow(
     value => String(value),
     () => "6P",
     () => "※軒下①"
-  )([
-    { lot: { name: "品目1", lot: "L-1" }, areas: ["軒下①"] },
-    { lot: { name: "品目2", lot: "L-2" }, areas: ["軒下①"] },
-  ]);
+  )([entry("品目1", "L-1"), entry("品目2", "L-2"), entry("品目3", "L-3")]);
   assert.match(html, /class="overflow-gap"/);
+  // 1段だけの日は隙間が要らない
+  const oneRow = renderOverflow(
+    value => String(value),
+    () => "6P",
+    () => "※軒下①"
+  )([entry("品目1", "L-1"), entry("品目2", "L-2")]);
+  assert.doesNotMatch(oneRow, /class="overflow-gap"/);
 });
 
 test("品目マスタJSONバックアップは品名とSNPだけを含む", () => {
@@ -1132,8 +1138,10 @@ test("8行の日は○を小さくして行高を詰める", () => {
   assert.match(source, /\.sheet\.grid8 td\.g \.mk\{width:19px;height:19px\}/);
 });
 
-test("8行の日だけ紙にgrid8の印を付ける", () => {
-  assert.match(source, /const gridCls = \(grid\.rows>7\) \? " grid8" : "";/);
+test("8行の日はgrid8、wide様式の日はwideの印を紙に付ける", () => {
+  // wide は総幅が normal より広い。CSS 側で幅を切り替えるための印
+  assert.match(source, /const gridCls = \(\(grid\.rows>7\) \? " grid8" : ""\)/);
+  assert.match(source, /\+ \(\(lay\.cols>SHEET_LAYOUTS\.normal\.cols\) \? " wide" : ""\);/);
 });
 
 test("緊急用マスが空なら列番号行は数字のまま", () => {

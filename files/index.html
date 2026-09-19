@@ -430,10 +430,13 @@
      表にぴったり重なるこのラッパを座標の原点にする */
   .sheet .sheetbox{position:relative;width:max-content}
   .sheet .leaders{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
-  /* 総幅は 672px 固定。列数と1列の幅は SHEET_LAYOUTS が決める
-     （normal 48px×14 / wide 42px×16）。列幅は colgroup で与える */
+  /* 総幅は様式で決まる。列数×列幅（normal 48px×14=672 / wide 39px×18=702）と
+     必ず一致させること。ずれると table-layout:fixed が colgroup の幅を無視して
+     列を詰め、盤のマスと欄の位置が合わなくなる。列幅は colgroup で与える。
+     追記欄の中の表（.overflow-table）は親のセル幅に従うので除外する */
   .sheet table{border-collapse:collapse;table-layout:fixed;
                width:672px;min-width:672px;max-width:672px;margin:0}
+  .sheet.wide table:not(.overflow-table){width:702px;min-width:702px;max-width:702px}
   .sheet td{border:1px solid #000;text-align:center;font-size:11px;padding:1px;
             height:26px;background:#fff;color:#000;overflow:hidden}
   .sheet td.none{border:0;background:transparent}
@@ -911,18 +914,23 @@ const FLOOR_POS = {
 // 「配置図の表」での欄の割り当て。エリア名は SPACES の sheet 属性から引く。
 // 返す順は SPACES の並び順。下段の先頭が基準エリアで、注釈を付けず、グリッドを描く。
 function sheetAreas(tier){ return SPACES.filter(s=>(s.sheet||"bottom")===tier).map(s=>s.name); }
-/* 配置図の表の様式。荷物が多い日は上段・下段の欄を1つずつ増やした wide に切り替える。
-   総幅 672px は両方で同じ。672÷14=48、672÷16=42 でどちらも割り切れる。
+/* 配置図の表の様式。荷物が多い日は上段・下段の欄を増やした wide に切り替える。
+   総幅は normal が 672px、wide が 702px。672÷14=48、702÷18=39 でどちらも割り切れる。
    ・normal … 現行の紙。左ブロック5列(240px)＋すき間1列(48px)＋上段4欄×2列(96px)＝14列
-   ・wide   … 左ブロック5列(210px)＋すき間1列(42px)＋上段5欄×2列(84px)＝16列
-              メインは14列×42px=588px で、右に2列(84px)余る。あふれた項目を書く追記欄に使う。
+   ・wide   … 左ブロック5列(195px)＋すき間1列(39px)＋上段6欄×2列(78px)＝18列
+              メインは14列×39px=546px で、右に4列(156px)余る。追記欄を78px×2列に割って使う。
+   wide を 702px にしたのは、A4横・余白8mm の印刷領域 281×194mm＝約1062×733px に対して
+   672px では横を 89% しか使えず、1列ぶんまるごと余っていたため（2026-09-19 実測）。
+   702px なら印刷倍率 1.4 で紙上 261mm、横93%に収まり、右端に 20mm の余白が残る。
+   欄が増えるぶん追記欄へ落ちる件数が減るので、縦の使用率もむしろ下がる。
    左ブロックが両方とも5列なのは、曜日セルが5個並ぶため。5列未満にはできない。
-   wide の1列42pxは、あさ／ひるの丸印に要る36px（文字11px×2＋padding6＋border4＋tdの4）を満たす。
+   wide の1列39pxは、あさ／ひるの丸印に要る36px（文字11px×2＋padding6＋border4＋tdの4）を満たす。
+   これ以上詰めると丸印が入らない。
    cols は SHEET_GRID_ORDER の要素数（メインの列数）以上でなければならない。
    下回ると gridRows() の余り列が負になり、表が黙って崩れる。 */
 const SHEET_LAYOUTS = {
   normal: {cols:14, colW:48, top:4, bottom:7},
-  wide:   {cols:16, colW:42, top:5, bottom:8},
+  wide:   {cols:18, colW:39, top:6, bottom:9},
 };
 /* 欄が足りない日だけ wide にする。判定は「まとめた後の欄数」（sheetSlots の戻り値）で行う。
    上段だけが溢れた日でも上下段そろって wide になる。1つの表で列を共有しているので
@@ -4560,13 +4568,14 @@ function arrangeBottomSlots(entries, count, positions){
     .concat(rescuedEntries.slice(keptRescued.length), rightEntries.slice(keptRight.length));
   return {slots, dropped};
 }
-/* 通常欄から漏れた項目は追記欄に記載する。枠は2つしかないので、
-   3件以上ある日は2枠目を「まとめ欄」にして残り全部を縦積みする。
-   置き場所の無い荷物を紙から落とすと現場に伝わらないため、
-   文字が小さくなっても載せるほうを選ぶ（設計書 §4-5）。 */
+/* 通常欄から漏れた項目は追記欄に記載する。追記欄は 78px×2列×2段の4枠なので、
+   4件までは1件ずつ通常の欄に載せ、5件以上ある日だけ4枠目を「まとめ欄」にして
+   残り全部を縦積みする。置き場所の無い荷物を紙から落とすと現場に伝わらないため、
+   文字が小さくなっても載せるほうを選ぶ（設計書 §4-5）。
+   枠数を変えるときは overflowTable() の2列組みと必ず揃えること。 */
 function arrangeOverflowSlots(entries){
-  if(entries.length<=2) return {overflow:entries, unlisted:[]};
-  return {overflow:[entries[0], {group:entries.slice(1)}], unlisted:[]};
+  if(entries.length<=4) return {overflow:entries, unlisted:[]};
+  return {overflow:entries.slice(0,3).concat([{group:entries.slice(3)}]), unlisted:[]};
 }
 /* 上段・下段の欄と様式を1回で決める。欄数超過の警告と renderSheet() の両方がここを通る。
    2か所で別々に数えると、警告の件数と実際に紙へ出る欄がずれる。
@@ -4705,7 +4714,7 @@ function renderSheet(){
   // 紙のどこにあるか分からなくなっていた
   // 上段・下段の欄と様式は sheetPlacement() が1回で決める。欄数超過の警告も同じ関数を通るので、
   // 警告の件数と紙に出る欄がずれない。
-  // 欄が足りない日は wide（16列×42px・上段5欄・下段8欄）。総幅 672px は変わらない。
+  // 欄が足りない日は wide（18列×39px・上段6欄・下段9欄）。総幅は 672px→702px に広がる。
   // それでも上段に入りきらない欄は、下段に空きがあればその末尾へ回っている（bottom の末尾）
   const pl=sheetPlacement();
   const top=pl.top, bottom=pl.bottom, lay=pl.lay;
@@ -4715,7 +4724,7 @@ function renderSheet(){
   const ring=(v,on)=>on?`<span class="ring">${v}</span>`:v;
   const E='<td class="none"></td>';
 
-  // 全体を1つの表にして列を揃える。列数は様式で決まる（normal 14列＝雛形のB〜O列 / wide 16列）
+  // 全体を1つの表にして列を揃える。列数は様式で決まる（normal 14列＝雛形のB〜O列 / wide 18列）
   let rows="";
 
   // 行1：月日（列1から）＋ タイトル（下は太罫）
@@ -4763,8 +4772,10 @@ function renderSheet(){
   // 12列以上のときはグリッド自体は描けているので、案内はその下に置く
   if(grid.warn && grid.warn.kind==="extra")  rows+=gridNoticeRow(grid.warn, lay.cols);
 
-  // 8 行になる日は○を縮めて行高を詰める。紙の高さを増やさないための切り替え
-  const gridCls = (grid.rows>7) ? " grid8" : "";
+  // 8 行になる日は○を縮めて行高を詰める。紙の高さを増やさないための切り替え。
+  // wide は総幅が normal より広いので、CSS 側で幅を切り替えるための印も付ける
+  const gridCls = ((grid.rows>7) ? " grid8" : "")
+                + ((lay.cols>SHEET_LAYOUTS.normal.cols) ? " wide" : "");
   host.innerHTML=`<div class="sheet${gridCls}"><div class="sheetbox"><table>
     <colgroup>${Array(lay.cols).fill(`<col style="width:${lay.colW}px">`).join("")}</colgroup>
     ${rows}</table></div></div>`;
@@ -4865,10 +4876,19 @@ function overflowTable(entries){
     else cls+=" c-"+({name:"name",lot:"lot",pallet:"pal"}[kind]);
     const edge=kind==="name"?"bt2 bb2 bl2 br2":kind==="note"?"bl2 br2 bb2":"bl2 br2";
     const fit={name:"name",lot:"lot",pallet:"pal",note:"note"}[kind];
-    return `<tr><td class="${cls} ${edge}" data-fit="${fit}">${inner}</td></tr>`;
+    return `<td class="${cls} ${edge}" data-fit="${fit}">${inner}</td>`;
   };
-  const records=entries.map(e=>["name","lot","pallet","note"].map(k=>cell(e,k)).join(""));
-  return `<table class="overflow-table">${records.join('<tr class="overflow-gap"><td></td></tr>')}</table>`;
+  // 2列組み。1行に欄を2つ並べ、品名・ロット・P数・注記の4行で1段を作る。
+  // wide の追記欄は4列ぶん（156px）あるので、割ると1欄が78px＝下段の通常欄と同じ幅になる。
+  // 欄が1つだけの日も半分の幅のままにする。紙の中で欄の幅が揃っているほうが読み違えない。
+  // 余った側は罫線の無い空欄で埋める。td を省くと表が崩れて残りの欄が横に広がる。
+  const blank=`<td class="none"></td>`;
+  const pairs=[];
+  for(let i=0;i<entries.length;i+=2) pairs.push([entries[i], entries[i+1]]);
+  const block=([a,b])=>["name","lot","pallet","note"]
+    .map(k=>`<tr>${cell(a,k)}${b?cell(b,k):blank}</tr>`).join("");
+  return `<table class="overflow-table">${
+    pairs.map(block).join('<tr class="overflow-gap"><td colspan="2"></td></tr>')}</table>`;
 }
 
 // 紙の様式である 14 列の並び：通路 | 1-3 | 段番号 | 4-6 | 段番号 | 7-9 | 通路 | 段番号
