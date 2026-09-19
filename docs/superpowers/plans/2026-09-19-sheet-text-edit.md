@@ -438,8 +438,9 @@ EOF
   - `slotCells(entries, count, kind, extra, sepAt, tier, marks)`
   - `gridRows(pad, overflow, marks)` — `overflowTable` へ通すためだけに受け取る
   - `overflowTable(entries, marks)`
-  - `activeSheetMarks()` → `{}` または `marks`
-  - `currentSheetSig()` → `string`
+  - `activeSheetMarks(pl)` → `{}` または `marks`
+  - `currentSheetSig(pl)` → `string`（`pl` は省略可。省略すると `sheetPlacement()` を呼ぶ）
+  - `hiddenMarkCount(pl)` → `number`（Task 5 の `openSheetEditor` と Task 8 の案内が使う）
   - 各 `<td>` に `data-ek` と `data-auto`
 
 **このタスクの肝が3つある。**
@@ -605,14 +606,22 @@ function slotCells(entries,count,kind,extra,sepAt,tier,marks){
     // 自動計算の値。書き足しの有無にかかわらず組み立て、data-auto に入れる。
     // 編集を開くときにここから読む。表を描き直して読もうとすると、
     // タップされた td が DOM から切り離されて入力欄が出なくなる
+    // autoText は data-auto に入れる値。sheetCellText() が欄から読み戻す値と
+    // 揃えること（saveSheetMark() がこの2つを比べて「自動値と同じなら
+    // キーを消す」を判定する）。縦積みは改行で連結、それ以外はそのまま
     let autoInner="", autoText="";
     if(kind==="name"){ autoText=l?l.name:""; autoInner=span(autoText); }
     else if(kind==="lot"){
+      // 空のロット番号は並べない。品名だけ入力した荷物が混ざりうる
       const ts=ms.map(m=>m.lot.lot).filter(t=>t);
-      autoText=ts.join("\n");
-      autoInner = ts.length>=3 ? `<span class="fitcol">${ts.map(span).join("")}</span>`
-                               : span(ts.join("/"));
-      if(ts.length<3) autoText=ts.join("/");
+      if(ts.length>=3){
+        // 3件以上は1行に収まらない（9桁3件で圧縮 0.383。下限 0.4 を割る）ので縦に積む
+        autoText=ts.join("\n");
+        autoInner=`<span class="fitcol">${ts.map(span).join("")}</span>`;
+      }else{
+        autoText=ts.join("/");
+        autoInner=span(autoText);
+      }
     }
     else if(kind==="pallet"){ autoText=palSlotTextOf(ms); autoInner=span(autoText); }
     else if(kind==="note"){   autoText=e&&e.note?e.note:""; autoInner=span(autoText); }
@@ -752,10 +761,11 @@ function activeSheetMarks(){
   if(!ed || !ed.sig) return {};
   return ed.sig===currentSheetSig() ? (ed.marks||{}) : {};
 }
-// いまの状態の署名
-function currentSheetSig(){
+// いまの状態の署名。pl を持っている呼び出し元は渡す（sheetPlacement() の
+// 計算を省くため。1描画で3回呼ばれる）
+function currentSheetSig(pl){
   if(!schedule || !hasResult) return "";
-  const pl=sheetPlacement();
+  const p=pl||sheetPlacement();
   return sheetEditSigFrom({
     fp: lastFp,
     lots: lastLots,
@@ -763,10 +773,21 @@ function currentSheetSig(){
     spacesText: spacesToText(true),
     mergeLots: mergeLots,
     fracMode: fracMode,
-    layName: (pl.lay===SHEET_LAYOUTS.wide)?"wide":"normal",
+    layName: (p.lay===SHEET_LAYOUTS.wide)?"wide":"normal",
   });
 }
+// 保存には残っているが、署名が合わないので紙に出ていない書き足しの件数
+function hiddenMarkCount(pl){
+  if(!schedule) return 0;
+  const ed=activeShift().sheetEdits;
+  if(!ed || !ed.sig || ed.sig===currentSheetSig(pl)) return 0;
+  return Object.keys(ed.marks||{}).length;
+}
 ```
+
+`activeSheetMarks()` も `pl` を受け取って `currentSheetSig(pl)` へ渡す形にし、
+`renderSheet()` からは `activeSheetMarks(pl)` / `hiddenMarkCount(pl)` と呼ぶ。
+`pl` は `renderSheet()` が既に計算している（`const pl=sheetPlacement()`）。
 
 - [ ] **Step 7: 既存テストの7 assert を直す**
 
@@ -844,7 +865,8 @@ EOF
 - Produces:
   - `sheetEditMode`（`boolean`）
   - `toggleSheetEditMode()` / `applySheetEditMode()` / `exitSheetEditMode()`
-  - `commitSheetEdit()` — Task 5 で中身を入れる。ここでは空
+  - `flushSheetEdit()` — 保存だけして描き直さない。Task 5 で中身を入れる。ここでは `false` を返すだけ
+  - `commitSheetEdit()` — `flushSheetEdit()` が true なら `renderSheet()`。Task 4 で完成し、以降変えない
   - `printBlock()` テストヘルパー
 
 - [ ] **Step 1: テストヘルパーと失敗するテストを書く**
@@ -875,17 +897,20 @@ test("表を描き直しても横スクロール位置を戻す", () => {
   assert.match(functionSource("renderSheet"), /scrollLeft/);
 });
 
-test("表を描き直す前に編集中の入力を確定する。早期returnでも後始末する", () => {
+test("表を描き直す前に編集中の入力を保存する。早期returnでも後始末する", () => {
   // onHeadChange / setArrowHead / applyDisplay / showMapState はいずれも
   // 編集中でも走り、開いている入力欄を無言で捨てる。
   // 早期 return の経路では末尾の applySheetEditMode() に届かない
   const fn = functionSource("renderSheet");
-  const commitAt = fn.indexOf("commitSheetEdit()");
+  const flushAt = fn.indexOf("flushSheetEdit()");
   const guardAt = fn.indexOf("!isActiveFresh()");
-  assert.notEqual(commitAt, -1);
+  assert.notEqual(flushAt, -1);
   assert.notEqual(guardAt, -1);
-  assert.ok(commitAt < guardAt, "確定は早期 return より前に置くこと");
+  assert.ok(flushAt < guardAt, "保存は早期 return より前に置くこと");
   assert.match(fn, /applySheetEditMode\(\)/);
+  // commitSheetEdit() は renderSheet() を呼ぶので、ここから呼ぶと
+  // 1回の確定で表を2回組み立てることになる
+  assert.doesNotMatch(fn, /commitSheetEdit\(\)/);
 });
 
 test("あさとひるを切り替える前に編集を閉じる", () => {
@@ -935,14 +960,23 @@ function toggleSheetEditMode(){
   sheetEditMode=true;
   applySheetEditMode();
 }
-// 開いている入力欄を確定する。Task 5 で中身を入れる。
-// 印刷の経路（printSheet / beforeprint）からも呼ばれるので、
+// 開いている入力欄の値を保存する。描き直さない。Task 5 で中身を入れる。
+// 保存と描き直しを分けるのは、renderSheet() の冒頭から呼ぶため。
+// ここで renderSheet() を呼ぶと、外側の renderSheet() が続行して
+// 1回の確定で表を2回組み立てることになる。
+// 保存したら true
+function flushSheetEdit(){ return false; }
+// 保存して描き直す。入力欄の blur やボタンから呼ぶ。
+// 印刷の経路（printSheet / beforeprint）からも辿り着くので、
 // ここから confirm() を出してはならない。紙が白紙になる
-function commitSheetEdit(){}
+function commitSheetEdit(){ if(flushSheetEdit()) renderSheet(); }
 function exitSheetEditMode(){
-  commitSheetEdit();
+  const had=flushSheetEdit();
   sheetEditMode=false;
-  applySheetEditMode();
+  // renderSheet() の末尾で applySheetEditMode() が走るので、
+  // 描き直すときは二重に呼ばない
+  if(had) renderSheet();
+  else    applySheetEditMode();
 }
 // renderSheet() は #sheetView の中身を丸ごと入れ替えるので、
 // クラスは描き直すたびに貼り直す。呼び出し元は setArrowHead / onHeadChange /
@@ -979,10 +1013,12 @@ function applySheetEditMode(){
 
 ```js
 function renderSheet(){
-  // 描き直す前に、開いている入力欄を確定する。onHeadChange / setArrowHead /
+  // 描き直す前に、開いている入力欄の値を保存する。onHeadChange / setArrowHead /
   // applyDisplay / showMapState はいずれも編集中でも走るので、
-  // ここで確定しないと入力が無言で捨てられる。早期 return より前に置く
-  commitSheetEdit();
+  // ここで保存しないと入力が無言で捨てられる。早期 return より前に置く。
+  // commitSheetEdit() ではなく flushSheetEdit()。前者は renderSheet() を
+  // 呼ぶので、この下の組み立てと合わせて表を2回作ることになる
+  flushSheetEdit();
   const host=document.getElementById("sheetView");
   if(!isActiveFresh() || !lastSp){
     host.innerHTML="";
@@ -1066,7 +1102,7 @@ EOF
 - Test: `tests/sheet-placement.test.js`
 
 **Interfaces:**
-- Consumes: Task 4 の `sheetEditMode` / `commitSheetEdit()`、Task 1 の `normalizeMarkValue`
+- Consumes: Task 4 の `sheetEditMode` / `flushSheetEdit()` / `commitSheetEdit()`、Task 1 の `normalizeMarkValue`
 - Produces:
   - `sheetEditing`（`{key, td, el, auto}` または `null`）
   - `openSheetEditor(td)` / `openInlineEditor(td)` / `cancelSheetEdit()`
@@ -1129,10 +1165,28 @@ test("書き足しは空文字か自動計算値と同じならキーを消す",
 });
 
 test("確定の経路に確認を挟まない", () => {
-  // printSheet と beforeprint が exitSheetEditMode → commitSheetEdit →
+  // printSheet と beforeprint が exitSheetEditMode → flushSheetEdit →
   // saveSheetMark と辿る。ここで confirm を出すと紙が白紙になる
   assert.doesNotMatch(functionSource("saveSheetMark"), /confirm\(/);
-  assert.doesNotMatch(functionSource("commitSheetEdit"), /confirm\(/);
+  assert.doesNotMatch(functionSource("flushSheetEdit"), /confirm\(/);
+  assert.doesNotMatch(functionSource("exitSheetEditMode"), /confirm\(/);
+});
+
+test("欄を開くときは、描き直したあとの td をキーで引き直す", () => {
+  // openSheetEditor は先頭で commitSheetEdit() を呼ぶ。そこで renderSheet() が
+  // 走ると、引数で受け取った td は DOM から切り離される
+  // （isConnected===false）。切り離されたノードに入力欄を差し込んでも
+  // 画面に出ず focus() も効かない。編集中に別の欄をタップする＝最も普通の
+  // 操作で必ず起きる
+  const fn = functionSource("openSheetEditor");
+  const keyAt = fn.indexOf("td.dataset.ek");
+  const commitAt = fn.indexOf("commitSheetEdit()");
+  assert.notEqual(keyAt, -1);
+  assert.notEqual(commitAt, -1);
+  assert.ok(keyAt < commitAt, "キーは描き直す前に控えること");
+  assert.match(fn, /querySelector\('#sheetView td\[data-ek="'\s*\+\s*key/);
+  // 引数の td をそのまま渡していないこと
+  assert.doesNotMatch(fn, /open(Bar|Inline)Editor\(td\)/);
 });
 ```
 
@@ -1166,12 +1220,25 @@ document.addEventListener("mousedown", e=>{
 // 幅で方式を分ける。両方の入力欄を同時に DOM へ置かない。
 // 非表示側の要素に focus() を呼んでも何も起きない（2026-08-27 の教訓）
 function openSheetEditor(td){
+  // キーを先に控える。この下で表が描き直されると、引数で受け取った td は
+  // DOM から切り離される（isConnected===false）。切り離されたノードに
+  // 入力欄を差し込んでも画面に出ず focus() も効かない。
+  // 編集中に別の欄をタップする＝最も普通の操作で必ず起きる
+  const key=td.dataset.ek;
+  const hadHidden=hiddenMarkCount()>0;
+  // 前の欄を確定する。中で renderSheet() が走りうる
   commitSheetEdit();
   // 署名が合わないときはここで古い書き足しを捨てる（Task 7）。
   // 確定側ではなく開く側に置くのは、印刷の経路に confirm を出さないため
   if(!ensureSheetEditSig()) return;
-  if(compactInputMq.matches) openBarEditor(td);
-  else                       openInlineEditor(td);
+  // 捨てたなら #sheetMsg の「前の配置に対する書き足しが N 件」も消す
+  if(hadHidden) renderSheet();
+  // 描き直されたあとの欄をキーで引き直す。
+  // 属性セレクタは引用符で囲めばキーの "|" をそのまま書ける
+  const fresh=document.querySelector('#sheetView td[data-ek="'+key+'"]');
+  if(!fresh) return;
+  if(compactInputMq.matches) openBarEditor(fresh);
+  else                       openInlineEditor(fresh);
 }
 // 署名を合わせる。Task 7 で中身を入れる
 function ensureSheetEditSig(){ return true; }
@@ -1239,15 +1306,18 @@ function cancelSheetEdit(){
 }
 ```
 
-Task 4 で空にしておいた `commitSheetEdit()` を差し替える。
+Task 4 で空にしておいた `flushSheetEdit()` を差し替える。
+`commitSheetEdit()` は Task 4 のまま（`flushSheetEdit()` が true なら `renderSheet()`）。
 
 ```js
-function commitSheetEdit(){
-  if(!sheetEditing) return;
+// 保存だけして描き直さない。renderSheet() の冒頭から呼ばれるので、
+// ここで renderSheet() を呼ぶと表を2回組み立てることになる
+function flushSheetEdit(){
+  if(!sheetEditing) return false;
   const {key, el, auto}=sheetEditing;
-  sheetEditing=null;                 // 再入を止める。renderSheet() がまたここへ来る
+  sheetEditing=null;                 // 再入を止める
   saveSheetMark(key, el.value, auto);
-  renderSheet();
+  return true;
 }
 ```
 
@@ -1446,21 +1516,22 @@ function closeSheetEditBar(){
 }
 ```
 
-`commitSheetEdit()` と `cancelSheetEdit()` にバーを閉じる処理を足す。
+`flushSheetEdit()` と `cancelSheetEdit()` にバーを閉じる処理を足す。
+`commitSheetEdit()` は Task 4 のまま触らない。
 
 ```js
-function commitSheetEdit(){
-  if(!sheetEditing) return;
+function flushSheetEdit(){
+  if(!sheetEditing) return false;
   const {key, el, auto}=sheetEditing;
   sheetEditing=null;
-  closeSheetEditBar();
+  closeSheetEditBar();               // ← 足す
   saveSheetMark(key, el.value, auto);
-  renderSheet();
+  return true;
 }
 function cancelSheetEdit(){
   if(!sheetEditing) return;
   sheetEditing=null;
-  closeSheetEditBar();
+  closeSheetEditBar();               // ← 足す
   renderSheet();
 }
 ```
@@ -1612,10 +1683,10 @@ test("署名が合わない状態で書き始めたら古い書き足しを捨�
 
 test("確認は欄を開くときに出す。確定の経路には置かない", () => {
   // 確定側に置くと printSheet / beforeprint → exitSheetEditMode →
-  // commitSheetEdit → confirm となり、紙が白紙になる
+  // flushSheetEdit → confirm となり、紙が白紙になる
   assert.match(functionSource("openSheetEditor"), /ensureSheetEditSig\(\)/);
   assert.doesNotMatch(functionSource("saveSheetMark"), /ensureSheetEditSig/);
-  assert.doesNotMatch(functionSource("commitSheetEdit"), /confirm\(/);
+  assert.doesNotMatch(functionSource("flushSheetEdit"), /confirm\(/);
 });
 ```
 
@@ -1675,7 +1746,7 @@ Task 5 で空にしておいた関数を差し替える。
 // 逆に sig を据え置くと、書いた直後に自分の入力が消える。
 //
 // 呼ぶのは「欄を開く」ときだけ。確定側に置くと printSheet / beforeprint →
-// exitSheetEditMode → commitSheetEdit → confirm という経路ができ、
+// exitSheetEditMode → flushSheetEdit → confirm という経路ができ、
 // beforeprint の途中でモーダルが出て紙が白紙になる
 // （tests/stash-overflow.test.js:167 に既存のテストがある）。
 // 続けてよければ true、やめるなら false
@@ -1713,7 +1784,7 @@ git add files/index.html tests/sheet-placement.test.js && git commit -m "$(cat <
 feat: 配置が変わったあとに書き始めたら古い書き足しを捨てる
 
 確認は「欄を開く」ときに出す。確定側に置くと printSheet と beforeprint が
-exitSheetEditMode → commitSheetEdit → confirm と辿り、beforeprint の途中で
+exitSheetEditMode → flushSheetEdit → confirm と辿り、beforeprint の途中で
 モーダルが出て紙が白紙になる。既存の
 tests/stash-overflow.test.js:167 がこの罠を記録している。
 
@@ -1741,7 +1812,7 @@ EOF
 - Consumes: Task 3 の `currentSheetSig()`、Task 7 の `sheetEditSilent`
 - Produces:
   - `fitSheetText(pl, hidden)` — 引数を末尾に足す
-  - `hiddenMarkCount()` → `number` / `dropHiddenMarks()`
+  - `dropHiddenMarks()`（`hiddenMarkCount()` は Task 3 で定義済み）
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -1788,16 +1859,9 @@ Expected: FAIL
 
 - [ ] **Step 3: 件数と破棄の関数を足す**
 
-`activeSheetMarks()` の隣:
+`hiddenMarkCount()` は Task 3 で定義済み。ここでは破棄の関数だけ足す。
 
 ```js
-// 保存には残っているが、署名が合わないので紙に出ていない書き足しの件数
-function hiddenMarkCount(){
-  if(!schedule) return 0;
-  const ed=activeShift().sheetEdits;
-  if(!ed || !ed.sig || ed.sig===currentSheetSig()) return 0;
-  return Object.keys(ed.marks||{}).length;
-}
 // 利用者が自分で押す破棄。sheetEditSilent は見ない。
 // 押した破棄まで黙って実行すると、誤タップで書き足しが消える
 function dropHiddenMarks(){
@@ -1847,7 +1911,7 @@ function fitSheetText(pl,hidden){
 - [ ] **Step 5: `renderSheet()` から件数を渡す**
 
 ```js
-  fitSheetText(pl, hiddenMarkCount());
+  fitSheetText(pl, hiddenMarkCount(pl));
 ```
 
 - [ ] **Step 6: テストを走らせて通ることを確かめる**
@@ -2170,16 +2234,17 @@ lsof -ti:8765 | xargs kill
 
 - Task 1: `sheetEditHash` / `sheetEditSigFrom` / `sheetEditKey` / `sheetHeadKey` / `normalizeMarkValue`
 - Task 2: `normalizeSheetEdits`
-- Task 3: `activeSheetMarks` / `currentSheetSig`
-- Task 4: `sheetEditMode` / `toggleSheetEditMode` / `applySheetEditMode` / `commitSheetEdit` / `exitSheetEditMode` / `printBlock`（テスト側）
+- Task 3: `activeSheetMarks` / `currentSheetSig` / `hiddenMarkCount`
+- Task 4: `sheetEditMode` / `toggleSheetEditMode` / `applySheetEditMode` / `flushSheetEdit` / `commitSheetEdit` / `exitSheetEditMode` / `printBlock`（テスト側）
 - Task 5: `sheetEditing` / `openSheetEditor` / `openInlineEditor` / `cancelSheetEdit` / `saveSheetMark` / `sheetCellText` / `ensureSheetEditSig`（空実装）
 - Task 6: `openBarEditor` / `positionSheetEditBar` / `sheetEditLabelOf` / `closeSheetEditBar`
 - Task 7: `sheetEditSilent` / `toggleSheetEditSilent` / `ensureSheetEditSig`（中身）
-- Task 8: `hiddenMarkCount` / `dropHiddenMarks`
+- Task 8: `dropHiddenMarks`
 - Task 9: `clearAllMarks`
 
-2回に分けて書く関数は `commitSheetEdit`（Task 4 で空 → Task 5 で中身 → Task 6 でバーを閉じる）と
+2回に分けて書く関数は `flushSheetEdit`（Task 4 で空 → Task 5 で中身 → Task 6 でバーを閉じる）と
 `ensureSheetEditSig`（Task 5 で空 → Task 7 で中身）の2つ。どちらも名前と引数は変わらない。
+`commitSheetEdit` は Task 4 で完成し、以降変えない。
 
 **3. 実装中に気をつける点（各タスクの本文に注記済み）**
 
