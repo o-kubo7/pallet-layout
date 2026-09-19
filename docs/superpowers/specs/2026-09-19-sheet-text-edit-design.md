@@ -102,9 +102,36 @@ applySheetZoom();
 `functionSource(name)` で関数本体を切り出し、`new Function(依存名..., src)` で評価する
 （例: `tests/stash-overflow.test.js:108` は `new Function("esc","palSlotTextOf","slotAreaNote", …)`）。
 
-切り出し対象に `slotCells` / `overflowTable` / `topHeadGroups` / `renderSheet` /
-`fitSheetText` / `printSheet` / `switchTab` が既に含まれる。
-**これらの関数がモジュールスコープの変数を新しく参照すると、既存テストが ReferenceError で落ちる。**
+切り出し方は2通りあり、制約が違う。
+
+**（A）`new Function` で実行される関数** — `slotCells` / `overflowTable` /
+`topHeadGroups` / `gridRows`。
+**この4つがモジュールスコープの関数や変数を新しく参照すると、
+依存名リストに無いため ReferenceError で落ちる。**
+
+`gridRows` は見落としやすい。`overflowTable` を呼ぶのは `renderSheet` ではなく
+`gridRows` の中（`files/index.html:5143`）で、`gridRows` 自身も
+`new Function("lastSp","sheetAreas","gridWarn","SHEET_GRID_ORDER","overflowTable","lastLots","tailAreaOf", …)`
+で実行される（`tests/sheet-placement.test.js:331`、`:391`）。
+
+**（B）文字列として照合されるだけの関数** — `renderSheet` / `fitSheetText` /
+`printSheet` / `switchTab`。`functionSource()` の戻り値に `assert.match` を掛ける。
+実行されないのでモジュールスコープを参照してよい。
+代わりに**呼び出しの書き方そのものが固定されている**。
+
+```js
+// tests/sheet-placement.test.js:1830-1835
+assert.match(fn, /slotCells\(top,lay\.top,"name","bb2",gsep\)/);
+assert.match(fn, /slotCells\(bottom,lay\.bottom,"lot"\)/);
+// 同 :1844
+assert.match(fn, /slotCells\(topNotes,lay\.top,"note"\)/);
+// 同 :1820
+assert.match(fn, /<span class="fit">\$\{esc\(g\.label\)\}<\/span>/);
+```
+
+`slotCells` の呼び出しに引数を足すと、これらの正規表現は末尾の `)` まで
+含むためマッチしなくなる。**引数を足す実装では、この7つの assert を
+同時に更新する必要がある。**「既存テストを直さない」では済まない。
 
 ---
 
@@ -123,6 +150,11 @@ shift.sheetEdits = {
 
 `normalizeShift()`（`files/index.html:1151` 付近）に `sheetEdits` の正規化を足す。
 壊れた値・古い版のデータは `{sig:"", marks:{}}` に落とす。
+
+**`sig` が空なら `marks` も空にする。** `{sig:"", marks:{中身あり}}` を通すと、
+`activeSheetMarks()` も §3-7 の件数も `sig` が空のときは 0 を返すので、
+紙にも出ず件数の案内にも出ない書き足しが保存に残る。
+編集モードの「書き足しを全部戻す」からしか消せない見えない残骸になる。
 `loadOrMigrateSchedule()` の「一部を読み込めなかった」警告（`files/index.html:1274`）の
 条件には `sheetEdits` を足さない。書き足しが読めなくても配置そのものは復元できるため。
 
@@ -219,16 +251,26 @@ sig = ハッシュ(
 署名が合わない状態でも編集モードは開ける。紙には自動計算の値が出ているので、
 それを直すこと自体はできる。
 
-この状態で**最初に確定した時点**で、古い `marks` を捨てて新しい署名で始める。
+この状態で**最初に欄を開いた時点**で、古い `marks` を捨てて新しい署名で始める。
 
 ```
 1. あさの配置図に書き足し（署名 A、marks 3件）
 2. 荷物を1マス動かす → 署名 B。3件は紙から消える（保存には残る）
-3. どこかの欄を直して確定 ← ここ
+3. どこかの欄をタップして開く ← ここ
    → confirm「前の配置の書き足し 3 件を捨てて、新しく書き始めます。よろしいですか？」
-     OK      : marks を空にし、sig を B にして、今の入力を保存
-     キャンセル: 今の入力を捨てる（marks も sig もそのまま）
+     OK      : marks を空にし、sig を B にする。そのまま欄が開く
+     キャンセル: 欄を開かない（marks も sig もそのまま）
 ```
+
+**確認を「確定」ではなく「開く」に置くのが要。** 確定の側に置くと、
+`printSheet()` と `beforeprint` が呼ぶ `exitSheetEditMode()` →
+`commitSheetEdit()` → 保存 → `confirm()` という経路ができる（§3-13）。
+`beforeprint` の途中でモーダルを出すと紙が白紙になる。
+`tests/stash-overflow.test.js:167` の
+「印刷の経路には確認を挟まない（ここに confirm が入ると紙が白紙になる）」は
+この罠を既に記録したテスト。
+
+開く側に置けば、確定の経路は保存するだけになり、印刷からも安全に呼べる。
 
 `{sig, marks}` を1組しか持たない代わりに、「配置を戻せば前の書き足しが復活する」は
 この時点で諦める。署名が合わない間は画面から前の書き足しが消えているので、
@@ -244,6 +286,12 @@ sig = ハッシュ(
 既定は OFF（確認する）。ON のときは confirm を出さずに黙って捨てる。
 保存キーは `STORE_KEY.sheetEditSilent`（`palletApp.sheetEditSilent`）。この端末に保存する。
 
+**この設定が効くのはここだけ。** 利用者が自分で押す破棄
+（§3-7 の「捨てる」ボタン、§3-8 の「書き足しを全部戻す」）は
+この設定に関わらず必ず確認する。設定の文言は「配置が変わったら」であって
+「押したときも」ではない。押した破棄まで黙って実行すると、
+誤タップで書き足しが消える。
+
 ### 3-5. 編集対象
 
 含める:
@@ -253,11 +301,18 @@ sig = ハッシュ(
 - 上段の見出し（`topHeadGroups()` が作るグループのラベル）
 - **荷物が入っていない空欄も含める**
 
+「空欄」とは、上段・下段の欄のうち荷物が割り当たっていないもの
+（`slotCells()` が `count` のぶん必ず作る `<td>`）を指す。
+上段の注釈行を自由記入に使うにはここが要る。
+
 含めない:
 
 - グリッドの○
 - 月日・曜日・総パレット数
 - 通路の見出し・列番号などの固定文字
+- **追記欄の余り欄**（件数が奇数の日に右側を埋める `blank`）。
+  これは荷物の欄ではなく表を崩さないための埋め草で、`entries` の添字を持たない。
+  件数が1つ増えると埋め草が本物の欄に変わり、書き足しが荷物の欄へずれる（§3-6）
 
 ### 3-6. 書き足しの差し込み
 
@@ -270,19 +325,41 @@ ReferenceError で落ちる。
 
 ```js
 slotCells(entries, count, kind, extra, sepAt, tier, marks)
+gridRows(pad, overflow, marks)                 // overflowTable へ通すためだけに受け取る
 overflowTable(entries, marks)
 topHeadGroups(entries, count, baseArea)        // 引数は変えない。キーは呼び出し側で組む
 ```
+
+**`gridRows` を経由するのが要。** 追記欄を呼ぶのは `renderSheet` ではなく
+`gridRows` の中（`files/index.html:5143`）なので、
+`renderSheet → gridRows(pad, overflow, marks) → overflowTable(overflow, marks)`
+と引数で通す。`gridRows` も `new Function` で実行されるため、
+その中からモジュールスコープを参照できない（§2-7）。
 
 各関数の中で `[tier, i, kind].join("|")` を組み立て、
 
 - `marks` に値があればその文字列を `<span class="fit">` に入れる（`esc()` を通す）
 - 無ければ従来どおり自動計算の値を入れる
 - どちらの場合も `<td>` に `data-ek="<キー>"` を付ける（編集モードが OFF のときも付ける）
+- **同時に `data-auto="<自動計算の値>"` も付ける**（§3-10 の比較と §3-9 の
+  「編集を開いたときに何を見せるか」で使う。これが無いと自動値を知るために
+  表を描き直すことになる）
 - `marks` から値を取った `<td>` には `edited` クラスを付ける
 
 見出しは `renderSheet()` の行1を組み立てるところで `marks` を引き、
-`data-ek="top|g<n>|head"` を付ける。
+`data-ek="top|g<n>|head"` と `data-auto` を付ける。
+
+**追記欄の index の取り回し。** `overflowTable()` は `entries` を2件ずつの
+`pairs` に畳んでから 4 行 × 2 列で組む（`files/index.html:4996-5003`）ので、
+`entries` の添字がそのままでは残らない。
+`pairs.push([[entries[i], i], [entries[i+1], i+1]])` のように
+添字を対にして持ち回る。
+
+件数が奇数の日に右側を埋める `blank`（`<td class="none"></td>`、
+`files/index.html:4996`）は**編集対象に含めない**。これは荷物の欄ではなく
+表を崩さないための埋め草で、`entries` の添字を持たない。
+ここにキーを与えると、件数が1つ増えただけで埋め草が本物の欄に変わり、
+書き足しが荷物の欄へずれる。
 
 改行を含む値（§3-9 の `<textarea>` で書いたもの）は、改行で分けて
 `<span class="fitcol"><span class="fit">…</span>…</span>` に組み立てる。
@@ -344,7 +421,15 @@ ON の間、`.sheet` に `editing` クラスを付ける。CSS で `data-ek` を
 - タップされた `<td>` は背景色でハイライトし、どこを直しているか分かるようにする
 - バーは `position: fixed`。`visualViewport.offsetTop / height` を見て
   ソフトキーボードの上に留める。計算は既存の `acPosition()`（`files/index.html:1903`）
-  と同じパターンを使う（`#actionBar` は配置図タブでは非表示なので `barH` は 0）
+  と同じパターンを使う（`#actionBar` は配置図タブでは非表示なので `barH` は 0）。
+  可視領域の**下端**（キーボードのすぐ上）に置く。上端に貼ると、
+  ハイライトした `<td>` がバーの下に隠れることがある
+- **`#sheetEditBar[hidden]{display:none}` を必ず書く。** バーの `display:flex` は
+  ID セレクタの作者スタイルなので、UA の `[hidden]{display:none}` に勝つ。
+  書かないと `bar.hidden=true` が効かずバーが出っぱなしになる。
+  このリポジトリは同じ回避を既に3か所でしている
+  （`.ac-list[hidden]`（`files/index.html:83`）、`.blocked-edit-actions[hidden]`（`:165`）、
+  `.editcfg[hidden]`（`:170`））
 
 in-place にしない理由: 欄の実測幅は 95px で、品名（16px）は**5.6文字しか見えない**（§6-3）。
 `.sheet table` は `table-layout: fixed` の 672px 固定なので入力欄を広げても列は広がらない。
@@ -366,6 +451,20 @@ in-place だと実機に取り消し手段が存在しない。バーなら「�
   マウスで横スクロールできるので 91px でも実用になる
 
 どちらの方式でも、同時に開く入力欄は1つだけ。
+
+**自動計算の値は `data-auto` から読む。** 編集を開くとき、その欄の
+「書き足しを外した値」が要る（§3-10 の比較のため）。
+表を描き直して読むのは避ける。`renderSheet()` は `#sheetView` の中身を
+丸ごと差し替えるので、**タップされた `<td>` が DOM から切り離される**。
+切り離されたノードに入力欄を差し込んでも画面に出ず、`focus()` も効かない。
+しかもこれが起きるのは「すでに書き足した欄をもう一度直す」＝最も普通の用途。
+描画時に `data-auto` を付けておけば（§3-6）、読むだけで済む。
+
+**開いている欄をもう一度クリックしたときに閉じない。** PC では
+入力欄の `blur` → 確定 → `renderSheet()` で DOM が総入れ替えになるため、
+`mousedown` で前の欄が閉じ、`mouseup` の時点でクリック対象が消えている。
+別の欄へ移るのに2タップ必要になる。
+`mousedown` で欄を開く（`click` を待たない）ことで1タップにする。
 
 ### 3-10. 確定と取り消し
 
@@ -414,6 +513,25 @@ in-place だと実機に取り消し手段が存在しない。バーなら「�
 `renderSheet()` の冒頭で、開いている入力があれば確定する
 （`exitSheetEditMode()` と対称に `commitSheetEdit()` を置く）。
 
+**4. 早期 return。** `renderSheet()` は先頭で
+`if(!isActiveFresh() || !lastSp){ host.innerHTML=""; return; }`（`files/index.html:4803`）
+と抜ける。この経路では末尾の `applySheetEditMode()` に届かないので、
+トグルが ON のまま残り、`sheetEditing.td` が宙に浮く。
+早期 return の**前**に `commitSheetEdit()` を置き、
+return する直前に `sheetEditMode=false` にしてボタンを戻す。
+
+**5. あさ↔ひるの切り替え。** `setActiveTiming()`（`files/index.html:3059`）は
+`captureActiveShift()` → `activeTiming=key` → `restoreActiveShift(false)` →
+`showMapState()` の順に進む。`showMapState()` は `renderSheet()` を呼びうるので、
+そこで `commitSheetEdit()` が走ると、`activeShift()` が**既に切り替わった後**の
+シフトを指す。あさで開いていた入力がひるの `marks` に保存される。
+
+対策は `setActiveTiming()` の `if(key!==activeTiming)` の中の先頭、
+`acClose()` の隣で `exitSheetEditMode()` を呼ぶこと。
+切り替える前に確定すれば、正しいシフトへ保存される。
+`switchTab()` 側のガード（配置図タブ以外へ移ったら OFF）は
+`name!=="sheet"` の条件なので、この経路では発火しない。
+
 ### 3-12. 編集済みの印
 
 ```css
@@ -440,6 +558,15 @@ Ctrl/Cmd+P とブラウザのメニューからの印刷は `printSheet()` を�
 実機（Pixel 9a / Android Chrome）には Ctrl/Cmd+P が無いので、実際に効くのは
 「🖨 印刷」ボタンの経路。`beforeprint` は PC から印刷する場合の保険。
 どちらの端末から紙を出すかは §7 の検証タスクで確認する。
+
+**この経路に `confirm()` を入れてはならない。** `exitSheetEditMode()` から
+`commitSheetEdit()` → 保存、と進む途中でモーダルを出すと、
+`beforeprint` の最中に止まって紙が白紙になる。
+`tests/stash-overflow.test.js:167` に
+「印刷の経路には確認を挟まない（ここに confirm が入ると紙が白紙になる）」
+という既存のテストがある。
+署名が合わないときの確認は「欄を開く」側に置いてあるので（§3-4）、
+確定の経路は保存するだけで済む。
 
 ### 3-14. あふれたときの扱い
 
@@ -685,15 +812,52 @@ input の内幅    = 91px
   - 空欄にも書き足しが差し込める
   - **あさで書いた `marks` がひるの紙に出ない**
   - 改行を含む値が `.fitcol` に組み立てられる
+  - **`data-auto` に自動計算の値が入る**（書き足しがある欄でも入る）
+  - **追記欄の書き足しが `gridRows` 経由で届く**（`renderSheet` は
+    `overflowTable` を直接呼ばない）
+  - 追記欄の余り欄（`blank`）には `data-ek` が付かない
 - 確定時の正規化
   - 空文字・空白だけ・改行だけでキーが消える
   - 前後の空白が trim される
   - trim した結果が自動計算の値と同じならキーが消える
 - `normalizeShift()` が壊れた `sheetEdits` を `{sig:"", marks:{}}` に落とす
+- `sig` が空の `sheetEdits` は `marks` も空にする（§3-1）
+- **保存して読み直しても署名が一致する。** `snapshotSpaces()` →
+  `clone()` → `hydrateBlockedRows()` の往復（`files/index.html:3103-3108`）で
+  `sp` の JSON が変わらないこと。ここが崩れると、リロードした瞬間に
+  全部の書き足しが「表示されない」に落ち、次の確定で捨てられる。
+  設計 §1 の「リロードしても残る」の根拠になるテスト
 
-**既存テストの呼び出し側も直す。** `slotCells` / `overflowTable` に引数を足すので、
-`tests/sheet-placement.test.js` と `tests/stash-overflow.test.js` の
-`new Function(依存名..., src)` の呼び出しを揃える（§2-7）。
+**既存テストのうち7つの assert を直す。** 引数を末尾に足しても、
+`renderSheet` を**文字列として照合している**テストは呼び出しの書き方ごと
+固定しているので落ちる（§2-7）。
+
+```
+tests/sheet-placement.test.js:1830-1835  slotCells の呼び出し5本
+tests/sheet-placement.test.js:1844       slotCells(topNotes,lay.top,"note")
+tests/sheet-placement.test.js:1820       <span class="fit">${esc(g.label)}</span>
+```
+
+該当するテスト名は「グループの区切り線は上段の品名・ロット・P数の行にも通す」
+「上段の注釈行は残し、またがる欄にだけ注釈を出す」
+「配置図の見出し行はグループごとのセルで、列数の合計が様式に一致する」。
+
+一方、`slotCells` を**実行している**テスト（`new Function` で組む側）は
+位置引数で呼ぶので直さなくてよい
+（`tests/sheet-placement.test.js:1780` の `render(entries, 3, "name", "bb2", new Set([1]))` など）。
+`tier` と `marks` が `undefined` のときは従来どおりの出力にすること。
+この「引数を省略したときの既定動作」自体をテストに足して、回帰を検出できるようにする。
+
+`slotCells` / `overflowTable` / `gridRows` の中から
+**モジュールスコープの関数や変数を新しく呼ばない**。
+キーの組み立ては `[tier, i, kind].join("|")` をその場に書く。
+`sheetEditKey()` のような別の関数を呼ぶと、`new Function(依存名..., src)` の
+依存名リストに無いため ReferenceError になる（§2-7）。
+
+**印刷CSSを見るテストは `@media print` の閉じ括弧までを切り出す。**
+このブロックは `files/index.html:563-582` の 866 文字しかない。
+`source.slice(printStart, printStart + 4000)` のような固定長で切ると
+ブロックの外まで含み、印刷CSSの外に書いた指定でも緑になる。
 
 ### 7-2. ブラウザでの確認（PC）
 
@@ -705,8 +869,15 @@ input の内幅    = 91px
 - 印刷プレビューに入力欄の枠と編集済みの背景色が出ない
 - Ctrl/Cmd+P でも編集モードが OFF になる
 - 署名が変わると紙から消え、`#sheetMsg` に件数が出る
-- 署名が合わない状態で編集すると §3-4 の confirm が出る。設定を ON にすると出ない
+- 署名が合わない状態で**欄を開くと** §3-4 の confirm が出る。設定を ON にすると出ない
 - **掲載先を変えたときに書き足しが紙から消える**（署名の材料が効いているかの確認）
+- **一度書き足した欄をもう一度開ける**（`data-auto` が効いているかの確認。
+  ここが壊れていると入力欄が出ず、`focus()` も効かない）
+- **別の欄へ1タップで移れる**（`mousedown` で開いているかの確認）
+- **リロードしても書き足しが紙に残る**（署名がスナップショット往復で一致するか）
+- **あさで書いた書き足しが、ひるに切り替えてから戻っても、あさに残っている**
+  （`setActiveTiming()` で保存先がずれていないかの確認）
+- 「捨てる」「書き足しを全部戻す」は設定を ON にしても確認が出る
 - 追記欄を出す日を作り、まとめ欄（`font-size:55%`）を編集できるか、
   行を増やしたとき何px伸びるかを測る（§6-6）
 
@@ -724,11 +895,20 @@ input の内幅    = 91px
 確認する内容:
 
 - 欄をタップすると編集バーが出て、その欄がハイライトされる
+- **バーがハイライトした欄を覆っていない**
 - ソフトキーボードが出てもバーが隠れない
 - 日本語を変換して確定しても、変換確定の Enter で欄が閉じない
-- 「取り消し」で元に戻る
+- 「取り消し」で元に戻り、**バーが閉じる**（`[hidden]` が効いているかの確認）
 - 確定しても横スクロール位置が保たれる
 - 「🖨 印刷」から印刷するとき、編集モードが OFF になり紙に入力欄の枠が出ない
+- **ツールバーのボタンが増えても紙が押し下げられすぎない。**
+  `.sheet-toolbar` は `flex-wrap: wrap`（`files/index.html:355`）で
+  `.btn` は `min-height:44px`（`:50`）。412px 幅に「あさ/ひる」「✏ 文字を編集」
+  「書き足しを全部戻す」「🖨 印刷」が並ぶと2〜3段に折り返す。
+  実機で段数を見て、収まらなければボタンの文言を詰める
+- **1文字直すたびの待ち時間が気にならない。**
+  確定のたびに `renderSheet()` が走り、その中で `fitSheetText()`（全 `.fit` の実測）と
+  `drawLeaders()` が動く。荷物が多い日ほど重くなる
 
 ---
 
