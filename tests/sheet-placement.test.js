@@ -1674,3 +1674,97 @@ test("上段の注釈は、2つ以上のエリアにまたがる欄にだけ出�
   assert.equal(topSlotNote({ areas: [] }), "");
   assert.equal(topSlotNote(null), "");
 });
+
+test("上段の見出しは、先頭エリアだけの日と空の日は従来どおり「軒下」1つ", () => {
+  const topHeadGroups = new Function(
+    functionSource("topHeadGroups") + "; return topHeadGroups;"
+  )();
+  const at = name => ({ areas: [name] });
+
+  // 日常。現場が毎日見る紙の見た目を変えない
+  assert.deepEqual(topHeadGroups([at("軒下①"), at("軒下①")], 4, "軒下①"),
+    [{ label: "軒下", slots: 4 }]);
+  // 上段に荷物が無い日
+  assert.deepEqual(topHeadGroups([], 4, "軒下①"),
+    [{ label: "軒下", slots: 4 }]);
+});
+
+test("上段の見出しは、先頭エリア以外だけの日にそのエリア名を出す", () => {
+  // ここを「軒下」にすると置き場所が紙から完全に消える（設計書 §3-3）
+  const topHeadGroups = new Function(
+    functionSource("topHeadGroups") + "; return topHeadGroups;"
+  )();
+  const at = name => ({ areas: [name] });
+
+  assert.deepEqual(topHeadGroups([at("出庫口横")], 4, "軒下①"),
+    [{ label: "出庫口横", slots: 4 }]);
+  // 退避は「退避」ではなく「未定」。現場にとって退避は場所の名前ではない
+  assert.deepEqual(topHeadGroups([{ areas: ["退避"], stash: true }], 4, "軒下①"),
+    [{ label: "未定", slots: 4 }]);
+  // 下段から上段へ回した欄
+  assert.deepEqual(topHeadGroups([at("PC横")], 4, "軒下①"),
+    [{ label: "PC横", slots: 4 }]);
+});
+
+test("上段の見出しはエリアごとに分かれ、欄数の合計は必ず count に一致する", () => {
+  const topHeadGroups = new Function(
+    functionSource("topHeadGroups") + "; return topHeadGroups;"
+  )();
+  const at = name => ({ areas: [name] });
+  const sum = gs => gs.reduce((a, g) => a + g.slots, 0);
+
+  const two = topHeadGroups([at("軒下①"), at("軒下①"), at("軒下②")], 4, "軒下①");
+  assert.deepEqual(two.map(g => g.label), ["軒下①", "軒下②"]);
+  // 余った1欄は末尾のグループに足す
+  assert.deepEqual(two.map(g => g.slots), [2, 2]);
+  assert.equal(sum(two), 4);
+
+  const stash = topHeadGroups(
+    [at("軒下①"), { areas: ["退避"], stash: true }], 4, "軒下①");
+  assert.deepEqual(stash.map(g => g.label), ["軒下①", "未定"]);
+  assert.equal(sum(stash), 4);
+});
+
+test("上段の見出しは、またがる欄のエリアもラベルに並べる", () => {
+  // 3欄のうち1欄だけが出庫口横にもまたがる日、見出しで「出庫口横にもある」が読める
+  const topHeadGroups = new Function(
+    functionSource("topHeadGroups") + "; return topHeadGroups;"
+  )();
+
+  // またがる欄しか2つ目のエリアを使っていない日。グループは1つだがラベルは割れる
+  assert.deepEqual(
+    topHeadGroups([{ areas: ["軒下①", "軒下②"] }], 4, "軒下①"),
+    [{ label: "軒下①・軒下②", slots: 4 }]
+  );
+  // 3エリア以上は先頭2つ＋「 ほか」で打ち切る。1欄ぶんの幅では折り返して
+  // 見出し行が約18px伸びるため（設計書 §5-3 の実測）
+  assert.deepEqual(
+    topHeadGroups([{ areas: ["軒下①", "出庫口横", "5棟壁際"] }], 4, "軒下①"),
+    [{ label: "軒下①・出庫口横 ほか", slots: 4 }]
+  );
+});
+
+test("上段の見出しは、紙に出ない欄を数えない", () => {
+  // top は lay.top を超えうる（sheetPlacement の omittedTop）。
+  // 超えた分まで数えると colspan の合計が lay.cols を超えて表が崩れる
+  const topHeadGroups = new Function(
+    functionSource("topHeadGroups") + "; return topHeadGroups;"
+  )();
+  const at = name => ({ areas: [name] });
+  const sum = gs => gs.reduce((a, g) => a + g.slots, 0);
+
+  const over = topHeadGroups(
+    [at("軒下①"), at("軒下①"), at("軒下②"), at("軒下②"),
+     at("出庫口横"), at("5棟壁際")], 4, "軒下①");
+  assert.equal(sum(over), 4);
+  // 5件目以降（出庫口横・5棟壁際）は紙に出ないので見出しにも出さない
+  assert.deepEqual(over.map(g => g.label), ["軒下①", "軒下②"]);
+
+  // wide（上段6欄）でも合計が一致する
+  const wide = topHeadGroups([at("軒下①"), at("軒下②")], 6, "軒下①");
+  assert.equal(sum(wide), 6);
+
+  // areas が空の欄が混ざっても落ちない
+  const broken = topHeadGroups([{ areas: [] }, at("軒下②")], 4, "軒下①");
+  assert.equal(sum(broken), 4);
+});

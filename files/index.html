@@ -4497,6 +4497,54 @@ function topSlotNote(e){
   const areas=(e&&e.areas)||[];
   return areas.length>1 ? "※"+areas.slice(1).join("・") : "";
 }
+/* 上段の欄をエリアごとのグループに割る。見出し行のセルを作るのに使う。
+   entries は sheetPlacement() の top、count は lay.top。
+   紙に出るのは先頭 count 件だけ（renderSheet() が slotCells(top,lay.top,…) で切る）なので、
+   ここでも先頭だけを見る。slots の合計は必ず count に一致させること。
+   ずれると行1の colspan が合わず、table-layout:fixed が colgroup の幅を無視して
+   列を詰める（盤のマスと欄の位置、引き出し線の座標が同時に狂う）。
+
+   隣り合う欄だけを見るので、同じエリアの欄が離れて並ぶと見出しが重複して出る。
+   いまそれが起きないのは、top の並びが sheetAreas("top") の順であること、および
+   「上段があふれる日（moved）」と「下段から欄が回ってくる日（movedBottom）」が
+   排他であること（前者は top.length>lay.top、後者は lay.top>top.length が条件）に
+   依存している。sheetPlacement() の並べ方を変えるときはここも見直すこと。 */
+function topHeadGroups(entries, count, baseArea){
+  const groups=[];
+  (entries||[]).slice(0,count).forEach(e=>{
+    // 退避は倉庫のエリアではないので、場所ではなく状態で呼ぶ（stashSlots の ※未定 と揃える）
+    const stash=!!(e&&e.stash);
+    const key=stash ? "未定" : ((e&&e.areas&&e.areas[0])||"");
+    const names=stash ? ["未定"] : ((e&&e.areas)||[]);
+    const last=groups[groups.length-1];
+    if(last && last.key===key){
+      last.slots++;
+      names.forEach(n=>{ if(!last.names.includes(n)) last.names.push(n); });
+    }else{
+      groups.push({key, slots:1, names:names.slice()});
+    }
+  });
+  // 荷物が無い日と、先頭エリアだけの日は固定の見出しにする。
+  // 日常の大半はここに落ちるので、現場が毎日見る紙の見た目を変えない。
+  // 逆にこの条件を「グループが1つ」だけに緩めると、出庫口横だけ・退避だけの日にも
+  // 「軒下」と出て置き場所が紙から消える（設計書 §3-3）。
+  // さらに names.length===1 も必須にする。基準エリアにまたがる欄（例:
+  // 軒下①・出庫口横）1件だけの日をここに含めると、見出しが「軒下」に潰れて
+  // 出庫口横／5棟壁際のような同居エリアが紙から消える。設計書 §3-3 の表が
+  // 挙げている、まさにこのガードで防ぐべき退行そのもの。
+  if(!groups.length || (groups.length===1 && baseArea && groups[0].key===baseArea && groups[0].names.length===1)){
+    return [{label:"軒下", slots:count}];
+  }
+  // 上段に空欄がある日は合計が count に足りない。末尾のグループで吸わせる
+  const used=groups.reduce((a,g)=>a+g.slots,0);
+  if(used<count) groups[groups.length-1].slots+=count-used;
+  // 3エリア以上を1欄ぶんの幅に連結すると 0.4 の圧縮下限を割って折り返す。
+  // 見出し行が伸びるより、盤を見て確かめてもらうほうを選ぶ（設計書 §5-3）
+  return groups.map(g=>({
+    label: g.names.length<=2 ? g.names.join("・") : g.names.slice(0,2).join("・")+" ほか",
+    slots: g.slots,
+  }));
+}
 /* 退避スペースの中身を配置図の欄にする。
    退避は倉庫に実在しないので掲載先（sheet）を持たず、sheetAreas() には出てこない。
    欄を作る経路だけをここに分けてある。sheet:"top" に変えて既存経路へ乗せると、
