@@ -4488,6 +4488,15 @@ function lotsIn(slots){ return slots.reduce((a,g)=>a+(g.members?g.members.length
    areas が空になることは sheetEntries() の作り上ありえない（欄は必ず1つ以上のエリアに置かれる）。
    空文字を返す分岐は保険で、ここが空のまま回ると注釈のない欄が紙に出る。 */
 function slotAreaNote(areas){ return (areas && areas.length) ? "※"+areas.join("・") : ""; }
+/* 上段の欄の注釈。グループキー（areas[0]）を省いた残りだけを出す。
+   上段の見出しはエリアのまとまりを表すので、欄ごとの注釈は
+   「見出しのエリアだけでは場所を特定できない欄」＝複数エリアにまたがる欄に絞る。
+   sheetEntries() の note は「段の基準エリアを省く」という別の規則なので、
+   そちらには手を入れずここで作り直す（設計書 §3-5）。 */
+function topSlotNote(e){
+  const areas=(e&&e.areas)||[];
+  return areas.length>1 ? "※"+areas.slice(1).join("・") : "";
+}
 /* 退避スペースの中身を配置図の欄にする。
    退避は倉庫に実在しないので掲載先（sheet）を持たず、sheetAreas() には出てこない。
    欄を作る経路だけをここに分けてある。sheet:"top" に変えて既存経路へ乗せると、

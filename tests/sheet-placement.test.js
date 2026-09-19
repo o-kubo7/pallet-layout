@@ -1655,3 +1655,22 @@ test("まとめ欄が上段へ回っても movedBottom はその欄をそのま�
   // 1欄だが荷物は2件。画面通知はこちらの数で言う
   assert.equal(lotsIn(result.movedBottom), 2);
 });
+
+test("上段の注釈は、2つ以上のエリアにまたがる欄にだけ出す", () => {
+  // 見出しがエリアを代表するので、欄ごとの注釈は「見出しだけでは
+  // 場所を特定できない欄」に絞る。areas[0] はグループキーそのものなので省く
+  const topSlotNote = new Function(
+    functionSource("topSlotNote") + "; return topSlotNote;"
+  )();
+  assert.equal(topSlotNote({ areas: ["軒下①"] }), "");
+  assert.equal(topSlotNote({ areas: ["軒下①", "出庫口横"] }), "※出庫口横");
+  assert.equal(
+    topSlotNote({ areas: ["軒下①", "出庫口横", "5棟壁際"] }),
+    "※出庫口横・5棟壁際"
+  );
+  // 退避は見出しが「未定」になるので欄の注釈は要らない
+  assert.equal(topSlotNote({ areas: ["退避"], stash: true }), "");
+  // areas が空でも落ちない（slotAreaNote と同じ保険）
+  assert.equal(topSlotNote({ areas: [] }), "");
+  assert.equal(topSlotNote(null), "");
+});
