@@ -1866,3 +1866,16 @@ test("上段の注釈行の列数のコメントが様式と合っている", ()
   // wide は 5+1+6×2=18 列。「5+1+5×2=16 列」は誤り
   assert.match(source, /normal は 5\+1\+4×2=14 列、wide は 5\+1\+6×2=18 列/);
 });
+
+test("見出しが入りきらないときは、品名ではなくエリア名の短縮を案内する", () => {
+  // 見出しは --fs-* の対象外なので表示設定では小さくならず、品名でもない。
+  // 既存の文言をそのまま出すと、書いてある対処法がどちらも効かない
+  assert.match(source, /const FIT_LABEL = \{[^}]*head:"見出し"/);
+  const fn = functionSource("fitSheetText");
+  assert.match(fn, /「配置マス」でエリア名を短くしてください/);
+  // 欄の側の案内は残す
+  assert.match(fn, /「表示設定」で文字を小さくするか、品名を短くしてください/);
+  // 見出しだけがあふれた日に、品名の案内を出さない
+  assert.match(fn, /hasSlot/);
+  assert.match(fn, /hasHead/);
+});

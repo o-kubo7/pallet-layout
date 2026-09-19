@@ -4707,7 +4707,7 @@ function sheetPlacement(){
      欠けさせないため。
    ・非表示タブでは幅が 0 なので何もしない（drawLeaders() と同じ理由）。 */
 const FIT_MIN_SCALE = 0.4;
-const FIT_LABEL = {name:"品名", lot:"ロット", pal:"P数", note:"注釈"};
+const FIT_LABEL = {name:"品名", lot:"ロット", pal:"P数", note:"注釈", head:"見出し"};
 const PRINT_ZOOM = 1.4;                 // 印刷CSSの .sheet{zoom} と必ず揃える
 const PRINT_H_PX = 733.2;               // A4横・余白8mm の印刷領域の高さ
 const PRINT_H_LIMIT = PRINT_H_PX*0.98;  // ブラウザごとの余白差を見込んで 98% を上限にする
@@ -4770,8 +4770,14 @@ function fitSheetText(pl){
   }
   const parts=Object.keys(over).map(k=>`${FIT_LABEL[k]||k} ${over[k].size}件`);
   if(parts.length){
-    html+=`<div class="msg warn">⚠ 文字が入りきらない欄があります：${parts.join(" / ")}。`
-        + `設定タブの「表示設定」で文字を小さくするか、品名を短くしてください。</div>`;
+    // 見出しは表示設定（--fs-*）の対象外で、品名でもない。直せるのはエリア名だけなので、
+    // あふれたのが見出しか欄かで案内を分ける。両方あふれた日は両方出す
+    const hasHead="head" in over;
+    const hasSlot=Object.keys(over).some(k=>k!=="head");
+    let how="";
+    if(hasSlot) how+="設定タブの「表示設定」で文字を小さくするか、品名を短くしてください。";
+    if(hasHead) how+="見出しは設定タブの「配置マス」でエリア名を短くしてください。";
+    html+=`<div class="msg warn">⚠ 文字が入りきらない欄があります：${parts.join(" / ")}。${how}</div>`;
   }
   // 縦のはみ出し。autoSheetZoom() は Math.max(1,...) で 1 倍を下回らないので、
   // 文字を大きくして表が伸びても自動では救われない
