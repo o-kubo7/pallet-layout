@@ -1879,3 +1879,20 @@ test("見出しが入りきらないときは、品名ではなくエリア名�
   assert.match(fn, /hasSlot/);
   assert.match(fn, /hasHead/);
 });
+
+test("見出しと欄の案内が、それぞれ正しい条件にぶら下がっている", () => {
+  // hasSlot と hasHead を取り違えても、上の「文言が両方ある」テストは通ってしまう。
+  // 取り違えると見出しがあふれた日に「品名を短くしてください」と出て、
+  // 書いてある対処法が効かない元の不具合に戻る
+  const fn = functionSource("fitSheetText");
+  assert.match(fn, /if\(hasSlot\) how\+="設定タブの「表示設定」/);
+  assert.match(fn, /if\(hasHead\) how\+="見出しは設定タブの「配置マス」/);
+  // head は欄の側に数えない（見出しだけの日に品名の案内を出さないため）
+  assert.match(fn, /const hasSlot=Object\.keys\(over\)\.some\(k=>k!=="head"\)/);
+});
+
+test("上段の注釈行の高さは16pxのまま", () => {
+  // 注釈の中身は見出しへ移して普段は空になったが、行は高さごと残す。
+  // あとで足す配置図のテキスト編集が、上段の自由記入欄としてこの行を使う（設計書 §3-5）
+  assert.match(source, /\.sheet tr\.note-row td\.none\{height:16px\}/);
+});
