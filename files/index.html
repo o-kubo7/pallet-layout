@@ -4889,7 +4889,7 @@ function palSlotTextOf(members){
 }
 // 区画セル（2列ぶんの幅）。kind: name / lot / pallet / pallet2 / note
 // extra: 全セルに足すクラス（品名行の太罫など）。品名行は左右の端も太罫にする
-function slotCells(entries,count,kind,extra){
+function slotCells(entries,count,kind,extra,sepAt){
   // data-fit は fitSheetText() が「どの種類の欄が入りきらなかったか」を数えるのに使う
   const FIT={name:"name", lot:"lot", pallet:"pal", note:"note"};
   const fk=FIT[kind]||"";
@@ -4913,6 +4913,9 @@ function slotCells(entries,count,kind,extra){
     else if(kind==="pallet") inner=span(palSlotTextOf(ms));
     else if(kind==="note"){  inner=span(e&&e.note?e.note:""); cls="none snote"; }
     if(kind!=="note") cls+=" c-"+fk;
+    // グループの境目の欄だけ左辺を太くする。見出し行と同じ index を渡してもらうので、
+    // 見出し・品名・ロット・P数 の4行で線が縦に揃う。注釈行には引かない
+    if(sepAt && sepAt.has(i) && kind!=="note") cls+=" gsep";
     if(extra && kind!=="note"){
       cls+=" "+extra;
       if(i===0)       cls+=" bl2";

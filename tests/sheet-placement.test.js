@@ -1768,3 +1768,28 @@ test("上段の見出しは、紙に出ない欄を数えない", () => {
   const broken = topHeadGroups([{ areas: [] }, at("軒下②")], 4, "軒下①");
   assert.equal(sum(broken), 4);
 });
+
+test("欄のセルは、指定された index の左辺だけ太くする", () => {
+  // グループの境目を見出し行から P数 の行まで縦に貫かせる。
+  // 位置を欄の index で受け取るので、呼び出し側が4行で同じ集合を使える
+  const render = new Function(
+    "esc", "palSlotTextOf",
+    functionSource("slotCells") + "; return slotCells;"
+  )(v => String(v), () => "3P");
+  const lot = name => ({ lot: { name, lot: "L" } });
+
+  const html = render([lot("A"), lot("B"), lot("C")], 3, "name", "bb2", new Set([1]));
+  const tds = html.match(/<td class="[^"]*"/g) || [];
+  assert.equal(tds.length, 3);
+  assert.doesNotMatch(tds[0], /gsep/);
+  assert.match(tds[1], /gsep/);
+  assert.doesNotMatch(tds[2], /gsep/);
+
+  // 省略時は従来どおり（既存の呼び出しを壊さない）
+  const plain = render([lot("A"), lot("B")], 2, "name", "bb2");
+  assert.doesNotMatch(plain, /gsep/);
+
+  // 注釈行には引かない
+  const note = render([lot("A"), lot("B")], 2, "note", null, new Set([1]));
+  assert.doesNotMatch(note, /gsep/);
+});
