@@ -2399,3 +2399,56 @@ test("欄を開く入口は mousedown だけ。touchstart を足さない", () =
   assert.equal(opens.length, 1, "欄を開くリスナは1つだけ");
   assert.match(opens[0], /mousedown/);
 });
+
+test("確認なしで書き足しを捨てる設定を置く", () => {
+  assert.match(source, /sheetEditSilent:"palletApp\.sheetEditSilent"/);
+  const cfgStart = source.indexOf('<div id="cfgpane-display"');
+  const pane = source.slice(cfgStart, cfgStart + 4000);
+  assert.match(pane, /id="sheetEditSilentChk"[^>]*onchange="toggleSheetEditSilent\(\)"/);
+  assert.match(pane, /確認なしで書き足しを捨てる/);
+});
+
+test("署名が合わない状態で書き始めたら古い書き足しを捨てる", () => {
+  const ensure = new Function(
+    "activeShift", "currentSheetSig", "sheetEditSilent", "confirm", "saveSchedule",
+    functionSource("ensureSheetEditSig") + "; return ensureSheetEditSig;"
+  );
+
+  // 署名が合っていれば何もしない
+  const same = { sheetEdits: { sig: "s1", marks: { "top|0|name": "A" } } };
+  assert.equal(ensure(() => same, () => "s1", false, () => false, () => {})(), true);
+  assert.deepEqual(same.sheetEdits.marks, { "top|0|name": "A" });
+
+  // 署名が違い、確認で OK なら marks を空にして新しい署名にする
+  const diff = { sheetEdits: { sig: "s1", marks: { "top|0|name": "A" } } };
+  assert.equal(ensure(() => diff, () => "s2", false, () => true, () => {})(), true);
+  assert.deepEqual(diff.sheetEdits.marks, {});
+  assert.equal(diff.sheetEdits.sig, "s2");
+
+  // キャンセルなら何も変えず false（欄を開かない）
+  const kept = { sheetEdits: { sig: "s1", marks: { "top|0|name": "A" } } };
+  assert.equal(ensure(() => kept, () => "s2", false, () => false, () => {})(), false);
+  assert.deepEqual(kept.sheetEdits.marks, { "top|0|name": "A" });
+
+  // 設定が ON なら確認せずに捨てる
+  const silent = { sheetEdits: { sig: "s1", marks: { "top|0|name": "A" } } };
+  let asked = false;
+  assert.equal(ensure(() => silent, () => "s2", true, () => { asked = true; return false; }, () => {})(), true);
+  assert.equal(asked, false);
+  assert.deepEqual(silent.sheetEdits.marks, {});
+
+  // 書き足しが元から空なら確認せずに署名だけ更新する
+  const empty = { sheetEdits: { sig: "s1", marks: {} } };
+  let asked2 = false;
+  assert.equal(ensure(() => empty, () => "s2", false, () => { asked2 = true; return false; }, () => {})(), true);
+  assert.equal(asked2, false);
+  assert.equal(empty.sheetEdits.sig, "s2");
+});
+
+test("確認は欄を開くときに出す。確定の経路には置かない", () => {
+  // 確定側に置くと printSheet / beforeprint → exitSheetEditMode →
+  // flushSheetEdit → confirm となり、紙が白紙になる
+  assert.match(functionSource("openSheetEditor"), /ensureSheetEditSig\(\)/);
+  assert.doesNotMatch(functionSource("saveSheetMark"), /ensureSheetEditSig/);
+  assert.doesNotMatch(functionSource("flushSheetEdit"), /confirm\(/);
+});

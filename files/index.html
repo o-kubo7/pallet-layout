@@ -870,6 +870,8 @@
         <div><label class="chk"><input type="checkbox" id="fracChk" onchange="toggleFrac()"> 端数を「半」で表示</label></div>
         <div><label class="chk"><input type="checkbox" id="mergeChk" checked onchange="toggleMerge()"> 同じ品名のロットを1つの欄にまとめる</label></div>
         <div class="hint">品名・入数・種別・置き場所がすべて同じロットだけをまとめます。メインに置いた荷物は、引き出し線が1本ずつ要るのでまとめません。</div>
+        <div><label class="chk"><input type="checkbox" id="sheetEditSilentChk" onchange="toggleSheetEditSilent()"> 配置が変わったら、確認なしで書き足しを捨てる</label></div>
+        <div class="hint">配置図の「✏ 文字を編集」で書き足した文字は、荷物を動かしたり伝票を直したりすると紙から消えます。その状態で新しく書き始めるとき、古い書き足しを捨てる確認を出すかどうかです。「捨てる」「書き足しを全部戻す」を自分で押したときは、この設定にかかわらず確認します。</div>
         <div class="row-actions">
           <button class="btn btn-ghost" onclick="resetDisplay()">文字を初期値に戻す</button>
         </div>
@@ -1035,6 +1037,7 @@ let MASTER = [];
 let lastLots=null, lastColor=null, lastSp=null;
 let hasResult=false;
 let fracMode=false;   // true なら「満載数P 半」表記
+let sheetEditSilent=false;
 const TIMING_KEYS=["am","pm"];
 const TIMING_LABEL={am:"あさ",pm:"ひる"};
 const SCHEDULE_VERSION=1;
@@ -1043,7 +1046,7 @@ let scheduleLoadWarning=[];
 let spacesWereReset=false;
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", schedule:"palletApp.schedule"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
 const SPACES_SAVE_VERSION = 4;   // 現場の実測で置き場が増えたので上げる
@@ -1693,6 +1696,15 @@ function toggleFrac(){
   fracMode=document.getElementById("fracChk").checked;
   saveData(STORE_KEY.frac, fracMode);
   recalcAllRows();
+}
+/* 配置が変わったときに、書き足しを捨てる確認を出すかどうか。
+   既定は off（確認する）。「そのほかの表示」の他の項目と同じ流儀で
+   専用の STORE_KEY に保存する。DEFAULT_DISPLAY に相乗りさせない。
+   利用者が自分で押す破棄（「捨てる」「書き足しを全部戻す」）には効かせない。
+   押した破棄まで黙って実行すると、誤タップで書き足しが消える */
+function toggleSheetEditSilent(){
+  sheetEditSilent=document.getElementById("sheetEditSilentChk").checked;
+  saveData(STORE_KEY.sheetEditSilent, sheetEditSilent);
 }
 /* 同じ品名のロットを1つの欄にまとめるか。既定は on。
    「そのほかの表示」の他の項目（矢印の先・角の丸み・端数の「半」）と同じ流儀で、
@@ -5032,8 +5044,29 @@ function openSheetEditor(td){
   if(compactInputMq.matches) openBarEditor(fresh);
   else                       openInlineEditor(fresh);
 }
-// 署名を合わせる。Task 7 で中身を入れる
-function ensureSheetEditSig(){ return true; }
+// 署名が合わない状態で書き始めたとき、古い書き足しを捨てて新しい署名で始める。
+// {sig, marks} を1組しか持たないので、sig だけ書き換えると古い marks が
+// 新しい配置の同じ位置に一斉に復活する（位置キーなので必ず衝突する）。
+// 逆に sig を据え置くと、書いた直後に自分の入力が消える。
+//
+// 呼ぶのは「欄を開く」ときだけ。確定側に置くと printSheet / beforeprint →
+// exitSheetEditMode → flushSheetEdit → confirm という経路ができ、
+// beforeprint の途中でモーダルが出て紙が白紙になる
+// （tests/stash-overflow.test.js:167 に既存のテストがある）。
+// 続けてよければ true、やめるなら false
+function ensureSheetEditSig(){
+  const ed=activeShift().sheetEdits;
+  const now=currentSheetSig();
+  if(ed.sig===now) return true;
+  const n=Object.keys(ed.marks).length;
+  if(n>0 && !sheetEditSilent){
+    if(!confirm(`前の配置に対する書き足しが ${n} 件あります。\n捨てて、新しく書き始めますか？`)) return false;
+  }
+  ed.marks={};
+  ed.sig=now;
+  saveSchedule();
+  return true;
+}
 // 欄の中の文字。縦積み（.fitcol）は行を改行で連結する
 function sheetCellText(td){
   const col=td.querySelector(".fitcol");
@@ -5915,6 +5948,12 @@ updateSaveStatus();
 (function initMergeLots(){
   const m=loadData(STORE_KEY.merge);
   if(m===false){ mergeLots=false; document.getElementById("mergeChk").checked=false; }
+})();
+
+// 書き足しを捨てる確認：保存があれば復元。既定は off なので true のときだけ立てる
+(function initSheetEditSilent(){
+  const v=loadData(STORE_KEY.sheetEditSilent);
+  if(v===true){ sheetEditSilent=true; document.getElementById("sheetEditSilentChk").checked=true; }
 })();
 
 /* 表示設定：保存があれば復元。
