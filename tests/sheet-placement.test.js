@@ -657,7 +657,7 @@ test("sheetPlacementはグリッドセル中心に近い下段欄へメインロ
     [null, 1, null, null, null, null, null]);
 });
 
-test("右端予約で欄数が減ってもあふれたメイン項目は入力順を保つ", () => {
+test("右端予約で欄数が減ってもメイン項目はグリッド順に並ぶ", () => {
   const arrange = new Function(
     "sheetAreas",
     functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
@@ -668,8 +668,10 @@ test("右端予約で欄数が減ってもあふれたメイン項目は入力�
   const pc = { lot: { id: 4 }, areas: ["PC横"] };
   const ev = { lot: { id: 5 }, areas: ["EV横"] };
   const result = arrange([right, left, middle, pc, ev], 4, { 1: 9, 2: 1, 3: 5 });
-  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id), [2, 1, 4, 5]);
-  assert.deepEqual(result.dropped.map(entry => entry.lot.id), [3]);
+  // 基準エリア優先にしたのでメイン3件が先に欄を取り、右詰めに残るのは1欄。
+  // 並び順の先頭の PC横 が残り、EV横 がこぼれる（設計書 2026-09-19 §3-2）
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id), [2, 3, 1, 4]);
+  assert.deepEqual(result.dropped.map(entry => entry.lot.id), [5]);
 });
 
 test("入力順が逆でもメイン項目はグリッドの左から右へ並ぶ", () => {
@@ -1409,4 +1411,79 @@ test("up の列で准緊急用マスまで埋まったら緊急用マスは使�
   )();
   const cells = cellsOf({ h: 9, up: 1, fills: [{ id: 0, count: 8 }], aisleRows: [8] });
   assert.equal(cells[8].id, null); // 緊急用マス(row8)は自動配置の対象外、8個では届かない
+});
+
+test("下段の欄は基準エリアのロットが先に取る", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const pc = n => ({ lot: { id: "P" + n }, areas: ["PC横"] });
+  const ev = n => ({ lot: { id: "E" + n }, areas: ["EV横"] });
+  const result = arrange(
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
+     pc(1), pc(2), pc(3), ev(1)], 9, null);
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
+    ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "P1", "P2"]);
+  assert.deepEqual(result.dropped.map(entry => entry.lot.id), ["P3", "E1"]);
+});
+
+test("右詰めに1欄しか残らない日は並び順の先頭を残す", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const result = arrange(
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7), main(8),
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }],
+    9, null);
+  assert.equal(result.slots[8].lot.id, "P1");
+  assert.deepEqual(result.dropped.map(entry => entry.lot.id), ["E1"]);
+});
+
+test("基準エリアが欄数を超えたら基準エリア以外は全部こぼれる", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const result = arrange(
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7), main(8), main(9),
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }],
+    9, null);
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
+    ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9"]);
+  assert.deepEqual(result.dropped.map(entry => entry.lot.id), ["P1", "E1"]);
+});
+
+test("両方が下段に残る日は右詰めとEV横最右を保つ", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const result = arrange(
+    [main(1), main(2), main(3), main(4), main(5), main(6),
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }],
+    9, null);
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
+    ["M1", "M2", "M3", "M4", "M5", "M6", null, "P1", "E1"]);
+  assert.deepEqual(result.dropped, []);
+});
+
+test("上段からの救済は基準エリア以外より後ろに置く", () => {
+  const arrange = new Function(
+    "sheetAreas",
+    functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
+  )(() => ["メイン", "PC横", "EV横"]);
+  const rescued = { lot: { id: "R1" }, areas: ["軒下①"], fromTop: true };
+  const result = arrange(
+    [{ lot: { id: "M1" }, areas: ["メイン"] }, { lot: { id: "M2" }, areas: ["メイン"] },
+     rescued,
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }],
+    7, null);
+  assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
+    ["M1", "M2", "R1", null, null, "P1", "E1"]);
 });

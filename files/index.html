@@ -4529,10 +4529,14 @@ function arrangeBottomSlots(entries, count, positions){
   const rescuedEntries=entries.filter(entry=>entry.fromTop);
   const rightEntries=entries.filter(entry=>
     !entry.fromTop && (!baseArea || !entry.areas.includes(baseArea)));
-  // PC横・EV横が両方ある場合は、EV横を最も右に置く。欄超過時も右側の先頭から残す。
-  const keptRight=rightEntries.slice(0, Math.min(rightEntries.length, count));
+  // 下段の欄は基準エリアのロットが先に取る（設計書 2026-09-19 §3-1）。盤に描かれるのは
+  // 基準エリアだけで、どのロットが盤のどこにあるかは下段の欄から引く引き出し線でしか
+  // 分からない。基準エリア以外は盤に無いので、下段の欄を取っても線の価値を使わない。
+  // 残った欄を基準エリア以外に右詰めで配る。並び順の先頭から残すので、
+  // 1欄しか残らない日は PC横 が残り、「EV横 が最右」は両方入る日だけ成り立つ。
+  const keptMain=mainEntries.slice(0, Math.min(mainEntries.length, count));
+  const keptRight=rightEntries.slice(0, Math.max(0, count-keptMain.length));
   const mainCap=Math.max(0, count-keptRight.length);
-  const keptMain=mainEntries.slice(0, mainCap);
   const allPositions=positions && keptMain.every(entry=>
     Object.prototype.hasOwnProperty.call(positions, entry.lot.id));
   const orderedMain=allPositions
