@@ -4699,6 +4699,12 @@ function fitSheetText(pl){
     html+=`<div class="msg ok">※ 上段に入りきらない ${lotsIn(pl.moved)} 件を`
         + `下段の空き欄に回しています。</div>`;
   }
+  // 下段から上段へ回した日も同じように知らせる。紙の上では PC横・EV横 が「軒下」の
+  // 見出しの下に注釈つきで現れるので、画面で理由を言わないと不具合と疑われる
+  if(pl.movedBottom && pl.movedBottom.length){
+    html+=`<div class="msg ok">※ 下段に入りきらない ${lotsIn(pl.movedBottom)} 件を`
+        + `上段の空き欄に回しています。</div>`;
+  }
   const parts=Object.keys(over).map(k=>`${FIT_LABEL[k]||k} ${over[k].size}件`);
   if(parts.length){
     html+=`<div class="msg warn">⚠ 文字が入りきらない欄があります：${parts.join(" / ")}。`

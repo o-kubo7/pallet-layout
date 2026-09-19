@@ -1541,3 +1541,10 @@ test("下段があふれた日は上段から下段への救済が起きない",
   );
   assert.deepEqual(placement().moved, []);
 });
+
+test("下段から上段へ回した欄を画面にだけ知らせる", () => {
+  const fit = functionSource("fitSheetText");
+  assert.match(fit, /pl\.movedBottom\.length/);
+  assert.match(fit, /下段に入りきらない \$\{lotsIn\(pl\.movedBottom\)\} 件を/);
+  assert.match(fit, /上段の空き欄に回しています。/);
+});
