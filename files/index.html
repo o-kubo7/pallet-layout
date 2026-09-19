@@ -4614,14 +4614,27 @@ function sheetPlacement(){
     if(anchors) positions=Object.fromEntries(anchors.map(anchor=>[anchor.id, anchor.k+.5]));
   }
   const arranged=arrangeBottomSlots(bottomAll, lay.bottom, positions);
+  // 下段に入りきらなかった欄のうち、基準エリア以外は上段に空きがあればそこへ回す
+  // （設計書 2026-09-19 §3-3）。基準エリアの欄は回さない。上段には引き出し線が引けないので、
+  // 回しても盤のどこにあるか分からないまま「軒下」の見出しの下に並ぶことになり、
+  // 追記欄に落とすのと情報量が変わらない。
+  // 退避は除く。退避はもともと top の末尾に居て、上段に空きがあるなら降りてきていない。
+  const baseArea=sheetAreas("bottom")[0]||null;
+  const topFree=Math.max(0, lay.top-top.length);
+  const backable=arranged.dropped.filter(e=>
+    !e.stash && baseArea && !e.areas.includes(baseArea));
+  const movedBottom=backable.slice(0, topFree);
+  const backSet=new Set(movedBottom);
+  // 回した欄は注釈を作り直す（基準エリアを省かない）。元の欄は書き換えず浅く複製する
+  const topAll=top.concat(movedBottom.map(e=>({...e, note:slotAreaNote(e.areas)})));
   const omittedTop=top.slice(lay.top+moved.length);
   // 追記欄は欄数超過を先に載せる。退避の欄は top の末尾に居るので、
   // 並べ直さないと下段の欄数超過（arranged.dropped）を押し出してしまう
-  const rest=omittedTop.concat(arranged.dropped);
+  const rest=omittedTop.concat(arranged.dropped.filter(e=>!backSet.has(e)));
   const ordered=rest.filter(e=>!e.stash).concat(rest.filter(e=>e.stash));
   const overflowed=arrangeOverflowSlots(ordered);
-  return {lay, top, bottom:arranged.slots, bottomAll, droppedBottom:arranged.dropped,
-          overflow:overflowed.overflow, unlisted:overflowed.unlisted, moved};
+  return {lay, top:topAll, bottom:arranged.slots, bottomAll, droppedBottom:arranged.dropped,
+          overflow:overflowed.overflow, unlisted:overflowed.unlisted, moved, movedBottom};
 }
 /* 欄に入りきらない文字を水平に縮めて1行に収める。
    ・自然幅は .sheet の zoom で割って CSS px に直してから比を取る。

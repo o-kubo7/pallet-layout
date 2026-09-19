@@ -1487,3 +1487,57 @@ test("上段からの救済は基準エリア以外より後ろに置く", () =>
   assert.deepEqual(result.slots.map(entry => entry && entry.lot.id),
     ["M1", "M2", "R1", null, null, "P1", "E1"]);
 });
+
+function buildPlacementForTier(topSlots, bottomSlots) {
+  return new Function(
+    "sheetSlots", "stashSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas",
+    functionSource("arrangeBottomSlots") +
+    functionSource("arrangeOverflowSlots") +
+    functionSource("sheetPlacement") + "; return sheetPlacement;"
+  )(
+    tier => tier === "top" ? topSlots : bottomSlots,
+    () => [],
+    () => ({ top: 6, bottom: 9 }),
+    areas => "※" + areas.join("・"),
+    false,
+    tier => tier === "bottom" ? ["メイン", "PC横", "EV横"] : ["軒下①"]
+  );
+}
+
+test("下段のこぼれのうち基準エリア以外は上段の空き欄へ回る", () => {
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const placement = buildPlacementForTier(
+    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" }],
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "P2" }, areas: ["PC横"] },
+     { lot: { id: "P3" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }]
+  );
+  const result = placement();
+  assert.deepEqual(result.top.map(entry => entry.lot.id), ["T1", "P3", "E1"]);
+  // 回した欄は基準エリアを省かない注釈に作り直す
+  assert.deepEqual(result.top.slice(1).map(entry => entry.note), ["※PC横", "※EV横"]);
+});
+
+test("基準エリアのこぼれは上段へ回さず追記欄へ行く", () => {
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const placement = buildPlacementForTier(
+    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" }],
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7), main(8), main(9), main(10),
+     { lot: { id: "P1" }, areas: ["PC横"] }]
+  );
+  const result = placement();
+  // 上段へ回るのは PC横 だけ。メインのこぼれは追記欄へ直行する
+  assert.deepEqual(result.top.map(entry => entry.lot.id), ["T1", "P1"]);
+  assert.deepEqual(result.overflow.map(entry => entry.lot.id), ["M10"]);
+});
+
+test("下段があふれた日は上段から下段への救済が起きない", () => {
+  const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
+  const placement = buildPlacementForTier(
+    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" }],
+    [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
+     { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "P2" }, areas: ["PC横"] },
+     { lot: { id: "P3" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }]
+  );
+  assert.deepEqual(placement().moved, []);
+});
