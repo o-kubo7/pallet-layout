@@ -186,12 +186,14 @@ test("退避に荷物が残る日だけ確認する", () => {
 test("まとめ欄の td には roll クラスを付ける", () => {
   const fn = functionSource("overflowTable");
   // 1項目の欄には付けない。まとめ欄だけを縮める目印。
-  // if(e.group){...}else{ の中、まとめ欄の inner を組み立てた直後に
+  // if(e.group){...}else{ の中、まとめ欄の autoInner を組み立てた直後に
   // cls+=" roll"; が来ることを見る（else 側に付いても素通りしないように
-  // 順序つきで、if(e.group) のブロック内に限定して照合する）
+  // 順序つきで、if(e.group) のブロック内に限定して照合する）。
+  // 書き足しを足したときに inner → autoInner へ改名した。inner は
+  // 「書き足しがあればそちら、無ければ autoInner」を入れる変数になっている
   assert.match(
     fn,
-    /if\(e\.group\)\{[\s\S]*?inner=`<span class="fitcol">\$\{vals\.map\(span\)\.join\(""\)\}<\/span>`;\s*cls\+=" roll";\s*\}else\{/
+    /if\(e\.group\)\{[\s\S]*?autoInner=`<span class="fitcol">\$\{vals\.map\(span\)\.join\(""\)\}<\/span>`;\s*cls\+=" roll";\s*\}else\{/
   );
 });
 

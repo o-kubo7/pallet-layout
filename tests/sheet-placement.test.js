@@ -1818,7 +1818,7 @@ test("配置図の見出し行はグループごとのセルで、列数の合�
   assert.doesNotMatch(fn, /colspan="\$\{lay\.top\*2\}">軒下/);
   // 見出しは圧縮の対象に入れ、警告で種類が分かるように data-fit を付ける
   assert.match(fn, /data-fit="head"/);
-  assert.match(fn, /<span class="fit">\$\{esc\(g\.label\)\}<\/span>/);
+  assert.match(fn, /<span class="fit">\$\{esc\(label\)\}<\/span>/);
 });
 
 test("グループの境目のセルは左辺を2pxにする", () => {
@@ -1828,12 +1828,12 @@ test("グループの境目のセルは左辺を2pxにする", () => {
 test("グループの区切り線は上段の品名・ロット・P数の行にも通す", () => {
   // 見出し行だけ 2px、下の行が 1px だと線が途中で細くなる
   const fn = functionSource("renderSheet");
-  assert.match(fn, /slotCells\(top,lay\.top,"name","bb2",gsep\)/);
-  assert.match(fn, /slotCells\(top,lay\.top,"lot",null,gsep\)/);
-  assert.match(fn, /slotCells\(top,lay\.top,"pallet",null,gsep\)/);
-  // 下段には渡さない（下段は今回変更しない）
-  assert.match(fn, /slotCells\(bottom,lay\.bottom,"name","bb2"\)/);
-  assert.match(fn, /slotCells\(bottom,lay\.bottom,"lot"\)/);
+  assert.match(fn, /slotCells\(top,lay\.top,"name","bb2",gsep,"top",marks\)/);
+  assert.match(fn, /slotCells\(top,lay\.top,"lot",null,gsep,"top",marks\)/);
+  assert.match(fn, /slotCells\(top,lay\.top,"pallet",null,gsep,"top",marks\)/);
+  // 下段にはグループの区切りを渡さない（sepAt が null）
+  assert.match(fn, /slotCells\(bottom,lay\.bottom,"name","bb2",null,"bottom",marks\)/);
+  assert.match(fn, /slotCells\(bottom,lay\.bottom,"lot",null,null,"bottom",marks\)/);
 });
 
 test("上段の注釈行は残し、またがる欄にだけ注釈を出す", () => {
@@ -1842,7 +1842,7 @@ test("上段の注釈行は残し、またがる欄にだけ注釈を出す", ()
   const fn = functionSource("renderSheet");
   assert.match(fn, /<tr class="note-row"><td class="none" colspan="5"><\/td>/);
   assert.match(fn, /top\.slice\(0,lay\.top\)\.map\(e=>e\?\{\.\.\.e,note:topSlotNote\(e\)\}:e\)/);
-  assert.match(fn, /slotCells\(topNotes,lay\.top,"note"\)/);
+  assert.match(fn, /slotCells\(topNotes,lay\.top,"note",null,null,"top",marks\)/);
   // 元の欄は書き換えない（浅い複製を渡す）
   assert.doesNotMatch(fn, /e\.note=topSlotNote/);
 
@@ -2062,6 +2062,132 @@ test("署名の材料の sp は snapshotSpaces を通した形にする", () => 
   // snapshotSpaces を通せば一致する
   assert.equal(JSON.stringify(snapshotSpaces(raw)), JSON.stringify(snapshotSpaces(restored)));
 
-  // currentSheetSig が生の lastSp を渡していないこと
-  // (currentSheetSig は Task 3 で追加されるため、それに対する assert も Task 3 で追加する)
+  // currentSheetSig が生の lastSp を渡していないことは、この下の
+  // 「署名の sp は snapshotSpaces を通す」で実装に対して固定している
+});
+
+test("署名の sp は snapshotSpaces を通す", () => {
+  // 上の「署名の材料の sp は snapshotSpaces を通した形にする」で測った理由を、
+  // currentSheetSig の実装そのものに対して固定する
+  assert.match(functionSource("currentSheetSig"), /snapshotSpaces\(lastSp\)/);
+  assert.doesNotMatch(functionSource("currentSheetSig"), /sp:\s*lastSp\b/);
+});
+
+test("書き足しがあれば自動計算の値より優先する", () => {
+  const render = new Function(
+    "esc", "palSlotTextOf",
+    functionSource("slotCells") + "; return slotCells;"
+  )(v => String(v), () => "3P");
+  const lot = name => ({ lot: { name, lot: "L" } });
+
+  const html = render([lot("部品A"), lot("部品B")], 2, "name", null, null,
+                      "top", { "top|1|name": "手書きの品名" });
+  assert.match(html, /部品A/);
+  assert.match(html, /手書きの品名/);
+  assert.doesNotMatch(html, />部品B</);
+});
+
+test("欄には data-ek と data-auto を付ける", () => {
+  const render = new Function(
+    "esc", "palSlotTextOf",
+    functionSource("slotCells") + "; return slotCells;"
+  )(v => String(v), () => "3P");
+  const lot = name => ({ lot: { name, lot: "L" } });
+
+  const html = render([lot("部品A"), lot("部品B")], 2, "name", null, null,
+                      "top", { "top|1|name": "手書き" });
+  const tds = html.match(/<td [^>]*>/g) || [];
+  assert.equal(tds.length, 2);
+  // data-ek は編集モードが OFF でも常に付ける
+  assert.match(tds[0], /data-ek="top\|0\|name"/);
+  assert.match(tds[1], /data-ek="top\|1\|name"/);
+  // data-auto は書き足しがある欄にも、自動計算の値が入る。
+  // これが無いと自動値を知るために表を描き直すことになり、
+  // タップされた td が DOM から切り離されて入力欄が出なくなる
+  assert.match(tds[0], /data-auto="部品A"/);
+  assert.match(tds[1], /data-auto="部品B"/);
+  // edited は書き足した欄だけ
+  assert.doesNotMatch(tds[0], /edited/);
+  assert.match(tds[1], /edited/);
+});
+
+test("空欄にも書き足しを差し込める", () => {
+  const render = new Function(
+    "esc", "palSlotTextOf",
+    functionSource("slotCells") + "; return slotCells;"
+  )(v => String(v), () => "3P");
+
+  const html = render([], 2, "note", null, null, "top", { "top|0|note": "臨時の置き場" });
+  assert.match(html, /臨時の置き場/);
+  assert.match(html, /data-ek="top\|0\|note"/);
+});
+
+test("改行を含む書き足しは縦積みに組み立てる", () => {
+  const render = new Function(
+    "esc", "palSlotTextOf",
+    functionSource("slotCells") + "; return slotCells;"
+  )(v => String(v), () => "3P");
+
+  const html = render([], 1, "lot", null, null, "top", { "top|0|lot": "L1\nL2\nL3" });
+  assert.match(html, /<span class="fitcol">/);
+  const inner = html.match(/<span class="fit">[^<]*<\/span>/g) || [];
+  assert.equal(inner.length, 3);
+  assert.match(inner[0], /L1/);
+  assert.match(inner[2], /L3/);
+
+  const one = render([], 1, "lot", null, null, "top", { "top|0|lot": "L1" });
+  assert.doesNotMatch(one, /fitcol/);
+});
+
+test("書き足しを渡さなければ従来どおりの出力になる", () => {
+  // slotCells を実行しているテストは位置引数で呼ぶので、tier と marks は
+  // undefined になる。この経路が従来どおりであることを回帰として残す
+  const render = new Function(
+    "esc", "palSlotTextOf",
+    functionSource("slotCells") + "; return slotCells;"
+  )(v => String(v), () => "3P");
+  const lot = name => ({ lot: { name, lot: "L" } });
+
+  const html = render([lot("部品A")], 1, "name", "bb2");
+  assert.match(html, /部品A/);
+  assert.doesNotMatch(html, /edited/);
+  // tier が無いときはキーが作れないので data-ek を付けない
+  assert.doesNotMatch(html, /data-ek/);
+});
+
+test("追記欄の書き足しは gridRows を経由して届く", () => {
+  // overflowTable を呼ぶのは renderSheet ではなく gridRows の中。
+  // gridRows 自身も new Function で実行されるので、marks は引数で通す
+  const fn = functionSource("gridRows");
+  assert.match(fn, /overflowTable\(overflow,\s*marks\)/);
+  const render = functionSource("renderSheet");
+  assert.match(render, /gridRows\([^)]*marks\)/);
+});
+
+test("追記欄にも書き足しを差し込める。余り欄には付けない", () => {
+  const renderOverflow = new Function(
+    "esc", "palSlotTextOf", "slotAreaNote",
+    functionSource("overflowTable") + "; return overflowTable;"
+  )(v => String(v), () => "3P", () => "※未定");
+
+  const entry = n => ({ lot: { name: n, lot: "L" }, areas: ["退避"], note: "※未定" });
+  // 件数が奇数。右側は blank で埋まる
+  const html = renderOverflow([entry("部品A")], { "over|0|name": "書き足し" });
+  assert.match(html, /書き足し/);
+  assert.doesNotMatch(html, />部品A</);
+  assert.match(html, /data-ek="over\|0\|name"/);
+  // 余り欄（blank）は荷物の欄ではないのでキーを与えない。
+  // 与えると件数が1つ増えたとき埋め草が本物の欄に変わり、書き足しがずれる
+  const blanks = html.match(/<td class="none"[^>]*>/g) || [];
+  blanks.forEach(td => assert.doesNotMatch(td, /data-ek/));
+
+  // 2件目にも正しい index が付く
+  const two = renderOverflow([entry("A"), entry("B")], {});
+  assert.match(two, /data-ek="over\|0\|name"/);
+  assert.match(two, /data-ek="over\|1\|name"/);
+
+  // 渡さなければ従来どおり
+  const plain = renderOverflow([entry("部品A")]);
+  assert.match(plain, />部品A</);
+  assert.doesNotMatch(plain, /data-ek/);
 });

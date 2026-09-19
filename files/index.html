@@ -4854,6 +4854,45 @@ function fitSheetText(pl){
   }
   box.innerHTML=html;
 }
+// いま紙に出してよい書き足し。署名が合わないときは空を返す。
+// marks そのものは捨てない（保存に残し、#sheetMsg で件数を知らせる）。
+// pl を持っている呼び出し元は渡す（sheetPlacement() の計算を省くため）
+function activeSheetMarks(pl){
+  if(!schedule) return {};
+  const ed=activeShift().sheetEdits;
+  if(!ed || !ed.sig) return {};
+  return ed.sig===currentSheetSig(pl) ? (ed.marks||{}) : {};
+}
+// いまの状態の署名。pl を持っている呼び出し元は渡す（sheetPlacement() の
+// 計算を省くため。1描画で3回呼ばれる）。
+//
+// sp は snapshotSpaces() を通した形にする。生の lastSp は使えない。
+// リロード時の lastSp は clone(snapshot.sp) + hydrateBlockedRows() で
+// 復元されるが、hydrateBlockedRows() は全スペースの全列に blockedRows を
+// 入れるのに対し、buildWork() が作った生の lastSp では退避スペースの列だけ
+// blockedRows を持たない。2026-09-19 の実測（サンプル9件・normal）で
+// 3063 バイト vs 3080 バイトと一致しなかった。
+// snapshotSpaces() は blockedRows を削るので、どちらの経路でも同じ JSON になる
+function currentSheetSig(pl){
+  if(!schedule || !hasResult) return "";
+  const p=pl||sheetPlacement();
+  return sheetEditSigFrom({
+    fp: lastFp,
+    lots: lastLots,
+    sp: snapshotSpaces(lastSp),
+    spacesText: spacesToText(true),
+    mergeLots: mergeLots,
+    fracMode: fracMode,
+    layName: (p.lay===SHEET_LAYOUTS.wide)?"wide":"normal",
+  });
+}
+// 保存には残っているが、署名が合わないので紙に出ていない書き足しの件数
+function hiddenMarkCount(pl){
+  if(!schedule) return 0;
+  const ed=activeShift().sheetEdits;
+  if(!ed || !ed.sig || ed.sig===currentSheetSig(pl)) return 0;
+  return Object.keys(ed.marks||{}).length;
+}
 function renderSheet(){
   const host=document.getElementById("sheetView");
   if(!isActiveFresh() || !lastSp){ host.innerHTML=""; return; }
@@ -4868,6 +4907,8 @@ function renderSheet(){
   // それでも上段に入りきらない欄は、下段に空きがあればその末尾へ回っている（bottom の末尾）
   const pl=sheetPlacement();
   const top=pl.top, bottom=pl.bottom, lay=pl.lay;
+  // 書き足し。署名が合わないときは空を渡す（紙には出さないが保存には残す）
+  const marks=activeSheetMarks(pl);
   const d=headDate?new Date(headDate+"T00:00:00"):null;
   const mm=d?d.getMonth()+1:"", dd=d?d.getDate():"", dw=d?DOW[d.getDay()]:"";
   const totalP=lastLots.reduce((a,l)=>a+l.pallets,0);
@@ -4888,13 +4929,21 @@ function renderSheet(){
   // 行1：月日（列1から）＋ 上段の見出し（下は太罫）
   rows+=`<tr><td class="hd" colspan="5"><div class="fldrow c5">`
       + `<span>${mm}</span><span>月</span><span>${dd}</span><span>日</span></div></td>${E}`
-      + heads.map((g,i)=>`<td class="ttl bb2${i?" gsep":""}" data-fit="head" colspan="${g.slots*2}">`
-          + `<span class="fit">${esc(g.label)}</span></td>`).join("")
+      + heads.map((g,i)=>{
+          // 見出しのキーは欄の位置ではなくグループ番号。sheetHeadKey() と同じ形
+          const ek=["top","g"+i,"head"].join("|");
+          const mv=Object.prototype.hasOwnProperty.call(marks,ek)?marks[ek]:null;
+          const edited=(mv!=null&&mv!=="");
+          const label=edited?mv:g.label;
+          return `<td class="ttl bb2${i?" gsep":""}${edited?" edited":""}" data-fit="head"`
+               + ` data-ek="${ek}" data-auto="${esc(g.label)}" colspan="${g.slots*2}">`
+               + `<span class="fit">${esc(label)}</span></td>`;
+        }).join("")
       + `</tr>`;
 
   // 行2：曜日 ＋ 上段の品名（品名欄は太枠で囲う）
   rows+=`<tr class="r1">${["月","火","水","木","金"].map(x=>`<td class="dow">${x===dw?`<span class="weekday-ring">${x}</span>`:x}</td>`).join("")}`
-      + `${E}${slotCells(top,lay.top,"name","bb2",gsep)}</tr>`;
+      + `${E}${slotCells(top,lay.top,"name","bb2",gsep,"top",marks)}</tr>`;
 
   // 行3：総パレット数・あさ／ひる ＋ 上段のロット
   //      左ブロックは用紙どおり行4まで（2行ぶん）ぶち抜き
@@ -4902,10 +4951,10 @@ function renderSheet(){
       + `<span>${totalP}</span><span>P</span></div></td>`
       + `<td class="dow" rowspan="2">${ring("あさ",TIMING_LABEL[activeTiming]==="あさ")}</td>`
       + `<td class="dow" rowspan="2">${ring("ひる",TIMING_LABEL[activeTiming]==="ひる")}</td>${E}`
-      + `${slotCells(top,lay.top,"lot",null,gsep)}</tr>`;
+      + `${slotCells(top,lay.top,"lot",null,gsep,"top",marks)}</tr>`;
 
   // 行4：上段のパレット数（左5列は上の行の rowspan で埋まっている）
-  rows+=`<tr class="r3">${E}${slotCells(top,lay.top,"pallet",null,gsep)}</tr>`;
+  rows+=`<tr class="r3">${E}${slotCells(top,lay.top,"pallet",null,gsep,"top",marks)}</tr>`;
 
   // 行5：上段の注釈。行3 の rowspan は行4 までしか届かないので、
   //      左5列はこの行で自分で埋める（5 + 1 + lay.top×2 = lay.cols。normal は 5+1+4×2=14 列、wide は 5+1+6×2=18 列）
@@ -4915,21 +4964,21 @@ function renderSheet(){
   //      上段にも自由記入できる欄として使う（設計書 §3-5）
   const topNotes=top.slice(0,lay.top).map(e=>e?{...e,note:topSlotNote(e)}:e);
   rows+=`<tr class="note-row"><td class="none" colspan="5"></td>${E}`
-      + `${slotCells(topNotes,lay.top,"note")}</tr>`;
+      + `${slotCells(topNotes,lay.top,"note",null,null,"top",marks)}</tr>`;
 
   // 上下段の区切り（用紙では太罫1本）
   rows+=`<tr class="gap"><td class="none sep" colspan="${lay.cols}"></td></tr>`;
 
   // 下段（lay.bottom 区画。normal 7 / wide 8）：品名／ロット／パレット数／注記
-  rows+=`<tr>${slotCells(bottom,lay.bottom,"name","bb2")}</tr>`;
-  rows+=`<tr>${slotCells(bottom,lay.bottom,"lot")}</tr>`;
+  rows+=`<tr>${slotCells(bottom,lay.bottom,"name","bb2",null,"bottom",marks)}</tr>`;
+  rows+=`<tr>${slotCells(bottom,lay.bottom,"lot",null,null,"bottom",marks)}</tr>`;
   // この行の各セルの下辺が引き出し線の起点になる
-  rows+=`<tr class="btmp">${slotCells(bottom,lay.bottom,"pallet")}</tr>`;
-  rows+=`<tr class="note-row">${slotCells(bottom,lay.bottom,"note")}</tr>`;
+  rows+=`<tr class="btmp">${slotCells(bottom,lay.bottom,"pallet",null,null,"bottom",marks)}</tr>`;
+  rows+=`<tr class="note-row">${slotCells(bottom,lay.bottom,"note",null,null,"bottom",marks)}</tr>`;
   rows+=`<tr class="gap"><td class="none" colspan="${lay.cols}"></td></tr>`;
 
   // グリッド（メイン）
-  const grid=gridRows(lay.cols-SHEET_GRID_ORDER.length, pl.overflow);
+  const grid=gridRows(lay.cols-SHEET_GRID_ORDER.length, pl.overflow, marks);
   // グリッドが描けないときは、グリッドがあった位置に案内を出す。
   // 紙を見た人が「ここに図があるはずだ」と分かる位置に置く。
   if(grid.warn && grid.warn.kind!=="extra") rows+=gridNoticeRow(grid.warn, lay.cols);
@@ -4968,30 +5017,56 @@ function palSlotTextOf(members){
 }
 // 区画セル（2列ぶんの幅）。kind: name / lot / pallet / pallet2 / note
 // extra: 全セルに足すクラス（品名行の太罫など）。品名行は左右の端も太罫にする
-function slotCells(entries,count,kind,extra,sepAt){
+function slotCells(entries,count,kind,extra,sepAt,tier,marks){
   // data-fit は fitSheetText() が「どの種類の欄が入りきらなかったか」を数えるのに使う
   const FIT={name:"name", lot:"lot", pallet:"pal", note:"note"};
   const fk=FIT[kind]||"";
   let out="";
   // 空欄は包まない。包むと高さ0の span が残って測定対象が無駄に増える
   const span = v => v ? `<span class="fit">${esc(v)}</span>` : "";
+  // 書き足しの値。改行を含むときは縦積みに組み立てる。
+  // ここで別の関数を呼ばないこと。テストが new Function(依存名..., src) で
+  // 本体だけを評価するので、依存名に無い名前は ReferenceError になる
+  const markSpan = v => {
+    const lines=String(v).split("\n");
+    return lines.length<=1 ? span(lines[0])
+      : `<span class="fitcol">${lines.map(span).join("")}</span>`;
+  };
+  const mk = marks || {};
   for(let i=0;i<count;i++){
     const e=entries[i], l=e&&e.lot;
     // まとめの対象外の欄（メインに乗るロットや、まとめ設定オフ）は members を持たないので、
     // 自分自身を1件として扱う。下段にも members を持つ欄は出る（救済で回ってきた欄を含む）
     const ms = e ? (e.members || [e]) : [];
-    let inner="", cls="slot";
-    if(kind==="name")        inner=span(l?l.name:"");
+    // 自動計算の値。書き足しの有無にかかわらず組み立て、data-auto に入れる。
+    // 編集を開くときにここから読む。表を描き直して読もうとすると、
+    // タップされた td が DOM から切り離されて入力欄が出なくなる
+    // autoText は data-auto に入れる値。sheetCellText() が欄から読み戻す値と
+    // 揃えること（saveSheetMark() がこの2つを比べて「自動値と同じなら
+    // キーを消す」を判定する）。縦積みは改行で連結、それ以外はそのまま
+    let autoInner="", autoText="";
+    if(kind==="name"){ autoText=l?l.name:""; autoInner=span(autoText); }
     else if(kind==="lot"){
       // 空のロット番号は並べない。品名だけ入力した荷物が混ざりうる
       const ts=ms.map(m=>m.lot.lot).filter(t=>t);
-      // 3件以上は1行に収まらない（9桁3件で圧縮 0.383。下限 0.4 を割る）ので縦に積む
-      inner = ts.length>=3 ? `<span class="fitcol">${ts.map(span).join("")}</span>`
-                           : span(ts.join("/"));
+      if(ts.length>=3){
+        // 3件以上は1行に収まらない（9桁3件で圧縮 0.383。下限 0.4 を割る）ので縦に積む
+        autoText=ts.join("\n");
+        autoInner=`<span class="fitcol">${ts.map(span).join("")}</span>`;
+      }else{
+        autoText=ts.join("/");
+        autoInner=span(autoText);
+      }
     }
-    else if(kind==="pallet") inner=span(palSlotTextOf(ms));
-    else if(kind==="note"){  inner=span(e&&e.note?e.note:""); cls="none snote"; }
-    if(kind!=="note") cls+=" c-"+fk;
+    else if(kind==="pallet"){ autoText=palSlotTextOf(ms); autoInner=span(autoText); }
+    else if(kind==="note"){   autoText=e&&e.note?e.note:""; autoInner=span(autoText); }
+    // 欄のキーは位置で引く。tier が渡されていない経路（既存テストなど）では
+    // キーを作らず、data-ek も data-auto も付けない
+    const ek = tier ? [tier,i,kind].join("|") : "";
+    const mv = ek && Object.prototype.hasOwnProperty.call(mk,ek) ? mk[ek] : null;
+    const edited = (mv!=null && mv!=="");
+    const inner = edited ? markSpan(mv) : autoInner;
+    let cls = (kind==="note") ? "none snote" : "slot c-"+fk;
     // グループの境目の欄だけ左辺を太くする。見出し行と同じ index を渡してもらうので、
     // 見出し・品名・ロット・P数 の4行で線が縦に揃う。注釈行には引かない
     if(sepAt && sepAt.has(i) && kind!=="note") cls+=" gsep";
@@ -5000,7 +5075,10 @@ function slotCells(entries,count,kind,extra,sepAt){
       if(i===0)       cls+=" bl2";
       if(i===count-1) cls+=" br2";
     }
-    out+=`<td class="${cls}" data-fit="${fk}" colspan="2">${inner}</td>`;
+    // 書き足した欄は画面でだけ色を付ける。印刷では消す（CSS 側で扱う）
+    if(edited) cls+=" edited";
+    const attr = ek ? ` data-ek="${ek}" data-auto="${esc(autoText)}"` : "";
+    out+=`<td class="${cls}" data-fit="${fk}"${attr} colspan="2">${inner}</td>`;
   }
   // 4区画のときは左半分（6列）を空ける
   return out;
@@ -5008,10 +5086,19 @@ function slotCells(entries,count,kind,extra,sepAt){
 
 // 追記欄の1項目は、右端2列の中で品名・ロット・P数・注記を縦に記載する。
 // まとめ欄（{group:[...]}）は、その4種それぞれを件数ぶん縦積みにする。
-function overflowTable(entries){
+function overflowTable(entries,marks){
   if(!entries.length) return "";
   const span=v=>v?`<span class="fit">${esc(v)}</span>`:"";
-  const cell=(e,kind)=>{
+  // 書き足しの値。改行を含むときは縦積みに組み立てる。
+  // ここで別の関数を呼ばないこと。テストが new Function(依存名..., src) で
+  // 本体だけを評価するので、依存名に無い名前は ReferenceError になる
+  const markSpan = v => {
+    const lines=String(v).split("\n");
+    return lines.length<=1 ? span(lines[0])
+      : `<span class="fitcol">${lines.map(span).join("")}</span>`;
+  };
+  // e は [entry, index] の対。index は entries の添字。ペア化で添字が失われるので対で持ち回る
+  const cell=([e,index],kind)=>{
     const gs=e.group||[e];
     const textOf=(g)=>{
       const l=g.lot, ms=g.members||[g];
@@ -5021,7 +5108,10 @@ function overflowTable(entries){
       return g.note||slotAreaNote(g.areas);
     };
     let cls="slot";
-    let inner;
+    // 自動計算の値。書き足しの有無にかかわらず組み立て、data-auto に入れる。
+    // 編集を開くときにここから読む（slotCells と同じ理由）。
+    // autoText は縦積みなら改行で連結、それ以外はそのまま
+    let autoInner, autoText;
     if(e.group){
       // まとめ欄。注記は ※未定 が何件も並ぶだけなので、空欄と重複を畳んで1行にする。
       // 品名・ロット・P数は別々の td に縦積みされ、行の位置だけで件が対応しているので、
@@ -5030,31 +5120,48 @@ function overflowTable(entries){
       const texts=gs.map(textOf);
       const vals=(kind==="note") ? [...new Set(texts.filter(Boolean))]
                                  : texts.map(v=>v||"—");
-      inner=`<span class="fitcol">${vals.map(span).join("")}</span>`;
+      autoText=vals.join("\n");
+      autoInner=`<span class="fitcol">${vals.map(span).join("")}</span>`;
       cls+=" roll";
     }else{
       // 1項目の欄。ロット番号が3つ以上あるときだけ従来どおり縦積みにする
       const ms=gs[0].members||[gs[0]];
       const lots=(kind==="lot") ? ms.map(m=>m.lot.lot).filter(Boolean) : null;
-      inner=(lots && lots.length>=3)
-        ? `<span class="fitcol">${lots.map(span).join("")}</span>`
-        : span(textOf(gs[0]));
+      if(lots && lots.length>=3){
+        autoText=lots.join("\n");
+        autoInner=`<span class="fitcol">${lots.map(span).join("")}</span>`;
+      }else{
+        autoText=textOf(gs[0]);
+        autoInner=span(autoText);
+      }
     }
     if(kind==="note") cls+=" c-note";
     else cls+=" c-"+({name:"name",lot:"lot",pallet:"pal"}[kind]);
+    // 欄のキーは位置で引く。marks が渡されていない経路（既存テストなど）では
+    // キーを作らず、data-ek も data-auto も付けない
+    const ek = marks ? ["over",index,kind].join("|") : "";
+    // ek が空でないのは marks が渡されたときだけなので、marks を直に見てよい
+    const mv = ek && Object.prototype.hasOwnProperty.call(marks,ek) ? marks[ek] : null;
+    const edited = (mv!=null && mv!=="");
+    const inner = edited ? markSpan(mv) : autoInner;
+    // 書き足した欄は画面でだけ色を付ける。印刷では消す（CSS 側で扱う）
+    if(edited) cls+=" edited";
     const edge=kind==="name"?"bt2 bb2 bl2 br2":kind==="note"?"bl2 br2 bb2":"bl2 br2";
     const fit={name:"name",lot:"lot",pallet:"pal",note:"note"}[kind];
-    return `<td class="${cls} ${edge}" data-fit="${fit}">${inner}</td>`;
+    const attr = ek ? ` data-ek="${ek}" data-auto="${esc(autoText)}"` : "";
+    return `<td class="${cls} ${edge}" data-fit="${fit}"${attr}>${inner}</td>`;
   };
   // 2列組み。1行に欄を2つ並べ、品名・ロット・P数・注記の4行で1段を作る。
   // wide の追記欄は4列ぶん（156px）あるので、割ると1欄が78px＝下段の通常欄と同じ幅になる。
   // 欄が1つだけの日も半分の幅のままにする。紙の中で欄の幅が揃っているほうが読み違えない。
   // 余った側は罫線の無い空欄で埋める。td を省くと表が崩れて残りの欄が横に広がる。
+  // ここは荷物の欄ではないので data-ek を与えない。与えると件数が1つ増えたとき
+  // 埋め草が本物の欄に変わり、書き足しが荷物の欄へずれる
   const blank=`<td class="none"></td>`;
   const pairs=[];
-  for(let i=0;i<entries.length;i+=2) pairs.push([entries[i], entries[i+1]]);
+  for(let i=0;i<entries.length;i+=2) pairs.push([[entries[i],i],[entries[i+1],i+1]]);
   const block=([a,b])=>["name","lot","pallet","note"]
-    .map(k=>`<tr>${cell(a,k)}${b?cell(b,k):blank}</tr>`).join("");
+    .map(k=>`<tr>${cell(a,k)}${b[0]?cell(b,k):blank}</tr>`).join("");
   return `<table class="overflow-table">${
     pairs.map(block).join('<tr class="overflow-gap"><td colspan="2"></td></tr>')}</table>`;
 }
@@ -5155,7 +5262,7 @@ function sheetGridAnchors(sp, order){
 // 欄とグリッドが別のエリアを指し、引き出し線が的外れになる。
 /* pad: 表の右に余る列数。wide の様式ではメイン14列の右に2列（84px）余る。
    あふれた項目がある日は、この2列を縦2項目の追記欄に使う。 */
-function gridRows(pad, overflow){
+function gridRows(pad, overflow, marks){
   const useOverflow=pad>=2 && overflow && overflow.length;
   const padCell = pad>0 ? `<td class="none" colspan="${pad}"></td>` : "";
   const sp=lastSp.find(s=>s.name===sheetAreas("bottom")[0]);
@@ -5196,7 +5303,7 @@ function gridRows(pad, overflow){
   const g=gridShift(sp,colCells);
   // 追記欄はグリッドの全行と列番号行をまたぐ。行数は日によって変わる
   const sideCell=row=>useOverflow
-    ? (row===0?`<td class="overflow-host" colspan="${pad}" rowspan="${g.rows+1}">${overflowTable(overflow)}</td>`:"")
+    ? (row===0?`<td class="overflow-host" colspan="${pad}" rowspan="${g.rows+1}">${overflowTable(overflow, marks)}</td>`:"")
     : padCell;
   const at=(ci,ri)=>{
     // 端の列で太枠の左右を見るとき、存在しない添字が来る
