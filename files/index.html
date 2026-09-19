@@ -4633,7 +4633,11 @@ function sheetPlacement(){
   const rest=omittedTop.concat(arranged.dropped.filter(e=>!backSet.has(e)));
   const ordered=rest.filter(e=>!e.stash).concat(rest.filter(e=>e.stash));
   const overflowed=arrangeOverflowSlots(ordered);
-  return {lay, top:topAll, bottom:arranged.slots, bottomAll, droppedBottom:arranged.dropped,
+  // bottomAll と arranged.dropped は返さない。bottomAll は arrangeBottomSlots() への
+  // 入力としてこの関数の中でだけ使う。dropped は回送を入れた今、紙に載った欄も含むので
+  // 「下段からこぼれた」という名前が実態と合わない。読み手が要るのは行き先が確定した
+  // top / bottom / overflow / movedBottom のほう
+  return {lay, top:topAll, bottom:arranged.slots,
           overflow:overflowed.overflow, unlisted:overflowed.unlisted, moved, movedBottom};
 }
 /* 欄に入りきらない文字を水平に縮めて1行に収める。
@@ -4695,7 +4699,7 @@ function fitSheetText(pl){
   }
   // 上段に入りきらない荷物を下段の空き欄へ回した日も、画面にだけ知らせる。
   // 件数は欄の数ではなく荷物の数（まとめた欄は複数のロットを含む）
-  if(pl.moved.length){
+  if(pl.moved && pl.moved.length){
     html+=`<div class="msg ok">※ 上段に入りきらない ${lotsIn(pl.moved)} 件を`
         + `下段の空き欄に回しています。</div>`;
   }
