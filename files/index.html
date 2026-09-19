@@ -612,6 +612,9 @@
     .sheet td.editing-cell input,.sheet td.editing-cell textarea{border:0 !important;font-size:inherit !important}
     .sheet td.editing-cell .fit{transform:revert !important}
     #sheetEditBar{display:none !important}
+    /* .sheet-toolbar 自体は隠さない（#printBtn は既存どおり紙に出す）。
+       .btn は display を指定しないのでここで名指ししないと紙に出てしまう */
+    #sheetEditBtn,#sheetClearBtn{display:none !important}
     body{background:#fff}
   }
   #updateBar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:#111827;color:#fff;
@@ -771,6 +774,7 @@
         <div class="timing-switch" data-timing-switch></div>
         <button class="btn btn-ghost" id="sheetEditBtn" onclick="toggleSheetEditMode()">✏ 文字を編集</button>
         <button class="btn btn-ghost sheet-print" id="printBtn" onclick="printSheet()" disabled>🖨 印刷</button>
+        <button class="btn btn-ghost" id="sheetClearBtn" onclick="clearAllMarks()" hidden></button>
       </div>
 
       <div class="sizectl" id="zoomCtl">
@@ -4373,6 +4377,11 @@ function onHeadChange(){
 // 印刷は表だけを出す（印刷CSSが #tab-edit を隠す）。
 // 表は表示されて初めて幅が測れるので、印刷の前に配置表タブへ寄せて描き直す。
 function printSheet(){
+  // 編集中の入力を確定し、モードを OFF に戻してから印刷する。
+  // 紙に入力欄の枠や編集済みの背景色を出さない。
+  // この経路に confirm() が入ると紙が白紙になるので、
+  // 署名を合わせる確認は「欄を開く」側に置いてある
+  exitSheetEditMode();
   if(!isActiveFresh()){ refreshFreshness(); return; }
   switchTab('sheet');
   window.print();
@@ -4382,6 +4391,8 @@ function printSheet(){
 // switchTab('sheet') は中で renderSheet() を呼ぶので、ここで先に表を埋めておく。
 // printSheet() 経由の場合は switchTab('sheet') が二重に走るが、同じタブへの切替なので無害。
 window.addEventListener('beforeprint', ()=>{
+  // Ctrl/Cmd+P とブラウザのメニューからの印刷は printSheet() を通らない
+  exitSheetEditMode();
   if(!isActiveFresh()){ refreshFreshness(); return; }
   switchTab('sheet');
 });
@@ -5023,6 +5034,24 @@ function applySheetEditMode(){
     btn.classList.toggle("on", sheetEditMode);
     btn.setAttribute("aria-pressed", sheetEditMode ? "true" : "false");
   }
+  // 「書き足しを全部戻す」は編集モードの間だけ、書き足しがあるときだけ出す
+  const clear=document.getElementById("sheetClearBtn");
+  if(clear){
+    const n=schedule?Object.keys(activeShift().sheetEdits.marks||{}).length:0;
+    clear.hidden=!(sheetEditMode && n>0);
+    clear.textContent=`書き足しを全部戻す（${n}件）`;
+  }
+}
+// 利用者が自分で押す破棄。sheetEditSilent は見ない
+function clearAllMarks(){
+  const ed=activeShift().sheetEdits;
+  const n=Object.keys(ed.marks||{}).length;
+  if(!n) return;
+  if(!confirm(`書き足し ${n} 件を全部戻しますか？`)) return;
+  ed.marks={};
+  ed.sig="";
+  saveSchedule();
+  renderSheet();
 }
 // いま開いている編集の状態。1つだけ開く
 let sheetEditing=null;   // {key, td, el, auto}

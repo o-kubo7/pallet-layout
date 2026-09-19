@@ -293,6 +293,37 @@ test("ネイティブのスクロールバーをつまんでも矩形を始め�
   assert.match(handler, /e\.offsetX>e\.target\.clientWidth \|\| e\.offsetY>e\.target\.clientHeight/);
 });
 
+test("印刷の前に編集モードを閉じる。ショートカット経由も塞ぐ", () => {
+  // Ctrl/Cmd+P とブラウザのメニューは printSheet() を通らず beforeprint だけが走る
+  assert.match(functionSource("printSheet"), /exitSheetEditMode\(\)/);
+
+  const beforeStart = source.indexOf("window.addEventListener('beforeprint'");
+  assert.notEqual(beforeStart, -1);
+  assert.match(source.slice(beforeStart, beforeStart + 400), /exitSheetEditMode\(\)/);
+});
+
+test("書き足しを全部戻すボタンは編集モードの間だけ出す", () => {
+  const sheetStart = source.indexOf('<div id="tab-sheet"');
+  const sheetEnd = source.indexOf('<!-- ===== 設定タブ', sheetStart);
+  assert.match(source.slice(sheetStart, sheetEnd), /id="sheetClearBtn"[^>]*onclick="clearAllMarks\(\)"/);
+
+  const fn = functionSource("applySheetEditMode");
+  assert.match(fn, /sheetClearBtn/);
+  assert.match(fn, /hidden/);
+});
+
+test("書き足しを全部戻すときは設定にかかわらず確認する", () => {
+  const fn = functionSource("clearAllMarks");
+  assert.match(fn, /confirm/);
+  assert.doesNotMatch(fn, /sheetEditSilent/);
+});
+
+test("編集ツールバーのボタンは画面だけに出し、紙には出さない", () => {
+  // .sheet-toolbar 自体は隠さない（#printBtn は既存どおり紙に出す）ので、
+  // 新しく足した2つのボタンを名指しで消す必要がある
+  assert.match(printBlock(), /#sheetEditBtn,#sheetClearBtn\{display:none/);
+});
+
 function functionSource(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} must exist`);
