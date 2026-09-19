@@ -1896,3 +1896,78 @@ test("上段の注釈行の高さは16pxのまま", () => {
   // あとで足す配置図のテキスト編集が、上段の自由記入欄としてこの行を使う（設計書 §3-5）
   assert.match(source, /\.sheet tr\.note-row td\.none\{height:16px\}/);
 });
+
+test("書き足しの署名は材料が1つ変われば変わる", () => {
+  const hash = new Function(functionSource("sheetEditHash") + "; return sheetEditHash;")();
+  const sigFrom = new Function(
+    "sheetEditHash",
+    functionSource("sheetEditSigFrom") + "; return sheetEditSigFrom;"
+  )(hash);
+
+  const base = {
+    fp: '{"items":[{"itemId":"i1"}]}',
+    lots: [{ id: "l1", pallets: 3 }],
+    sp: [{ name: "軒下①", cells: ["l1"] }],
+    spacesText: "軒下① | far | v | 1 | 3,3 | top",
+    mergeLots: true,
+    fracMode: false,
+    layName: "normal",
+  };
+  const sig = sigFrom(base);
+
+  assert.equal(sigFrom({ ...base }), sig);
+  assert.notEqual(sigFrom({ ...base, fp: '{"items":[{"itemId":"i2"}]}' }), sig);
+  assert.notEqual(sigFrom({ ...base, lots: [{ id: "l1", pallets: 4 }] }), sig);
+  assert.notEqual(sigFrom({ ...base, sp: [{ name: "軒下①", cells: ["l2"] }] }), sig);
+  assert.notEqual(sigFrom({ ...base, mergeLots: false }), sig);
+  assert.notEqual(sigFrom({ ...base, fracMode: true }), sig);
+  assert.notEqual(sigFrom({ ...base, layName: "wide" }), sig);
+});
+
+test("書き足しの署名は掲載先が変われば変わる", () => {
+  // fingerprintFor() が使う spacesToText(false) は掲載先を含まないので、
+  // 掲載先を署名の材料に入れておかないと、上段・下段の欄が総入れ替えに
+  // なっても署名が一致したまま書き足しが別の荷物の欄に貼りつく
+  const hash = new Function(functionSource("sheetEditHash") + "; return sheetEditHash;")();
+  const sigFrom = new Function(
+    "sheetEditHash",
+    functionSource("sheetEditSigFrom") + "; return sheetEditSigFrom;"
+  )(hash);
+
+  const base = {
+    fp: "fp", lots: [], sp: [],
+    spacesText: "軒下① | far | v | 1 | 3,3 | bottom",
+    mergeLots: true, fracMode: false, layName: "normal",
+  };
+  const moved = { ...base, spacesText: "軒下① | far | v | 1 | 3,3 | top" };
+  assert.notEqual(sigFrom(moved), sigFrom(base));
+});
+
+test("書き足しのキーは段・位置・種別で引く", () => {
+  const key = new Function(functionSource("sheetEditKey") + "; return sheetEditKey;")();
+  const headKey = new Function(functionSource("sheetHeadKey") + "; return sheetHeadKey;")();
+
+  assert.equal(key("top", 2, "name"), "top|2|name");
+  assert.equal(key("bottom", 5, "note"), "bottom|5|note");
+  assert.equal(key("over", 0, "pallet"), "over|0|pallet");
+  assert.equal(headKey(0), "top|g0|head");
+  assert.equal(headKey(1), "top|g1|head");
+});
+
+test("書き足しの値は前後の空白を落とし、空白だけなら捨てる", () => {
+  const norm = new Function(
+    functionSource("normalizeMarkValue") + "; return normalizeMarkValue;"
+  )();
+
+  assert.equal(norm("  部品A  "), "部品A");
+  assert.equal(norm(""), "");
+  assert.equal(norm("   "), "");
+  assert.equal(norm("　　"), "");
+  assert.equal(norm("\n\n"), "");
+  assert.equal(norm(null), "");
+  assert.equal(norm(undefined), "");
+
+  assert.equal(norm(" A \n B "), "A\nB");
+  assert.equal(norm("A\n\nB"), "A\nB");
+  assert.equal(norm("A\n  \nB"), "A\nB");
+});

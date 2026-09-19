@@ -3045,6 +3045,46 @@ function fingerprintFor(slips){
   }));
   return JSON.stringify({items:items,spaces:spacesToText(false)});
 }
+/* ---------- 配置図のテキスト編集（書き足し） ---------- */
+// 署名の材料をそのまま持つと配置スナップショットのぶんだけ長くなり、
+// localStorage を無駄に食う。djb2 で短い16進に畳む
+function sheetEditHash(text){
+  const s=String(text==null?"":text);
+  let h=5381;
+  for(let i=0;i<s.length;i++) h=(((h<<5)+h)^s.charCodeAt(i))>>>0;
+  return h.toString(16);
+}
+// 書き足しが「どの配置に対して書かれたか」を1本の文字列で表す。
+// fp（伝票指紋）だけでは足りない。fingerprintFor() が使う spacesToText(false) は
+// 掲載先（top/bottom）を含まないので、掲載先を変えて上段・下段の欄が
+// 総入れ替えになっても fp は変わらず、位置キーの書き足しが別の荷物に貼りつく。
+// fracMode は P数欄の自動計算値そのものを変える（palletSlotText()）ので、
+// 「自動計算の値と同じならキーを削除」の比較基準がずれないよう材料に入れる。
+// 文字サイズ・矢印・角の丸みは欄の並びも自動値も変えないので入れない
+function sheetEditSigFrom(parts){
+  const p=parts||{};
+  return sheetEditHash(JSON.stringify([
+    p.fp||"", p.lots||null, p.sp||null, p.spacesText||"",
+    !!p.mergeLots, !!p.fracMode, p.layName||"",
+  ]));
+}
+// 欄のキー。ロットIDの集合ではなく位置で引く。
+// 署名が配置・掲載先・まとめ設定・端数表示・様式を全部含むので、
+// 署名が一致する間は欄の並びが変わらない。位置キーなら空欄にも書ける
+// （ロットIDキーだと荷物の無い欄が "top||name" に潰れて衝突する）。
+// 注意: slotCells / overflowTable / gridRows はテストが new Function で
+// 本体だけを評価するので、この関数をそこから呼んではいけない。
+// 向こうでは [tier,i,kind].join("|") をその場に書く
+function sheetEditKey(tier,index,kind){ return [tier,index,kind].join("|"); }
+function sheetHeadKey(groupIndex){ return ["top","g"+groupIndex,"head"].join("|"); }
+// 保存する前に値をならす。空白だけの入力は「書き足しなし」と同じに扱う。
+// 改行は残す（縦積みの欄を textarea で行ごとに編集するため）が、
+// 各行の前後の空白と空行は落とす
+function normalizeMarkValue(raw){
+  if(raw==null) return "";
+  const lines=String(raw).split("\n").map(s=>s.trim()).filter(Boolean);
+  return lines.join("\n");
+}
 function inputFingerprint(){ return fingerprintFor(readSlips()); }
 function renderTimingSwitches(){
   document.querySelectorAll("[data-timing-switch]").forEach(host=>{
