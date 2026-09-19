@@ -1071,7 +1071,22 @@ function newStableId(prefix){
   return prefix+"-"+Date.now().toString(36)+"-"+stableSeq.toString(36);
 }
 function emptyShift(){
-  return {slips:[],result:null,manual:null,resultFingerprint:null,blocked:[]};
+  return {slips:[],result:null,manual:null,resultFingerprint:null,blocked:[],
+          sheetEdits:{sig:"",marks:{}}};
+}
+// 書き足しの保存を正規化する。壊れた値・古い版のデータは空に落とす。
+// 値が文字列でないもの、空文字のものはキーごと捨てる。
+// 署名が空のときは marks も捨てる。残すと紙にも出ず件数の案内にも出ない
+// 見えない残骸になる（activeSheetMarks も hiddenMarkCount も
+// sig が空のときは 0 を返すため）
+function normalizeSheetEdits(raw){
+  const src=raw && typeof raw==="object" && !Array.isArray(raw) ? raw : {};
+  const sig = typeof src.sig==="string" ? src.sig : "";
+  if(!sig) return {sig:"", marks:{}};
+  const marks={};
+  const m=src.marks && typeof src.marks==="object" && !Array.isArray(src.marks) ? src.marks : {};
+  Object.keys(m).forEach(k=>{ if(typeof m[k]==="string" && m[k]!=="") marks[k]=m[k]; });
+  return {sig, marks};
 }
 function emptySchedule(date){
   return {version:SCHEDULE_VERSION,date:date||"",activeTiming:"am",
@@ -1152,6 +1167,7 @@ function normalizeShift(raw){
       manual:normalizeSnapshot(src.manual),
       resultFingerprint:typeof src.resultFingerprint==="string" ? src.resultFingerprint : null,
       blocked:normalizeBlocked(src.blocked),
+      sheetEdits:normalizeSheetEdits(src.sheetEdits),
     };
   }catch(e){
     return emptyShift();

@@ -349,12 +349,13 @@ function makeGridRows(cols, order) {
 
 test("旧形式の時間帯データは配置不可セルなしとして読み込む", () => {
   const normalizeShift = new Function(
-    "normalizeSlip", "normalizeSnapshot", "normalizeBlocked",
+    "normalizeSlip", "normalizeSnapshot", "normalizeBlocked", "normalizeSheetEdits",
     functionSource("normalizeShift") + "; return normalizeShift;"
   )(
     value => value,
     value => value,
-    () => []
+    () => [],
+    new Function(functionSource("normalizeSheetEdits") + "; return normalizeSheetEdits;")()
   );
   const shift = normalizeShift({ slips: [], result: null, manual: null });
   assert.deepEqual(shift.blocked, []);
@@ -1970,4 +1971,97 @@ test("書き足しの値は前後の空白を落とし、空白だけなら捨�
   assert.equal(norm(" A \n B "), "A\nB");
   assert.equal(norm("A\n\nB"), "A\nB");
   assert.equal(norm("A\n  \nB"), "A\nB");
+});
+
+test("シフトの初期値は空の書き足しを持つ", () => {
+  const emptyShift = new Function(functionSource("emptyShift") + "; return emptyShift;")();
+  assert.deepEqual(emptyShift().sheetEdits, { sig: "", marks: {} });
+});
+
+test("壊れた書き足しは空に落とす", () => {
+  const normalizeSheetEdits = new Function(
+    functionSource("normalizeSheetEdits") + "; return normalizeSheetEdits;"
+  )();
+
+  assert.deepEqual(normalizeSheetEdits(null), { sig: "", marks: {} });
+  assert.deepEqual(normalizeSheetEdits("abc"), { sig: "", marks: {} });
+  assert.deepEqual(normalizeSheetEdits([]), { sig: "", marks: {} });
+  assert.deepEqual(normalizeSheetEdits({}), { sig: "", marks: {} });
+  assert.deepEqual(normalizeSheetEdits({ sig: 1, marks: {} }), { sig: "", marks: {} });
+  assert.deepEqual(normalizeSheetEdits({ sig: "a", marks: "x" }), { sig: "a", marks: {} });
+
+  // 文字列でない値と空文字の値は落とす
+  assert.deepEqual(
+    normalizeSheetEdits({ sig: "a", marks: { "top|0|name": "A", "top|1|name": 5, "top|2|name": "" } }),
+    { sig: "a", marks: { "top|0|name": "A" } }
+  );
+});
+
+test("署名が空なら書き足しも空にする", () => {
+  // {sig:"", marks:{中身あり}} を通すと、紙にも出ず件数の案内にも出ない
+  // 見えない残骸が保存に残る（activeSheetMarks も hiddenMarkCount も
+  // sig が空のときは 0 を返すため）
+  const normalizeSheetEdits = new Function(
+    functionSource("normalizeSheetEdits") + "; return normalizeSheetEdits;"
+  )();
+  assert.deepEqual(
+    normalizeSheetEdits({ sig: "", marks: { "top|0|name": "孤児" } }),
+    { sig: "", marks: {} }
+  );
+});
+
+test("シフトの正規化は書き足しを通す", () => {
+  const normalizeSheetEdits = new Function(
+    functionSource("normalizeSheetEdits") + "; return normalizeSheetEdits;"
+  )();
+  const normalizeShift = new Function(
+    "normalizeSlip", "normalizeSnapshot", "normalizeBlocked", "emptyShift", "normalizeSheetEdits",
+    functionSource("normalizeShift") + "; return normalizeShift;"
+  )(
+    x => x,
+    () => null,
+    () => [],
+    () => ({ slips: [], result: null, manual: null, resultFingerprint: null, blocked: [], sheetEdits: { sig: "", marks: {} } }),
+    normalizeSheetEdits
+  );
+
+  const out = normalizeShift({ sheetEdits: { sig: "s1", marks: { "top|0|name": "手書き" } } });
+  assert.deepEqual(out.sheetEdits, { sig: "s1", marks: { "top|0|name": "手書き" } });
+  assert.deepEqual(normalizeShift({}).sheetEdits, { sig: "", marks: {} });
+});
+
+test("署名の材料の sp は snapshotSpaces を通した形にする", () => {
+  // リロードすると lastSp は clone(snapshot.sp) に hydrateBlockedRows() を
+  // 掛けて復元される。hydrateBlockedRows() は全スペースの全列に blockedRows を
+  // 入れるが、buildWork() が作った生の lastSp では退避スペースの列だけ
+  // blockedRows を持たない。2026-09-19 の実測（サンプル9件・normal）:
+  //   JSON.stringify(lastSp)                    3063 バイト
+  //   JSON.stringify(復元後の lastSp)            3080 バイト  ← 一致しない
+  //   JSON.stringify(snapshotSpaces(どちらも))   2536 バイト  ← 一致する
+  // 生の lastSp を材料にすると、リロードした瞬間に全部の書き足しが消える
+  const snapshotSpaces = new Function(
+    "clone",
+    functionSource("snapshotSpaces") + "; return snapshotSpaces;"
+  )(v => JSON.parse(JSON.stringify(v)));
+  const hydrateBlockedRows = new Function(
+    "blockedRowsFor",
+    functionSource("hydrateBlockedRows") + "; return hydrateBlockedRows;"
+  )(() => new Set());
+
+  // 生の lastSp を模す。退避スペースの列だけ blockedRows を持たない
+  const raw = [
+    { name: "メイン", cols: [{ h: 3, fills: [], blockedRows: new Set() }] },
+    { name: "退避",   cols: [{ h: 4, fills: [] }] },
+  ];
+  // リロード後を模す。hydrateBlockedRows が全列に入れる
+  const restored = JSON.parse(JSON.stringify(snapshotSpaces(raw)));
+  hydrateBlockedRows(restored, []);
+
+  // 生のままでは一致しない
+  assert.notEqual(JSON.stringify(raw), JSON.stringify(restored));
+  // snapshotSpaces を通せば一致する
+  assert.equal(JSON.stringify(snapshotSpaces(raw)), JSON.stringify(snapshotSpaces(restored)));
+
+  // currentSheetSig が生の lastSp を渡していないこと
+  // (currentSheetSig は Task 3 で追加されるため、それに対する assert も Task 3 で追加する)
 });
