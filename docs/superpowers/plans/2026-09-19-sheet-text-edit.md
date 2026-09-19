@@ -25,10 +25,15 @@
 制約が正反対なので混同しないこと。
 
 **（A）`new Function` で実行される関数** — `slotCells` / `overflowTable` /
-`topHeadGroups` / `gridRows` の4つ。
+`topHeadGroups` / `gridRows` / `normalizeShift` / `emptyShift`。
 
-- **この4つの中からモジュールスコープの関数や変数を新しく呼んではならない。**
+- **これらの中からモジュールスコープの関数や変数を新しく呼んではならない。**
   依存名リストに無いため ReferenceError で落ちる
+- `normalizeShift` も対象。既存テスト
+  （`tests/sheet-placement.test.js:350`「旧形式の時間帯データは配置不可セルなしとして読み込む」）は
+  依存名を `"normalizeSlip", "normalizeSnapshot", "normalizeBlocked"` の3つしか渡していない。
+  Task 2 で `normalizeSheetEdits()` を呼ぶ形に変えるので、
+  **この既存テストの依存名にも足す**（足さないと ReferenceError で落ちる）
 - キーの組み立ては `[tier, i, kind].join("|")` を**その場に書く**。
   `sheetEditKey()` を呼んではいけない
 - `gridRows` を忘れやすい。`overflowTable` を呼ぶのは `renderSheet` ではなく
@@ -330,32 +335,48 @@ test("シフトの正規化は書き足しを通す", () => {
   assert.deepEqual(normalizeShift({}).sheetEdits, { sig: "", marks: {} });
 });
 
-test("保存して読み直しても配置スナップショットのJSONが変わらない", () => {
-  // 署名は sp を JSON.stringify して作る。リロード時は snapshotSpaces() の値が
-  // clone() と hydrateBlockedRows() を通って復元されるので、この往復で
-  // JSON が変わると、リロードした瞬間に全部の書き足しが「表示されない」に落ち、
-  // 次の確定で捨てられる。設計 §1 の「リロードしても残る」の根拠
+test("署名の材料の sp は snapshotSpaces を通した形にする", () => {
+  // リロードすると lastSp は clone(snapshot.sp) に hydrateBlockedRows() を
+  // 掛けて復元される。hydrateBlockedRows() は全スペースの全列に blockedRows を
+  // 入れるが、buildWork() が作った生の lastSp では退避スペースの列だけ
+  // blockedRows を持たない。2026-09-19 の実測（サンプル9件・normal）:
+  //   JSON.stringify(lastSp)                    3063 バイト
+  //   JSON.stringify(復元後の lastSp)            3080 バイト  ← 一致しない
+  //   JSON.stringify(snapshotSpaces(どちらも))   2536 バイト  ← 一致する
+  // 生の lastSp を材料にすると、リロードした瞬間に全部の書き足しが消える
   const snapshotSpaces = new Function(
+    "clone",
     functionSource("snapshotSpaces") + "; return snapshotSpaces;"
-  )();
+  )(v => JSON.parse(JSON.stringify(v)));
   const hydrateBlockedRows = new Function(
     "blockedRowsFor",
     functionSource("hydrateBlockedRows") + "; return hydrateBlockedRows;"
   )(() => new Set());
 
-  const sp = [{ name: "メイン", zone: "in", orient: "v", block: 1,
-                cols: [{ h: 3, cells: ["l1", null, null] }, { h: 3, cells: [null, null, null] }] }];
-  const first = snapshotSpaces(sp);
-  const roundTrip = JSON.parse(JSON.stringify(first));
-  hydrateBlockedRows(roundTrip, []);
-  assert.equal(JSON.stringify(roundTrip), JSON.stringify(first));
+  // 生の lastSp を模す。退避スペースの列だけ blockedRows を持たない
+  const raw = [
+    { name: "メイン", cols: [{ h: 3, fills: [], blockedRows: new Set() }] },
+    { name: "退避",   cols: [{ h: 4, fills: [] }] },
+  ];
+  // リロード後を模す。hydrateBlockedRows が全列に入れる
+  const restored = JSON.parse(JSON.stringify(snapshotSpaces(raw)));
+  hydrateBlockedRows(restored, []);
+
+  // 生のままでは一致しない
+  assert.notEqual(JSON.stringify(raw), JSON.stringify(restored));
+  // snapshotSpaces を通せば一致する
+  assert.equal(JSON.stringify(snapshotSpaces(raw)), JSON.stringify(snapshotSpaces(restored)));
+
+  // currentSheetSig が生の lastSp を渡していないこと
+  assert.match(functionSource("currentSheetSig"), /snapshotSpaces\(lastSp\)/);
+  assert.doesNotMatch(functionSource("currentSheetSig"), /sp:\s*lastSp\b/);
 });
 ```
 
-**注意:** 最後のテストは `snapshotSpaces` と `hydrateBlockedRows` の実体を
-`grep -n "function snapshotSpaces" -A 20 files/index.html` で読み、
-依存する関数（`blockedRowsFor` など）を `new Function` の引数に揃えてから書くこと。
-`sp` の形も実際の `snapshotSpaces()` の戻り値に合わせる。
+**注意:** `currentSheetSig` は Task 3 で足すので、最後の2つの assert は
+Task 3 のテストへ移してもよい。その場合もこのテスト名のコメントは残すこと。
+`snapshotSpaces` / `hydrateBlockedRows` の実体は
+`sed -n '2133,2145p' files/index.html` で読んでから書く。
 
 - [ ] **Step 2: テストを走らせて落ちることを確かめる**
 
@@ -397,6 +418,23 @@ function normalizeSheetEdits(raw){
 ```js
       blocked:normalizeBlocked(src.blocked),
       sheetEdits:normalizeSheetEdits(src.sheetEdits),
+```
+
+**既存テストの依存名を直す。** `normalizeShift` は `new Function` で
+**実行される**（`tests/sheet-placement.test.js:350`
+「旧形式の時間帯データは配置不可セルなしとして読み込む」）。
+依存名リストに `normalizeSheetEdits` が無いと ReferenceError で落ちる。
+
+```js
+  const normalizeShift = new Function(
+    "normalizeSlip", "normalizeSnapshot", "normalizeBlocked", "normalizeSheetEdits",
+    functionSource("normalizeShift") + "; return normalizeShift;"
+  )(
+    value => value,
+    value => value,
+    () => [],
+    new Function(functionSource("normalizeSheetEdits") + "; return normalizeSheetEdits;")()
+  );
 ```
 
 `loadOrMigrateSchedule()` の警告条件（`1274` 付近）には足さない。
@@ -762,14 +800,22 @@ function activeSheetMarks(){
   return ed.sig===currentSheetSig() ? (ed.marks||{}) : {};
 }
 // いまの状態の署名。pl を持っている呼び出し元は渡す（sheetPlacement() の
-// 計算を省くため。1描画で3回呼ばれる）
+// 計算を省くため。1描画で3回呼ばれる）。
+//
+// sp は snapshotSpaces() を通した形にする。生の lastSp は使えない。
+// リロード時の lastSp は clone(snapshot.sp) + hydrateBlockedRows() で
+// 復元されるが、hydrateBlockedRows() は全スペースの全列に blockedRows を
+// 入れるのに対し、buildWork() が作った生の lastSp では退避スペースの列だけ
+// blockedRows を持たない。2026-09-19 の実測（サンプル9件・normal）で
+// 3063 バイト vs 3080 バイトと一致しなかった。
+// snapshotSpaces() は blockedRows を削るので、どちらの経路でも同じ JSON になる
 function currentSheetSig(pl){
   if(!schedule || !hasResult) return "";
   const p=pl||sheetPlacement();
   return sheetEditSigFrom({
     fp: lastFp,
     lots: lastLots,
-    sp: lastSp,
+    sp: snapshotSpaces(lastSp),
     spacesText: spacesToText(true),
     mergeLots: mergeLots,
     fracMode: fracMode,
@@ -1205,7 +1251,10 @@ let sheetEditing=null;   // {key, td, el, auto}
 
 // click ではなく mousedown で開く。click を待つと、前の欄の blur →
 // commitSheetEdit() → renderSheet() で DOM が総入れ替えになり、
-// mouseup の時点でクリック対象が消えていて別の欄へ移るのに2タップ要る
+// mouseup の時点でクリック対象が消えていて別の欄へ移るのに2タップ要る。
+// これはスマホの入口も兼ねる。タッチでも touchstart のあと合成の mousedown が
+// 発火するので、touchstart を別に登録してはいけない（二重に開いて
+// 開いたばかりの入力欄が blur ＝確定する）。方式の分岐は openSheetEditor の中
 document.addEventListener("mousedown", e=>{
   if(!sheetEditMode) return;
   const host=document.getElementById("sheetView");
@@ -1432,6 +1481,16 @@ test("幅で方式を分け、両方の入力欄を同時に置かない", () =>
   assert.match(fn, /openBarEditor/);
   assert.match(fn, /openInlineEditor/);
 });
+
+test("欄を開く入口は mousedown だけ。touchstart を足さない", () => {
+  // タッチでも touchstart のあと合成の mousedown が発火する。両方に登録すると
+  // 同じ欄で openSheetEditor が2回走り、2回目は mousedown ハンドラの
+  // preventDefault() を通らないまま既定のフォーカス移動が起きて、
+  // 開いたばかりの入力欄から blur ＝確定してしまう
+  const opens = source.match(/addEventListener\("(mousedown|touchstart)"[\s\S]{0,400}?data-ek/g) || [];
+  assert.equal(opens.length, 1, "欄を開くリスナは1つだけ");
+  assert.match(opens[0], /mousedown/);
+});
 ```
 
 - [ ] **Step 2: テストを走らせて落ちることを確かめる**
@@ -1545,18 +1604,17 @@ if(compactInputMq.addEventListener) compactInputMq.addEventListener("change", co
 else compactInputMq.addListener(commitSheetEdit);
 ```
 
-タップの入口（Task 5 は `mousedown`）にタッチも足す。
+**タップの入口は Task 5 の `mousedown` のまま。`touchstart` を足さないこと。**
 
-```js
-document.addEventListener("touchstart", e=>{
-  if(!sheetEditMode || !compactInputMq.matches) return;
-  const host=document.getElementById("sheetView");
-  if(!host || !host.contains(e.target)) return;
-  const td=e.target.closest("td[data-ek]");
-  if(!td || (sheetEditing && sheetEditing.td===td)) return;
-  openSheetEditor(td);
-}, {passive:true});
-```
+タッチでも `touchstart` のあと合成の `mousedown` が発火するので
+（2026-09-19 実測でこの順に飛ぶことを確認）、`mousedown` だけで
+PC とスマホの両方を賄える。両方に登録すると同じ欄で `openSheetEditor()` が
+2回走り、2回目は `mousedown` ハンドラの `preventDefault()` を通らないまま
+既定のフォーカス移動が起きて、開いたばかりの入力欄から `blur` ＝
+確定してしまう（実機で「タップしたら即座に閉じる」症状になる）。
+
+viewport meta に `width=device-width` があるので（`files/index.html:5`）、
+タップから `mousedown` までの 300ms 遅延は起きない。
 
 - [ ] **Step 5: CSS を足す**
 
@@ -1715,15 +1773,15 @@ function toggleSheetEditSilent(){
 }
 ```
 
-起動時の読み込み（`5473` 付近、`STORE_KEY.merge` を読む場所）:
+起動時の読み込みは、隣の `initMergeLots`（`files/index.html:5471`）と同じ
+IIFE の流儀に揃える。その直後に置く。
 
 ```js
-  const silent=loadData(STORE_KEY.sheetEditSilent);
-  if(typeof silent==="boolean"){
-    sheetEditSilent=silent;
-    const chk=document.getElementById("sheetEditSilentChk");
-    if(chk) chk.checked=silent;
-  }
+// 書き足しを捨てる確認：保存があれば復元。既定は off なので true のときだけ立てる
+(function initSheetEditSilent(){
+  const v=loadData(STORE_KEY.sheetEditSilent);
+  if(v===true){ sheetEditSilent=true; document.getElementById("sheetEditSilentChk").checked=true; }
+})();
 ```
 
 - [ ] **Step 4: 設定タブにチェックボックスを足す**
@@ -2125,7 +2183,9 @@ ov.innerHTML=orig; fitSheetText();
 - **あさで書いた書き足しが、ひるに切り替えてから戻ってもあさに残っている**
   `setActiveTiming()` の後始末が効いているかの確認
 - **リロードしても書き足しが紙に残る**
-  署名がスナップショット往復で一致しているかの確認
+  署名の sp が snapshotSpaces() を通っているかの確認。生の lastSp を
+  材料にしていると、リロードした瞬間に全部消える（退避スペースの
+  blockedRows のぶんだけ JSON が変わるため）
 
 - [ ] **Step 4: `CACHE_VERSION` を上げる**
 
@@ -2181,6 +2241,8 @@ Mac とスマホが同じ Wi-Fi にいること。ファイアウォールが有
 - 欄をタップすると画面下部に編集バーが出て、その欄がハイライトされる
 - **バーがハイライトした欄を覆っていない**
 - ソフトキーボードが出てもバーが隠れない
+- **タップした直後に欄が閉じない**（touchstart と mousedown の二重発火が
+  起きていないかの確認。起きていると入力欄が開いた瞬間に blur ＝確定する）
 - **日本語を変換して確定しても、変換確定の Enter で欄が閉じない**
 - 「確定」で紙に反映される。「取り消し」で元に戻り、**バーが閉じる**
 - 確定しても横スクロール位置が保たれる（右端の欄を続けて直せる）

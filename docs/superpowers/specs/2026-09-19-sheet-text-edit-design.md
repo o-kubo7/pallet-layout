@@ -105,9 +105,14 @@ applySheetZoom();
 切り出し方は2通りあり、制約が違う。
 
 **（A）`new Function` で実行される関数** — `slotCells` / `overflowTable` /
-`topHeadGroups` / `gridRows`。
-**この4つがモジュールスコープの関数や変数を新しく参照すると、
+`topHeadGroups` / `gridRows` / `normalizeShift` / `emptyShift`。
+**これらがモジュールスコープの関数や変数を新しく参照すると、
 依存名リストに無いため ReferenceError で落ちる。**
+
+`normalizeShift` も対象。既存テスト
+（`tests/sheet-placement.test.js:350`「旧形式の時間帯データは配置不可セルなしとして読み込む」）は
+依存名を `"normalizeSlip", "normalizeSnapshot", "normalizeBlocked"` の3つしか渡していない。
+`normalizeSheetEdits()` を呼ぶ形に変えるなら、**この既存テストの依存名にも足す**。
 
 `gridRows` は見落としやすい。`overflowTable` を呼ぶのは `renderSheet` ではなく
 `gridRows` の中（`files/index.html:5143`）で、`gridRows` 自身も
@@ -168,13 +173,37 @@ shift.sheetEdits = {
 ```
 sig = ハッシュ(
         fp（伝票指紋 fingerprintFor()）
-      + 配置スナップショット（lots, sp）
+      + lots（lastLots）
+      + sp（snapshotSpaces(lastSp) ← 生の lastSp ではない）
       + 掲載先（spacesToText(true)）
       + まとめ設定（mergeLots）
       + 端数表示（fracMode）
       + 様式（normal / wide）
       )
 ```
+
+**`sp` は `snapshotSpaces(lastSp)` を通してから材料にする。生の `lastSp` は使えない。**
+リロードすると `lastSp` は `clone(snapshot.sp)` に `hydrateBlockedRows()` を掛けて
+復元される（`files/index.html:3103-3108`）。`hydrateBlockedRows()` は
+**全スペースの全列に** `blockedRows` を入れるが、`buildWork()` が作った
+生の `lastSp` では退避スペースの列だけ `blockedRows` を持たない。
+
+2026-09-19 の実測（サンプル9件、様式 normal）:
+
+```
+JSON.stringify(lastSp)                          3063 バイト
+JSON.stringify(復元後の lastSp)                  3080 バイト   ← 一致しない
+  差分: 退避スペースの列に "blockedRows":{} が増える
+
+JSON.stringify(snapshotSpaces(lastSp))          2536 バイト
+JSON.stringify(snapshotSpaces(復元後の lastSp))  2536 バイト   ← 一致する
+```
+
+`snapshotSpaces()` は `blockedRows` を削ってから返すので、
+どちらの経路から来た `sp` でも同じ JSON になる。
+生の `lastSp` を材料にすると、**リロードした瞬間に全部の書き足しが
+「表示されない」に落ち、次に欄を開いたとき §3-4 で捨てられる。**
+設計 §1 の「リロードしても残る」が成立しない。
 
 ハッシュは短い文字列に畳む。材料をそのまま `JSON.stringify` で連結すると
 配置スナップショットのぶんだけ長くなり、`sheetEdits` が localStorage を無駄に食う
@@ -465,6 +494,18 @@ in-place だと実機に取り消し手段が存在しない。バーなら「�
 `mousedown` で前の欄が閉じ、`mouseup` の時点でクリック対象が消えている。
 別の欄へ移るのに2タップ必要になる。
 `mousedown` で欄を開く（`click` を待たない）ことで1タップにする。
+
+**`touchstart` は使わない。`mousedown` だけにする。**
+タッチでも `touchstart` のあと合成の `mousedown` が発火するので、
+`mousedown` だけで両方の端末を賄える。両方に登録すると同じ欄で
+`openSheetEditor()` が2回走り、2回目は `mousedown` ハンドラの
+`preventDefault()` を通らないまま既定のフォーカス移動が起き、
+開いたばかりの入力欄から `blur` ＝確定してしまう。
+viewport meta に `width=device-width` があるので（`files/index.html:5`）、
+タップから `mousedown` までの 300ms 遅延は起きない。
+
+`mousedown` の中で `preventDefault()` を呼んでも、その同じハンドラで
+作った `<input>` に `focus()` は効く（2026-09-19 実測）。
 
 ### 3-10. 確定と取り消し
 
@@ -822,10 +863,11 @@ input の内幅    = 91px
   - trim した結果が自動計算の値と同じならキーが消える
 - `normalizeShift()` が壊れた `sheetEdits` を `{sig:"", marks:{}}` に落とす
 - `sig` が空の `sheetEdits` は `marks` も空にする（§3-1）
-- **保存して読み直しても署名が一致する。** `snapshotSpaces()` →
-  `clone()` → `hydrateBlockedRows()` の往復（`files/index.html:3103-3108`）で
-  `sp` の JSON が変わらないこと。ここが崩れると、リロードした瞬間に
-  全部の書き足しが「表示されない」に落ち、次の確定で捨てられる。
+- **保存して読み直しても署名が一致する。** `snapshotSpaces()` を通した形どうしが
+  同じ JSON になること。生の `lastSp` は往復で変わる（退避スペースの
+  `blockedRows`、§3-2 の実測）ので、**署名の材料に生の `lastSp` を
+  使っていないこと**も併せて確かめる。
+  ここが崩れるとリロードした瞬間に全部の書き足しが消える。
   設計 §1 の「リロードしても残る」の根拠になるテスト
 
 **既存テストのうち7つの assert を直す。** 引数を末尾に足しても、
