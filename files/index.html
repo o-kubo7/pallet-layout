@@ -574,6 +574,19 @@
     font-family:inherit;font-size:max(13px,1em);line-height:1.2;text-align:center;
     background:#fff;color:#000;resize:none}
 
+  /* スマホの編集バー。.sheet の外なので zoom も scaleX も掛からない */
+  #sheetEditBar{position:fixed;left:8px;right:8px;z-index:60;display:flex;gap:6px;
+                align-items:center;background:#fff;border:1px solid #06f;border-radius:8px;
+                padding:6px 8px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+  /* display:flex は ID セレクタの作者スタイルなので UA の [hidden]{display:none}
+     に勝つ。これを書かないと bar.hidden=true が効かない
+     （.ac-list[hidden] などと同じ回避） */
+  #sheetEditBar[hidden]{display:none}
+  #sheetEditBar .lbl{flex:0 0 auto;font-size:12px;color:#333;white-space:nowrap}
+  #sheetEditBar input,#sheetEditBar textarea{flex:1 1 auto;min-width:0;font-size:16px;
+                padding:4px;border:1px solid #bbb;border-radius:4px;font-family:inherit;resize:none}
+  #sheetEditBar button{flex:0 0 auto}
+
   @media print{
     @page{size:A4 landscape;margin:8mm}
     header,.tabs,.actionbar,#updateBar,.sizectl,.timing-switch,#messages,#sheetMsg,#regInfo,#saveStatus,.note,.hint{display:none !important}
@@ -598,6 +611,7 @@
        消えず、transform:none が残ると圧縮が外れて欄からあふれる */
     .sheet td.editing-cell input,.sheet td.editing-cell textarea{border:0 !important;font-size:inherit !important}
     .sheet td.editing-cell .fit{transform:revert !important}
+    #sheetEditBar{display:none !important}
     body{background:#fff}
   }
   #updateBar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:#111827;color:#fff;
@@ -766,6 +780,15 @@
         <button class="sizebtn" data-zoom="1.5" onclick="setSheetZoom('1.5')">150%</button>
         <button class="sizebtn" data-zoom="2" onclick="setSheetZoom('2')">200%</button>
         <span class="lbl" id="zoomNow"></span>
+      </div>
+
+      <!-- スマホ（600px以下）の編集バー。欄の実幅は95pxで品名は5.6文字しか
+           見えず、Pixel 9a には Escape キーも無いので、表の外で編集する -->
+      <div id="sheetEditBar" hidden>
+        <span class="lbl" id="sheetEditLabel"></span>
+        <input type="text" id="sheetEditInput">
+        <button class="btn btn-primary" onclick="commitSheetEdit()">確定</button>
+        <button class="btn btn-ghost" onclick="cancelSheetEdit()">取り消し</button>
       </div>
 
       <div id="sheetMsg"></div>
@@ -4938,6 +4961,7 @@ function flushSheetEdit(){
   if(!sheetEditing) return false;
   const {key, el, auto}=sheetEditing;
   sheetEditing=null;                 // 再入を止める
+  closeSheetEditBar();
   saveSheetMark(key, el.value, auto);
   return true;
 }
@@ -5062,9 +5086,71 @@ function openInlineEditor(td){
   });
   el.addEventListener("blur", ()=>{ commitSheetEdit(); });
 }
+// スマホ（600px 以下）。表の外のバーで編集する。
+// 欄の実幅は 95px で品名（16px）は 5.6 文字しか見えず、
+// Pixel 9a には Escape キーが無く、ソフトキーボードの戻るボタンは
+// blur ＝確定になるので、in-place だと取り消す手段が無い
+function openBarEditor(td){
+  const key=td.dataset.ek;
+  const auto=td.dataset.auto||"";
+  const cur=sheetCellText(td);
+  const multi=cur.indexOf("\n")>=0 || !!td.querySelector(".fitcol");
+  const bar=document.getElementById("sheetEditBar");
+  // 単一行と縦積みで要素ごと入れ替える。両方を DOM に置いたままにしない
+  const el=document.createElement(multi?"textarea":"input");
+  if(!multi) el.type="text";
+  el.id="sheetEditInput";
+  el.value=cur;
+  if(multi) el.rows=Math.max(2,cur.split("\n").length);
+  document.getElementById("sheetEditInput").replaceWith(el);
+
+  document.getElementById("sheetEditLabel").textContent=sheetEditLabelOf(key);
+  td.classList.add("editing-cell");
+  bar.hidden=false;
+  sheetEditing={key, td, el, auto};
+  positionSheetEditBar();
+  el.focus();
+
+  el.addEventListener("keydown", ev=>{
+    if(ev.key==="Enter" && !multi && ev.isComposing===false){ ev.preventDefault(); commitSheetEdit(); }
+  });
+}
+// どの欄を直しているかをバーに出す
+function sheetEditLabelOf(key){
+  const p=String(key).split("|");
+  const tier={top:"上段",bottom:"下段",over:"追記欄"}[p[0]]||p[0];
+  if(p[2]==="head") return `${tier} 見出し`;
+  const kind={name:"品名",lot:"ロット",pallet:"P数",note:"注釈"}[p[2]]||p[2];
+  return `${tier} ${Number(p[1])+1}番目の${kind}`;
+}
+// Chrome 108 以降の Android はソフトキーボードで Layout Viewport を
+// リサイズせず Visual Viewport だけ縮める。既存の acPosition() と同じ計算で
+// 可視領域の下端（キーボードのすぐ上）に貼る。上端だと、ハイライトした
+// 欄をバーが覆うことがある
+function positionSheetEditBar(){
+  const bar=document.getElementById("sheetEditBar");
+  if(!bar || bar.hidden) return;
+  const vv=window.visualViewport;
+  const vTop=vv?vv.offsetTop:0;
+  const vh=vv?vv.height:window.innerHeight;
+  bar.style.top=(vTop+vh-bar.getBoundingClientRect().height-8)+"px";
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener("resize", positionSheetEditBar);
+  window.visualViewport.addEventListener("scroll", positionSheetEditBar);
+}
+function closeSheetEditBar(){
+  const bar=document.getElementById("sheetEditBar");
+  if(bar) bar.hidden=true;
+}
+// 編集中にウィンドウ幅が 600px を跨いだら、いったん確定する。
+// 方式が変わるので、開いたままの入力欄を残さない
+if(compactInputMq.addEventListener) compactInputMq.addEventListener("change", commitSheetEdit);
+else compactInputMq.addListener(commitSheetEdit);
 function cancelSheetEdit(){
   if(!sheetEditing) return;
   sheetEditing=null;
+  closeSheetEditBar();
   renderSheet();
 }
 function renderSheet(){

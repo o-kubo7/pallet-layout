@@ -2348,3 +2348,54 @@ test("見出しの欄キーは sheetHeadKey と同じ形にする", () => {
   // sheetHeadKey 側だけ変えても誰も落ちず、見出しの編集が静かに効かなくなる
   assert.match(functionSource("renderSheet"), /\["top","g"\+i,"head"\]\.join\("\|"\)/);
 });
+
+test("スマホ用の編集バーを配置表タブに置く", () => {
+  const sheetStart = source.indexOf('<div id="tab-sheet"');
+  const sheetEnd = source.indexOf('<!-- ===== 設定タブ', sheetStart);
+  const sheetTab = source.slice(sheetStart, sheetEnd);
+  assert.match(sheetTab, /id="sheetEditBar"/);
+  assert.match(sheetTab, /id="sheetEditInput"/);
+  assert.match(sheetTab, /id="sheetEditLabel"/);
+  assert.match(sheetTab, /onclick="commitSheetEdit\(\)"/);
+  assert.match(sheetTab, /onclick="cancelSheetEdit\(\)"/);
+});
+
+test("編集バーは hidden で隠れる", () => {
+  // #sheetEditBar の display:flex は ID セレクタの作者スタイルなので
+  // UA の [hidden]{display:none} に勝つ。属性セレクタを書かないと
+  // bar.hidden=true が効かずバーが出っぱなしになる。
+  // このリポジトリは .ac-list[hidden] など3か所で同じ回避をしている
+  assert.match(source, /#sheetEditBar\[hidden\]\{display:none\}/);
+});
+
+test("編集バーはソフトキーボードの上に留まる", () => {
+  // Chrome 108 以降の Android はキーボードで Layout Viewport をリサイズせず
+  // Visual Viewport だけ縮める。既存の acPosition() と同じ計算を使う。
+  // 可視領域の下端に置く。上端だとハイライトした td をバーが覆いうる
+  const fn = functionSource("positionSheetEditBar");
+  assert.match(fn, /visualViewport/);
+  assert.match(fn, /offsetTop/);
+  assert.match(fn, /height/);
+});
+
+test("編集バーは印刷しない", () => {
+  assert.match(printBlock(), /#sheetEditBar/);
+});
+
+test("幅で方式を分け、両方の入力欄を同時に置かない", () => {
+  // 非表示側の要素に focus() を呼んでも何も起きない（2026-08-27 の教訓）
+  const fn = functionSource("openSheetEditor");
+  assert.match(fn, /compactInputMq\.matches/);
+  assert.match(fn, /openBarEditor/);
+  assert.match(fn, /openInlineEditor/);
+});
+
+test("欄を開く入口は mousedown だけ。touchstart を足さない", () => {
+  // タッチでも touchstart のあと合成の mousedown が発火する。両方に登録すると
+  // 同じ欄で openSheetEditor が2回走り、2回目は mousedown ハンドラの
+  // preventDefault() を通らないまま既定のフォーカス移動が起きて、
+  // 開いたばかりの入力欄から blur ＝確定してしまう
+  const opens = source.match(/addEventListener\("(mousedown|touchstart)"[\s\S]{0,400}?data-ek/g) || [];
+  assert.equal(opens.length, 1, "欄を開くリスナは1つだけ");
+  assert.match(opens[0], /mousedown/);
+});
