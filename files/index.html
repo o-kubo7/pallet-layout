@@ -505,10 +505,12 @@
   /* まとめ欄は件数のぶんだけ縦に伸びるので、ここだけ文字と行間を詰める。
      詰めないと3件で用紙の高さの106%、5件で128%になり紙が2ページに割れる
      （実測。詰めれば5件で99%に収まる）。1項目の欄は従来の大きさのままにする。
+     注記（c-note）だけは対象から外す。重複を畳むので件数が増えても伸びず、
+     縮めると隣の通常の欄と同じ「※未定」なのに大きさだけ違って見えるため。
      fitSheetText() は td の左右 padding を 1px ずつと決め打ちしているので、
      padding:0 のこの欄では有効幅を実際より2px少なく見積もる。縮む方向なので実害は無い */
-  .sheet .overflow-table td.roll{padding:0}
-  .sheet .overflow-table td.roll .fit{font-size:55%;line-height:1.05}
+  .sheet .overflow-table td.roll:not(.c-note){padding:0}
+  .sheet .overflow-table td.roll:not(.c-note) .fit{font-size:55%;line-height:1.05}
   /* 上段の注記行は左5列が空セル。td の既定の 26px が行を押し上げるので合わせる */
   .sheet tr.note-row td.none{height:16px}
   /* 大きな配置図が出せない／欠けているときの案内。表の中に置くので紙にも出る。
@@ -707,7 +709,7 @@
         <!-- [試作] 第3のゾーン。倉庫に実在しないので、フロア図の枠の外に別立てで置く -->
         <div class="floor stashfloor">
           <div class="zone-title zone-stash">退避スペース</div>
-          <p class="stashlead">倉庫には無い、画面の上だけの置き場。編集のあいだ荷物を逃がして、倉庫の側を空けるために使います。ここに残った荷物は、配置図に「置き場未定」として載ります。</p>
+          <p class="stashlead">倉庫には無い、画面の上だけの置き場。編集のあいだ荷物を逃がして、倉庫の側を空けるために使います。ここに残った荷物は、配置図に「未定」として載ります。</p>
           <div class="scroller"><div class="spaces" id="zone-stash"></div></div>
           <div class="stashbar" id="stashBar"></div>
           <button class="btn btn-ghost" id="stashBackBtn" style="display:none;margin-top:8px"
@@ -2330,11 +2332,11 @@ function renderResult(lots, unknown, typeMix){
     warnHtml+=`<div class="msg warn">⚠ 次のエリアには荷物が残っています（配置図の表には出ません）：${overStillFilled.join("・")}。「▶ 自動配置を作成」をもう一度押すか、掲載先を戻してください。</div>`;
   }
 
-  // 退避に残っている荷物は「置き場未定」として紙に載る（stashSlots）。
+  // 退避に残っている荷物は「未定」として紙に載る（stashSlots）。
   // 現物がどこにあるか決まっていないので、残っていること自体は知らせ続ける。
   const stashN=stashTotal(sp);
   if(stashN>0){
-    warnHtml+=`<div class="msg warn">⚠ 退避スペースに ${stashN}P 残っています。置き場未定として配置図に載ります。倉庫に空きができたら戻してください。</div>`;
+    warnHtml+=`<div class="msg warn">⚠ 退避スペースに ${stashN}P 残っています。配置図に「未定」として載ります。倉庫に空きができたら戻してください。</div>`;
   }
   // 退避にも入らなかった分は盤にも紙にも出ない。ここでしか知らせる場所がない
   const noRoom=lots.filter(l=>l.noRoom>0);
@@ -2345,7 +2347,7 @@ function renderResult(lots, unknown, typeMix){
   if(over.length){
     m.innerHTML=warnHtml+`<div class="msg warn">⚠ 入りきらない荷物があります：${
       over.map(l=>`${l.name}(${l.code}) ${l.rem}P`).join(" / ")
-    }。退避スペースへ移し、置き場未定として配置図に載せます。</div>`;
+    }。退避スペースへ移し、配置図に「未定」として載せます。</div>`;
   }else{
     let notes=[]; if(usedAisle)notes.push("通路へのはみ出しあり"); if(usedMix)notes.push("混載あり");
     const tail=notes.length?"（"+notes.join("・")+"）":"";
@@ -2421,7 +2423,7 @@ function run(goMap,deferSave=false){
   // 合計表示のためにパレット数も元に戻す。
   lots.forEach(l=>{ if(l.stashed){ putToStash(lastSp,l.id,l.stashed); l.pallets+=l.stashed; } });
   // あふれた分は退避スペースへ逃がす。倉庫に置き場所が無い荷物は
-  // 紙に「置き場未定」として載せる必要があり、退避がその受け皿になる。
+  // 紙に「未定」として載せる必要があり、退避がその受け皿になる。
   // 前回の退避を積み戻したあとに置くこと。先に置くと前回分の居場所を食う。
   lots.forEach(l=>{
     l.noRoom=0;
@@ -2596,7 +2598,7 @@ function leaveEdit(name){
   const onEdit=edit && edit.style.display!=="none";
   const n=stashTotal(lastSp);
   if(onEdit && name!=="edit" && n>0 &&
-     !confirm(`退避スペースに ${n}P 残っています。\n置き場未定として配置図に載ります。このまま移動しますか？`)) return;
+     !confirm(`退避スペースに ${n}P 残っています。\n配置図に「未定」として載ります。このまま移動しますか？`)) return;
   switchTab(name);
 }
 function switchTab(name){
@@ -4491,7 +4493,7 @@ function slotAreaNote(areas){ return (areas && areas.length) ? "※"+areas.join(
    欄を作る経路だけをここに分けてある。sheet:"top" に変えて既存経路へ乗せると、
    sheetEntries() がエリア名を注釈に出し、mergeEntries() の基準エリア判定にも
    退避が混ざるため、分岐がかえって増える。
-   注釈は「※置き場未定」で固定する。現場にとって「退避」は場所の名前ではない。 */
+   注釈は「※未定」で固定する。現場にとって「退避」は場所の名前ではない。 */
 function stashSlots(){
   if(!lastSp || !lastLots) return [];
   const order=[], byId={};
@@ -4511,12 +4513,12 @@ function stashSlots(){
     // したがって退避に1枚でもあるロットの「半」はこの欄に出る（設計書 §7(f)）
     const half = (tailAreaOf(e.lot.id)==="退避") ? Math.min(e.lot.half||0, e.pallets) : 0;
     return {lot:e.lot, pallets:e.pallets, half, areas:["退避"],
-            note:"※置き場未定", stash:true};
+            note:"※未定", stash:true};
   });
   if(!mergeLots) return entries;
   // 退避の欄はメイン（下段の基準エリア）に乗っていないので、まとめてよい。
   // 基準エリアを渡さないことで、まとめの除外条件に引っかからない
-  return mergeEntries(entries, null).map(g=>({...g, note:"※置き場未定", stash:true}));
+  return mergeEntries(entries, null).map(g=>({...g, note:"※未定", stash:true}));
 }
 /* 下段はメイン欄をグリッドに近い位置へ、PC横・EV横だけの欄を右端から埋める。
    配置表は左から配列を描く。PC横の次にEV横が並ぶため、EV横が右端になる。 */
@@ -4855,7 +4857,7 @@ function overflowTable(entries){
     let cls="slot";
     let inner;
     if(e.group){
-      // まとめ欄。注記は ※置き場未定 が何件も並ぶだけなので、空欄と重複を畳んで1行にする。
+      // まとめ欄。注記は ※未定 が何件も並ぶだけなので、空欄と重複を畳んで1行にする。
       // 品名・ロット・P数は別々の td に縦積みされ、行の位置だけで件が対応しているので、
       // 値が空の件を落とすとその列だけ行が繰り上がり、品名と別の件のロット番号が並ぶ。
       // 空でも「—」で1行を残す（span() は空文字を包まないので、そのままでは行が消える）

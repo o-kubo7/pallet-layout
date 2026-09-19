@@ -44,7 +44,7 @@ test("退避スペースの中身から紙の欄を作る", () => {
   // 退避エリアだけを見る
   assert.match(fn, /stashSpaces\(/);
   // 注釈はエリア名ではなく固定の文言
-  assert.match(fn, /※置き場未定/);
+  assert.match(fn, /※未定/);
   // 後続の分岐が見る目印
   assert.match(fn, /stash:\s*true/);
   // 通常の欄と同じくまとめる。まとめない設定にも従う
@@ -86,7 +86,7 @@ test("まとめ欄は品名・ロット・パレット数を縦積みで書く",
 });
 
 test("まとめ欄の注記は重複を畳む", () => {
-  // 置き場未定が3件あっても ※置き場未定 は1回だけ書く
+  // 注記が3件あっても ※未定 は1回だけ書く
   const fn = functionSource("overflowTable");
   assert.match(fn, /new Set\(/);
 });
@@ -109,11 +109,11 @@ test("まとめ欄は値が空でも4列の行数をそろえる", () => {
     "esc", "palSlotTextOf", "slotAreaNote",
     functionSource("overflowTable") + "; return overflowTable;"
   );
-  const entry = (name, lot) => ({ lot: { name, lot }, areas: ["退避"], note: "※置き場未定" });
+  const entry = (name, lot) => ({ lot: { name, lot }, areas: ["退避"], note: "※未定" });
   const html = renderOverflow(
     value => String(value),
     () => "3P",
-    () => "※置き場未定"
+    () => "※未定"
   )([
     { group: [entry("部品A", "L1"), entry("部品B", ""), entry("部品C", "L3")] },
   ]);
@@ -154,7 +154,7 @@ test("退避に荷物が残る日は「すべてのパレットを配置しま�
 
 test("退避の知らせは紙に載ることを伝える", () => {
   const fn = functionSource("renderResult");
-  assert.match(fn, /置き場未定として配置図に載ります/);
+  assert.match(fn, /配置図に「未定」として載ります/);
   assert.doesNotMatch(fn, /配置図の表には出ません。倉庫内・倉庫外へ戻してください/);
 });
 
@@ -180,7 +180,7 @@ test("退避に荷物が残る日だけ確認する", () => {
   assert.match(fn, /stashTotal\(lastSp\)/);
   assert.match(fn, /name!=="edit"/);
   assert.match(fn, /confirm\(/);
-  assert.match(fn, /置き場未定として配置図に載ります/);
+  assert.match(fn, /配置図に「未定」として載ります/);
 });
 
 test("まとめ欄の td には roll クラスを付ける", () => {
@@ -195,10 +195,11 @@ test("まとめ欄の td には roll クラスを付ける", () => {
   );
 });
 
-test("まとめ欄だけ文字と行間を詰める CSS がある", () => {
-  // 件数だけ縦に伸びるのはまとめ欄だけなので、通常の欄の見た目は変えない
-  assert.match(source, /\.sheet \.overflow-table td\.roll\{padding:0\}/);
-  assert.match(source, /\.sheet \.overflow-table td\.roll \.fit\{font-size:55%;line-height:1\.05\}/);
+test("まとめ欄は注記を除いて文字と行間を詰める", () => {
+  // 件数だけ縦に伸びるのは品名・ロット・P数の3列。注記は重複を畳むので伸びない。
+  // 注記まで縮めると、隣の通常の欄と同じ文言なのに大きさだけ違って見える
+  assert.match(source, /\.sheet \.overflow-table td\.roll:not\(\.c-note\)\{padding:0\}/);
+  assert.match(source, /\.sheet \.overflow-table td\.roll:not\(\.c-note\) \.fit\{font-size:55%;line-height:1\.05\}/);
 });
 
 test("荷物が多い日の様式は18列×39pxで上段6欄・下段9欄", () => {
