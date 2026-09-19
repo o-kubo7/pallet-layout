@@ -4846,9 +4846,14 @@ function renderSheet(){
   rows+=`<tr class="r3">${E}${slotCells(top,lay.top,"pallet",null,gsep)}</tr>`;
 
   // 行5：上段の注釈。行3 の rowspan は行4 までしか届かないので、
-  //      左5列はこの行で自分で埋める（5 + 1 + lay.top×2 = lay.cols。normal は 5+1+4×2=14 列、wide は 5+1+5×2=16 列）
+  //      左5列はこの行で自分で埋める（5 + 1 + lay.top×2 = lay.cols。normal は 5+1+4×2=14 列、wide は 5+1+6×2=18 列）
+  //      置き場所は見出しへ移したので、ここに出すのは見出しのエリアだけでは
+  //      特定できない欄（複数エリアにまたがる欄）だけ。行そのものは残す。
+  //      普段の日は全部空欄になるが、あとで足す配置図のテキスト編集で
+  //      上段にも自由記入できる欄として使う（設計書 §3-5）
+  const topNotes=top.slice(0,lay.top).map(e=>e?{...e,note:topSlotNote(e)}:e);
   rows+=`<tr class="note-row"><td class="none" colspan="5"></td>${E}`
-      + `${slotCells(top,lay.top,"note")}</tr>`;
+      + `${slotCells(topNotes,lay.top,"note")}</tr>`;
 
   // 上下段の区切り（用紙では太罫1本）
   rows+=`<tr class="gap"><td class="none sep" colspan="${lay.cols}"></td></tr>`;

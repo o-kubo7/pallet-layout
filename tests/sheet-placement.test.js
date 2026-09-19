@@ -1834,3 +1834,35 @@ test("グループの区切り線は上段の品名・ロット・P数の行に�
   assert.match(fn, /slotCells\(bottom,lay\.bottom,"name","bb2"\)/);
   assert.match(fn, /slotCells\(bottom,lay\.bottom,"lot"\)/);
 });
+
+test("上段の注釈行は残し、またがる欄にだけ注釈を出す", () => {
+  // 行そのものは残す。あとで足す配置図のテキスト編集で、
+  // 上段にも自由記入できる欄として使うため（設計書 §3-5）
+  const fn = functionSource("renderSheet");
+  assert.match(fn, /<tr class="note-row"><td class="none" colspan="5"><\/td>/);
+  assert.match(fn, /top\.slice\(0,lay\.top\)\.map\(e=>e\?\{\.\.\.e,note:topSlotNote\(e\)\}:e\)/);
+  assert.match(fn, /slotCells\(topNotes,lay\.top,"note"\)/);
+  // 元の欄は書き換えない（浅い複製を渡す）
+  assert.doesNotMatch(fn, /e\.note=topSlotNote/);
+
+  // 実際に空欄になることを確かめる
+  const render = new Function(
+    "esc", "palSlotTextOf",
+    functionSource("slotCells") + "; return slotCells;"
+  )(v => String(v), () => "3P");
+  const note = e => ({ ...e, note: new Function(
+    functionSource("topSlotNote") + "; return topSlotNote;")()(e) });
+  const html = render(
+    [note({ lot: { name: "A" }, areas: ["軒下①"] }),
+     note({ lot: { name: "B" }, areas: ["軒下①", "出庫口横"] })],
+    2, "note");
+  const cells = html.match(/<td class="[^"]*snote[^"]*"[^>]*>([\s\S]*?)<\/td>/g) || [];
+  assert.equal(cells.length, 2);
+  assert.doesNotMatch(cells[0], /※/);          // 単独の欄は空
+  assert.match(cells[1], /※出庫口横/);          // またがる欄だけ出る
+});
+
+test("上段の注釈行の列数のコメントが様式と合っている", () => {
+  // wide は 5+1+6×2=18 列。「5+1+5×2=16 列」は誤り
+  assert.match(source, /normal は 5\+1\+4×2=14 列、wide は 5\+1\+6×2=18 列/);
+});
