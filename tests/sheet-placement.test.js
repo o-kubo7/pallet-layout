@@ -1823,3 +1823,14 @@ test("配置図の見出し行はグループごとのセルで、列数の合�
 test("グループの境目のセルは左辺を2pxにする", () => {
   assert.match(source, /\.sheet td\.ttl\.gsep,\.sheet td\.slot\.gsep\{border-left-width:2px\}/);
 });
+
+test("グループの区切り線は上段の品名・ロット・P数の行にも通す", () => {
+  // 見出し行だけ 2px、下の行が 1px だと線が途中で細くなる
+  const fn = functionSource("renderSheet");
+  assert.match(fn, /slotCells\(top,lay\.top,"name","bb2",gsep\)/);
+  assert.match(fn, /slotCells\(top,lay\.top,"lot",null,gsep\)/);
+  assert.match(fn, /slotCells\(top,lay\.top,"pallet",null,gsep\)/);
+  // 下段には渡さない（下段は今回変更しない）
+  assert.match(fn, /slotCells\(bottom,lay\.bottom,"name","bb2"\)/);
+  assert.match(fn, /slotCells\(bottom,lay\.bottom,"lot"\)/);
+});

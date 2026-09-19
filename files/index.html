@@ -4832,7 +4832,7 @@ function renderSheet(){
 
   // 行2：曜日 ＋ 上段の品名（品名欄は太枠で囲う）
   rows+=`<tr class="r1">${["月","火","水","木","金"].map(x=>`<td class="dow">${x===dw?`<span class="weekday-ring">${x}</span>`:x}</td>`).join("")}`
-      + `${E}${slotCells(top,lay.top,"name","bb2")}</tr>`;
+      + `${E}${slotCells(top,lay.top,"name","bb2",gsep)}</tr>`;
 
   // 行3：総パレット数・あさ／ひる ＋ 上段のロット
   //      左ブロックは用紙どおり行4まで（2行ぶん）ぶち抜き
@@ -4840,10 +4840,10 @@ function renderSheet(){
       + `<span>${totalP}</span><span>P</span></div></td>`
       + `<td class="dow" rowspan="2">${ring("あさ",TIMING_LABEL[activeTiming]==="あさ")}</td>`
       + `<td class="dow" rowspan="2">${ring("ひる",TIMING_LABEL[activeTiming]==="ひる")}</td>${E}`
-      + `${slotCells(top,lay.top,"lot")}</tr>`;
+      + `${slotCells(top,lay.top,"lot",null,gsep)}</tr>`;
 
   // 行4：上段のパレット数（左5列は上の行の rowspan で埋まっている）
-  rows+=`<tr class="r3">${E}${slotCells(top,lay.top,"pallet")}</tr>`;
+  rows+=`<tr class="r3">${E}${slotCells(top,lay.top,"pallet",null,gsep)}</tr>`;
 
   // 行5：上段の注釈。行3 の rowspan は行4 までしか届かないので、
   //      左5列はこの行で自分で埋める（5 + 1 + lay.top×2 = lay.cols。normal は 5+1+4×2=14 列、wide は 5+1+5×2=16 列）
