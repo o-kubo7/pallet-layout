@@ -1793,3 +1793,33 @@ test("欄のセルは、指定された index の左辺だけ太くする", () =
   const note = render([lot("A"), lot("B")], 2, "note", null, new Set([1]));
   assert.doesNotMatch(note, /gsep/);
 });
+
+test("配置図の見出し行はグループごとのセルで、列数の合計が様式に一致する", () => {
+  // colspan の合計が lay.cols からずれると table-layout:fixed が colgroup を無視し、
+  // 盤のマスと欄の位置、引き出し線の座標が同時に狂う
+  const topHeadGroups = new Function(
+    functionSource("topHeadGroups") + "; return topHeadGroups;"
+  )();
+  const at = name => ({ areas: [name] });
+  const cols = groups => 5 + 1 + groups.reduce((a, g) => a + g.slots * 2, 0);
+
+  // normal: 14 列
+  assert.equal(cols(topHeadGroups([at("軒下①")], 4, "軒下①")), 14);
+  assert.equal(cols(topHeadGroups([at("軒下①"), at("軒下②")], 4, "軒下①")), 14);
+  assert.equal(cols(topHeadGroups([], 4, "軒下①")), 14);
+  // wide: 18 列
+  assert.equal(cols(topHeadGroups([at("軒下①"), at("軒下②"), at("PC横")], 6, "軒下①")), 18);
+
+  // renderSheet が topHeadGroups を通し、colspan をグループの欄数から作っていること
+  const fn = functionSource("renderSheet");
+  assert.match(fn, /topHeadGroups\(top,\s*lay\.top,\s*sheetAreas\("top"\)\[0\]\s*\|\|\s*null\)/);
+  assert.match(fn, /colspan="\$\{g\.slots\*2\}"/);
+  assert.doesNotMatch(fn, /colspan="\$\{lay\.top\*2\}">軒下/);
+  // 見出しは圧縮の対象に入れ、警告で種類が分かるように data-fit を付ける
+  assert.match(fn, /data-fit="head"/);
+  assert.match(fn, /<span class="fit">\$\{esc\(g\.label\)\}<\/span>/);
+});
+
+test("グループの境目のセルは左辺を2pxにする", () => {
+  assert.match(source, /\.sheet td\.ttl\.gsep,\.sheet td\.slot\.gsep\{border-left-width:2px\}/);
+});

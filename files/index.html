@@ -442,6 +442,8 @@
   .sheet td.none{border:0;background:transparent}
   .sheet td.hd{font-weight:700;font-size:13px}
   .sheet td.ttl{font-size:15px;font-weight:800;letter-spacing:.2em}
+  /* グループの境目。見出しから P数 の行まで同じ位置で縦に貫く */
+  .sheet td.ttl.gsep,.sheet td.slot.gsep{border-left-width:2px}
   .sheet td.dow{height:28px}
   /* 上段の3行：用紙と同じく「品名欄がいちばん高い」 */
   .sheet tr.r1 td{height:32px}
@@ -4810,13 +4812,23 @@ function renderSheet(){
   const ring=(v,on)=>on?`<span class="ring">${v}</span>`:v;
   const E='<td class="none"></td>';
 
+  // 上段の欄をエリアごとにまとめ、見出しをグループに分ける。
+  // 注釈行に1欄ずつ散っていた置き場所を、まとまりとして1か所で読めるようにする
+  const heads=topHeadGroups(top, lay.top, sheetAreas("top")[0]||null);
+  // グループの境目にあたる欄の index。先頭グループの左辺は既存の bl2 が引くので入れない
+  const gsep=new Set();
+  let gacc=0;
+  heads.forEach((g,i)=>{ if(i) gsep.add(gacc); gacc+=g.slots; });
+
   // 全体を1つの表にして列を揃える。列数は様式で決まる（normal 14列＝雛形のB〜O列 / wide 18列）
   let rows="";
 
-  // 行1：月日（列1から）＋ タイトル（下は太罫）
+  // 行1：月日（列1から）＋ 上段の見出し（下は太罫）
   rows+=`<tr><td class="hd" colspan="5"><div class="fldrow c5">`
       + `<span>${mm}</span><span>月</span><span>${dd}</span><span>日</span></div></td>${E}`
-      + `<td class="ttl bb2" colspan="${lay.top*2}">軒下</td></tr>`;
+      + heads.map((g,i)=>`<td class="ttl bb2${i?" gsep":""}" data-fit="head" colspan="${g.slots*2}">`
+          + `<span class="fit">${esc(g.label)}</span></td>`).join("")
+      + `</tr>`;
 
   // 行2：曜日 ＋ 上段の品名（品名欄は太枠で囲う）
   rows+=`<tr class="r1">${["月","火","水","木","金"].map(x=>`<td class="dow">${x===dw?`<span class="weekday-ring">${x}</span>`:x}</td>`).join("")}`
