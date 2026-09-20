@@ -411,6 +411,10 @@
   .slip[data-status="provisional"] .slip-head .item-count{color:#9a3412}
   .slip-head .unreceived{font-size:11px;background:#f97316;color:#fff;border-radius:99px;padding:2px 8px;font-weight:700}
   .slip-table{table-layout:fixed;min-width:0}
+  /* テーブル外周の枠線は .slip の枠と二重になるので消す。内部の仕切り線は残す */
+  .slip-table thead th{border-top:0}
+  .slip-table tr>*:first-child{border-left:0}
+  .slip-table tr>*:last-child{border-right:0}
   .slip-table .c-type{width:100px}.slip-table .c-snp,.slip-table .c-qty,.slip-table .c-pal{width:100px}
   .slip-table .c-del{width:56px}
   .slip-table th,.slip-table td input,.slip-table td select,.slip-table .pallet-cell{font-size:14px}
