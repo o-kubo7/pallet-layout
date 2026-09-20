@@ -590,10 +590,12 @@
        セレクタの詳細度で勝ち残る。宣言しないと欄が 40px に膨らむ
      - line-height:inherit … 置き換える .fit と同じ行送りにする。1.2 だと
        見出し（行送り24px）で縮み、行が詰まって別の崩れ方をする
-     - border ではなく outline … border は高さに足される。outline は
-       レイアウトに影響しない（offset -2px で欄の内側に引く） */
+     - 枠線を出さない … border は高さに足されるので使えない。outline も
+       出さない方針にしたので、ブラウザ既定のフォーカスリングを outline:none で
+       止める（止めないと Chrome が自前の枠を描く）。編集中であることは
+       白い背景と文字カーソルで分かる */
   .sheet td.editing-cell input,.sheet td.editing-cell textarea{
-    width:100%;box-sizing:border-box;border:0;outline:2px solid #2563eb;outline-offset:-2px;
+    width:100%;box-sizing:border-box;border:0;outline:none;
     min-height:0;padding:0;margin:0;
     font-family:inherit;font-size:max(13px,1em);line-height:inherit;text-align:center;
     background:#fff;color:#000;resize:none}
@@ -639,8 +641,9 @@
     .sheet td.edited{background:transparent !important}
     .sheet.editing td[data-ek]{background:transparent !important}
     .sheet.editing td.editing-cell{background:transparent !important}
-    /* セル内編集の入力欄。青い枠は背景ではないのでブラウザの「背景を印刷しない」では
-       消えず、transform:none が残ると圧縮が外れて欄からあふれる */
+    /* セル内編集の入力欄。枠線は背景ではないのでブラウザの「背景を印刷しない」では
+       消えない。画面側では枠を出していないが、戻されたときのために断っておく。
+       transform:none が残ると圧縮が外れて欄からあふれる */
     .sheet td.editing-cell input,.sheet td.editing-cell textarea{border:0 !important;font-size:inherit !important}
     .sheet td.editing-cell .fit{transform:revert !important}
     #sheetEditBar{display:none !important}

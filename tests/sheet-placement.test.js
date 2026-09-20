@@ -2301,12 +2301,14 @@ test("セル内編集で行の高さを変えない", () => {
   // 入力タブ用の td input{min-height:40px}（files/index.html:45）が詳細度で
   // 勝ち残るため、min-height:0 を宣言しないと欄が 40px に膨らんで表が組み替わる。
   // line-height は置き換える .fit と同じ inherit にする（1.2 だと見出しで縮む）。
-  // 枠は border ではなく outline。border は高さに足される
+  // 枠線は出さない。border は高さに足されるので使えず、ブラウザ既定の
+  // フォーカスリングも outline:none で止める（ユーザー指定）
   const css = source.slice(source.indexOf(".sheet td.editing-cell input"));
   const rule = css.slice(0, css.indexOf("}") + 1);
   assert.match(rule, /min-height:0/);
   assert.match(rule, /line-height:inherit/);
-  assert.match(rule, /outline:2px solid #2563eb/);
+  assert.match(rule, /outline:none/);
+  assert.doesNotMatch(rule, /outline:\d+px/);
   assert.doesNotMatch(rule, /border:1px/);
   assert.doesNotMatch(rule, /line-height:1\.2/);
 });
