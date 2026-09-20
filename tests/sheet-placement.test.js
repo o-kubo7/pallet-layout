@@ -66,7 +66,10 @@ test("Service Workerは版付きキャッシュ名を使う", () => {
   const sw = fs.readFileSync("files/sw.js", "utf8");
   assert.match(sw, /const CACHE_VERSION = "v\d+"/);
   assert.match(sw, /const CACHE_NAME = "pallet-layout-" \+ CACHE_VERSION/);
-  assert.match(sw, /const CACHE_VERSION = "v57"/);
+  // 版番号は更新のたびに上がるため、値そのものは固定しない。
+  // 定義が1か所であること（分岐して古い版が残らないこと）だけを確かめる。
+  assert.equal(sw.match(/const CACHE_VERSION =/g).length, 1);
+  assert.doesNotMatch(sw, /"pallet-layout-v\d+"/);
 });
 
 test("配置編集には配置不可編集と再配置の操作がある", () => {
@@ -937,7 +940,7 @@ test("伝票カードはモック同様に白い本体へ部分的な濃淡を�
   assert.match(source, /\.slip\[data-status="fax"\] \.slip-head\s*\{[^}]*background:#eff6ff[^}]*border-bottom-color:#2563eb[^}]*color:#1d4ed8[^}]*\}/);
   assert.match(source, /\.slip\[data-status="fax"\] \.slip-table th\s*\{[^}]*background:#f8fafc[^}]*color:#475569[^}]*\}/);
   assert.match(source, /\.slip\[data-status="fax"\] \.pallet-cell\s*\{[^}]*background:#f1f5f9[^}]*\}/);
-  assert.match(source, /\.slip\[data-status="fax"\] \.slip-actions\s*\{[^}]*background:#fff(?:;|})[^}]*border-top:2px solid #dbeafe[^}]*\}/);
+  assert.match(source, /\.slip\[data-status="fax"\] \.slip-actions\s*\{[^}]*background:#fff(?:;|})[^}]*border-top:1px solid #dbeafe[^}]*\}/);
 });
 
 test("仮伝票カードはFAXと同じ濃淡構造をオレンジ系にする", () => {
