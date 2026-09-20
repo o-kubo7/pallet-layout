@@ -41,8 +41,11 @@
   table{border-collapse:collapse;width:100%}
   th,td{border:1px solid var(--line);padding:6px 8px;text-align:center}
   th{background:#f3f4f6;font-weight:600;font-size:12px}
-  td input,td select{width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 5px;
+  /* セルの罫線と入力欄の枠が二重線に見えるので、入力欄の枠は透明にする。
+     枠そのものは残す（.err の border-color と :focus をここに乗せるため）。 */
+  td input,td select{width:100%;border:1px solid transparent;border-radius:6px;padding:7px 5px;
                      font-size:16px;text-align:center;background:#fff;min-height:40px}
+  td input:focus,td select:focus{border-color:var(--accent);outline:none}
   td.pallet-cell{font-weight:700;font-size:14px;color:#111827;background:#f8fafc;white-space:nowrap}
   td.pallet-cell.warn-cell{color:#b45309;background:#fffbeb}
 
@@ -50,11 +53,11 @@
   .btn{border:0;border-radius:8px;padding:11px 16px;font-size:14px;font-weight:600;cursor:pointer;min-height:44px}
   .btn-primary{background:var(--accent);color:#fff}
   .btn-ghost{background:#eef2f7;color:#374151}
-  .btn-slip-add{background:#eff6ff;color:#1d4ed8;border:2px solid #2563eb;padding:9px 14px}
+  .btn-slip-add{background:#eff6ff;color:#1d4ed8;border:1px solid #2563eb;padding:9px 14px}
   .btn-slip-add-provisional{background:#fff7ed;color:#9a3412;border-color:#f97316}
   .btn-on{background:#fde68a;color:#7c2d12}
   .btn-mini{background:#fee2e2;color:#b91c1c;border-radius:8px;padding:8px 12px;font-size:14px;
-            cursor:pointer;border:0;min-height:40px;min-width:44px}
+            cursor:pointer;border:1px solid #fca5a5;min-height:40px;min-width:44px}
   .item-delete{width:24px;min-width:24px;height:24px;min-height:24px;padding:0;border:0;border-radius:6px;
                background:#fee2e2;color:#b91c1c;font-size:16px;line-height:1;cursor:pointer}
   .row-actions{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -360,10 +363,10 @@
   .sheet-toolbar-actions{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .sheet-print{width:112px;margin-left:auto}
   .slip-count{margin-top:8px;color:var(--muted);font-weight:700}
-  .slip{border:3px solid #cbd5e1;border-radius:12px;background:#fff;margin-bottom:16px;overflow:hidden;min-width:0}
+  .slip{border:1px solid #cbd5e1;border-radius:12px;background:#fff;margin-bottom:16px;overflow:hidden;min-width:0}
   .slip[data-status="fax"]{border-color:#2563eb}
   .slip[data-status="provisional"]{border-color:#f97316}
-  .slip-head{display:flex;align-items:center;gap:12px;padding:12px 14px;background:#f8fafc;border-bottom:3px solid #cbd5e1;font-size:16px}
+  .slip-head{display:flex;align-items:center;gap:12px;padding:12px 14px;background:#f8fafc;border-bottom:1px solid #cbd5e1;font-size:16px}
   .slip[data-status="fax"] .slip-head{background:#eff6ff;border-bottom-color:#2563eb;color:#1d4ed8}
   .slip[data-status="provisional"] .slip-head{background:#ffedd5;border-bottom-color:#f97316;color:#9a3412}
   .slip-head .item-count{margin-left:auto;font-size:16px;color:var(--muted)}
@@ -379,11 +382,11 @@
   .slip[data-status="provisional"] .slip-table td{border-color:#fed7aa}
   .slip[data-status="provisional"] .pallet-cell{background:#ffe9c4;color:#9a3412}
   .slip .pallet-cell.warn-cell{color:#b45309;background:#fffbeb}
-  .slip-actions{display:flex;gap:8px;align-items:center;padding:12px 14px;flex-wrap:wrap;background:#fff;border-top:2px solid #e5e7eb}
-  .slip[data-status="fax"] .slip-actions{background:#fff;border-top:2px solid #dbeafe}
+  .slip-actions{display:flex;gap:8px;align-items:center;padding:12px 14px;flex-wrap:wrap;background:#fff;border-top:1px solid #e5e7eb}
+  .slip[data-status="fax"] .slip-actions{background:#fff;border-top:1px solid #dbeafe}
   .slip[data-status="provisional"] .slip-actions{background:#fff;border-top-color:#fed7aa}
-  .btn-slip-action-add{background:#eff6ff;color:#1d4ed8;border:2px solid #2563eb}
-  .btn-slip-action-receive{background:#f97316;color:#fff;border:2px solid #f97316}
+  .btn-slip-action-add{background:#eff6ff;color:#1d4ed8;border:1px solid #2563eb}
+  .btn-slip-action-receive{background:#f97316;color:#fff;border:1px solid #f97316}
   .slip-action-spacer{margin-left:auto}
   .input-add-actions{margin-bottom:10px}
   .compact-label{display:none}
@@ -586,7 +589,7 @@
   .sheet td.editing-cell .fit{transform:none !important}
   /* 行の高さを1pxも変えないこと。編集で行が伸びると表全体が組み替わり、
      1文字直すたびに紙の見た目が動いて読めなくなる。効かせるのは3点:
-     - min-height:0 … 入力タブ用の td input{min-height:40px}（:45）が
+     - min-height:0 … 入力タブ用の td input{min-height:40px}（:46）が
        セレクタの詳細度で勝ち残る。宣言しないと欄が 40px に膨らむ
      - line-height:inherit … 置き換える .fit と同じ行送りにする。1.2 だと
        見出し（行送り24px）で縮み、行が詰まって別の崩れ方をする
