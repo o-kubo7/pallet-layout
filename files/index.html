@@ -188,11 +188,47 @@
   /* 「見てほしい知らせがある」の印。件数を出す .dot とは別物 */
   .subtab.alert::after{content:"";position:absolute;top:-2px;right:-2px;
                        width:9px;height:9px;border-radius:50%;background:#f59e0b}
-  /* 表示設定の入力欄。項目が多いので2列に畳む */
-  .dspgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 14px;margin-bottom:10px}
-  .dspgrid label{font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px}
+  /* 表示設定の入力欄。項目が多いので2列以上に畳む。
+     列に上限を付けないと、PC 幅では1列が広がって「品名 …… 16」と
+     見出しと数字が離れてしまい、どの数字がどの項目か分からなくなる。 */
+  .dspgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,210px));gap:8px 14px;margin-bottom:10px}
+  .dspgrid label{font-size:14px;display:flex;align-items:center;justify-content:flex-start;gap:10px;min-height:40px}
+  /* 見出しの幅を揃えて、数字の左端を縦に並べる（ばらばらだと拾い読みしづらい） */
+  .dspgrid .lbl{flex:none;min-width:6em;text-align:right;color:var(--ink)}
   .dspgrid label.chk{justify-content:flex-start}
-  .dspgrid input[type=number]{width:72px}
+  /* 数値欄はブラウザ既定の 13.3px だと小さいので揃える。幅は2桁が入れば足りる */
+  .dspgrid input[type=number]{width:72px;font-size:16px}
+
+  /* 設定タブの文字。現場で読む画面なので、説明文・見出し・表の頭が 11〜13px では小さい。
+     他のタブの .hint / .badge / th は据え置き（紙に寄せた画面は行の高さが変わるため）。 */
+  #tab-settings .hint{font-size:14px}
+  #tab-settings .badge{font-size:12px}
+  #tab-settings th{font-size:14px}
+  #tab-settings .summary{font-size:14px}
+  #tab-settings .cfg textarea{font-size:14px}
+  #tab-settings .sizectl .lbl{font-size:14px}
+  /* 配置マスの説明。ふだん変えない設定で、読むのはたまにだけ。
+     そのぶん一度で読み切れるよう、他の説明文より大きく・行間を広く・段落を空ける。
+     #tab-settings .hint より後ろに書いて、font-size をこちらで上書きする */
+  #cfgpane-spaces .cfg-help{font-size:15px;line-height:1.9;margin-bottom:12px}
+  #cfgpane-spaces .cfg-help p{margin:0 0 14px}
+  #cfgpane-spaces .cfg-help p:last-child{margin-bottom:0}
+  /* 表示設定のまとまり。1枚のカードに項目を並べると切れ目が分からないので、
+     まとまりごとに薄い枠で囲って見出しを付ける */
+  .cfgsec{border:1px solid var(--line);border-radius:10px;background:#f8fafc;
+          padding:12px 14px;margin-bottom:12px}
+  .cfgsec:last-child{margin-bottom:0}
+  .cfgsec h3{margin:0 0 10px;font-size:15px;font-weight:700;color:#374151}
+  .cfgsec .row-actions{margin-top:4px}
+  .cfgsec > label.chk{min-height:36px}
+
+  /* 品目マスタの表。1行 73px と品名 771px は縦にも横にも伸びすぎなので、どちらも半分に詰める。
+     削除ボタンの列は 56px しかなく「削除」が2行に折り返して行を押し広げていたので広げる
+     （列を広げると折り返しが解けて、行の高さもそのぶん下がる）。 */
+  #masterTable{table-layout:fixed;max-width:580px}
+  #masterTable th,#masterTable td{padding:3px 6px}
+  #masterTable td input{min-height:28px;padding:3px 5px}
+  #masterTable .btn-mini{min-height:28px;padding:4px 10px;white-space:nowrap}
 
   /* ===== [試作] 退避スペース ===== */
   .zone-stash{background:#eef2ff;color:#3730a3}
@@ -420,6 +456,12 @@
     .actionbar{display:block}
     #runBtnInline{display:none}
     .note{gap:8px}
+    /* 表示設定の文字の欄。スマホ幅では列に上限を掛けると1列になって縦に伸びるので、
+       2列に固定する。画面が狭いぶん見出しと数字は元から近く、幅を揃える必要もない */
+    .dspgrid{grid-template-columns:repeat(2,1fr)}
+    .dspgrid .lbl{min-width:0}
+    .dspgrid input[type=number]{width:64px}
+    .cfgsec{padding:10px 12px}
   }
 
 
@@ -697,7 +739,9 @@
       <button class="btn btn-primary" id="runBtnInline" onclick="runFromButton()">▶ 自動配置を作成</button>
     </div>
     <div class="card">
-      <div class="row-actions">
+      <!-- サンプル読込は実務では押さない。既定は非表示にして、設定タブの
+           「表示設定 → そのほかの表示」で出し入れする（initSampleBtns） -->
+      <div class="row-actions" id="sampleActions" style="display:none">
         <button class="btn btn-ghost" onclick="loadSample('basic')">基本サンプル</button>
         <button class="btn btn-ghost" onclick="loadSample('mix')">混載デモ</button>
       </div>
@@ -859,7 +903,7 @@
         <h2>品目マスタ <span class="badge">品名 → SNP</span></h2>
         <table id="masterTable">
           <thead>
-            <tr><th>品名</th><th style="width:110px">SNP</th><th style="width:56px"></th></tr>
+            <tr><th>品名</th><th style="width:110px">SNP</th><th style="width:88px"></th></tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -878,7 +922,25 @@
       <div class="card cfg">
         <h2>スペース設定 <span class="badge" id="cfgBadge">この端末に保存</span></h2>
         <div class="hint" id="cfgNote" style="margin-bottom:8px;color:#b45309" hidden></div>
-        <div class="hint" style="margin-bottom:8px">各行：<b>名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路) | 掲載先(top/bottom/over)</b><br>掲載先は配置図の表のどこに欄を書くかです。top＝上段、bottom＝下段、over＝掲載しない。省略すると今の設定を引き継ぎます。<b>「掲載しない」にしたエリアには新しく荷物を置きません。</b>すでにそのエリアにある荷物は残り、配置図の表には出ません。<br><b>行の順番には意味があります。</b>上の行から順に自動配置で試します。また上段・下段それぞれの先頭の行が配置図の表の基準になり、その欄には注釈が付きません。大きなグリッドは下段の基準エリアを描きます。並べ替えると配置のしかたが変わり、手動で調整した配置は破棄されます。</div>
+        <!-- ふだん触らない設定なので、たまに読むときに読み切れるよう、
+             文の切れ目で改行して段落に分けてある（見た目は .cfg-help） -->
+        <div class="hint cfg-help">
+          <p><b>各行の書き方</b><br>
+          名前 | 区分(near/far) | 向き(v/h) | ブロック列数 | 各列の高さ(カンマ区切り、末尾*=通路) | 掲載先(top/bottom/over)</p>
+
+          <p><b>掲載先</b>は、配置図の表のどこに欄を書くかです。<br>
+          top＝上段、bottom＝下段、over＝掲載しない。<br>
+          省略すると今の設定を引き継ぎます。</p>
+
+          <p><b>「掲載しない」にしたエリアには、新しく荷物を置きません。</b><br>
+          すでにそのエリアにある荷物は残り、配置図の表には出ません。</p>
+
+          <p><b>行の順番には意味があります。</b><br>
+          上の行から順に、自動配置で試します。<br>
+          また、上段・下段それぞれの先頭の行が配置図の表の基準になり、その欄には注釈が付きません。<br>
+          大きなグリッドは、下段の基準エリアを描きます。<br>
+          並べ替えると配置のしかたが変わり、手動で調整した配置は破棄されます。</p>
+        </div>
         <textarea id="cfgText"></textarea>
         <div class="row-actions">
           <button class="btn btn-ghost" onclick="applyConfig()">設定を反映</button>
@@ -892,37 +954,64 @@
       <div class="card">
         <h2>表示設定 <span class="badge">この端末に保存</span></h2>
         <div class="hint" id="dspNote" style="margin-bottom:8px;color:#b45309" hidden></div>
-        <div class="hint" style="margin-bottom:10px">配置図の表の文字の大きさと太さです（品名・ロット・パレット数・注釈は8〜24px、月日・総パレット数は8〜32px）。欄に入りきらない文字は自動で横に縮みます（下限40%）。<b>ロットを太字にすると数字の幅が約8%広がる</b>ので、縮む欄が増えます。</div>
-        <div class="dspgrid">
-          <label>品名 <input type="number" id="fsName"  min="8" max="24" onchange="displayChanged()"></label>
-          <label>ロット <input type="number" id="fsLot"  min="8" max="24" onchange="displayChanged()"></label>
-          <label>パレット数 <input type="number" id="fsPal" min="8" max="24" onchange="displayChanged()"></label>
-          <label>注釈 <input type="number" id="fsNote"  min="8" max="24" onchange="displayChanged()"></label>
-          <label>月日 <input type="number" id="fsDate"  min="8" max="32" onchange="displayChanged()"></label>
-          <label>総パレット数 <input type="number" id="fsTotal" min="8" max="32" onchange="displayChanged()"></label>
+
+        <!-- 項目が多いので、まとまりごとに .cfgsec の枠で切り分ける。
+             文字の大きさ・太さは1つの話なので同じ枠。あとは設定ごとに1枠ずつ。 -->
+        <div class="cfgsec">
+          <h3>配置図の表の文字</h3>
+          <div class="hint" style="margin-bottom:10px">大きさと太さです（品名・ロット・パレット数・注釈は8〜24px、月日・総パレット数は8〜32px）。欄に入りきらない文字は自動で横に縮みます（下限40%）。<b>ロットを太字にすると数字の幅が約8%広がる</b>ので、縮む欄が増えます。</div>
+          <div class="dspgrid">
+            <label><span class="lbl">品名</span><input type="number" id="fsName"  min="8" max="24" onchange="displayChanged()"></label>
+            <label><span class="lbl">ロット</span><input type="number" id="fsLot"  min="8" max="24" onchange="displayChanged()"></label>
+            <label><span class="lbl">パレット数</span><input type="number" id="fsPal" min="8" max="24" onchange="displayChanged()"></label>
+            <label><span class="lbl">注釈</span><input type="number" id="fsNote"  min="8" max="24" onchange="displayChanged()"></label>
+            <label><span class="lbl">月日</span><input type="number" id="fsDate"  min="8" max="32" onchange="displayChanged()"></label>
+            <label><span class="lbl">総パレット数</span><input type="number" id="fsTotal" min="8" max="32" onchange="displayChanged()"></label>
+          </div>
+          <div class="dspgrid">
+            <label class="chk"><input type="checkbox" id="fwName" onchange="displayChanged()"> 品名を太字</label>
+            <label class="chk"><input type="checkbox" id="fwLot"  onchange="displayChanged()"> ロットを太字</label>
+            <label class="chk"><input type="checkbox" id="fwPal"  onchange="displayChanged()"> パレット数を太字</label>
+            <label class="chk"><input type="checkbox" id="fwNote" onchange="displayChanged()"> 注釈を太字</label>
+          </div>
+          <div class="row-actions">
+            <button class="btn btn-ghost" onclick="resetDisplay()">文字を初期値に戻す</button>
+          </div>
         </div>
-        <div class="dspgrid">
-          <label class="chk"><input type="checkbox" id="fwName" onchange="displayChanged()"> 品名を太字</label>
-          <label class="chk"><input type="checkbox" id="fwLot"  onchange="displayChanged()"> ロットを太字</label>
-          <label class="chk"><input type="checkbox" id="fwPal"  onchange="displayChanged()"> パレット数を太字</label>
-          <label class="chk"><input type="checkbox" id="fwNote" onchange="displayChanged()"> 注釈を太字</label>
+
+        <div class="cfgsec">
+          <h3>配置図の矢印と囲み枠線の角の形</h3>
+          <div class="sizectl">
+            <span class="lbl">矢印の先</span>
+            <button class="sizebtn on" data-arrow="1" onclick="setArrowHead(true)">あり</button>
+            <button class="sizebtn" data-arrow="0" onclick="setArrowHead(false)">なし</button>
+            <span class="grp"><span class="lbl">角の丸み</span>
+              <button class="sizebtn on" data-corner="1" onclick="setLotCorner(true)">あり</button>
+              <button class="sizebtn" data-corner="0" onclick="setLotCorner(false)">なし</button></span>
+          </div>
         </div>
-        <div class="hint" style="margin:12px 0 6px"><b>そのほかの表示</b></div>
-        <div class="sizectl">
-          <span class="lbl">矢印の先</span>
-          <button class="sizebtn on" data-arrow="1" onclick="setArrowHead(true)">あり</button>
-          <button class="sizebtn" data-arrow="0" onclick="setArrowHead(false)">なし</button>
-          <span class="grp"><span class="lbl">角の丸み</span>
-            <button class="sizebtn on" data-corner="1" onclick="setLotCorner(true)">あり</button>
-            <button class="sizebtn" data-corner="0" onclick="setLotCorner(false)">なし</button></span>
+
+        <div class="cfgsec">
+          <h3>端数の書き方</h3>
+          <label class="chk"><input type="checkbox" id="fracChk" onchange="toggleFrac()"> 入力画面での端数を「半」で表示</label>
         </div>
-        <div><label class="chk"><input type="checkbox" id="fracChk" onchange="toggleFrac()"> 端数を「半」で表示</label></div>
-        <div><label class="chk"><input type="checkbox" id="mergeChk" checked onchange="toggleMerge()"> 同じ品名のロットを1つの欄にまとめる</label></div>
-        <div class="hint">品名・入数・種別・置き場所がすべて同じロットだけをまとめます。メインに置いた荷物は、引き出し線が1本ずつ要るのでまとめません。</div>
-        <div><label class="chk"><input type="checkbox" id="sheetEditSilentChk" onchange="toggleSheetEditSilent()"> 配置が変わったら、確認無しでテキスト編集を破棄する</label></div>
-        <div class="hint">配置図の「✏ テキスト編集」で書き足した文字は、荷物を動かしたり伝票を直したりすると紙から消えます。その状態で新しく書き始めるとき、古い書き足しを捨てる確認を出すかどうかです。「捨てる」「テキスト編集を戻す」を自分で押したときは、この設定にかかわらず確認します。</div>
-        <div class="row-actions">
-          <button class="btn btn-ghost" onclick="resetDisplay()">文字を初期値に戻す</button>
+
+        <div class="cfgsec">
+          <h3>ロットのまとめ</h3>
+          <label class="chk"><input type="checkbox" id="mergeChk" checked onchange="toggleMerge()"> 同じ品名のロットを1つの欄にまとめる</label>
+          <div class="hint">品名・入数・種別・置き場所がすべて同じロットだけをまとめます。メインに置いた荷物は、引き出し線が1本ずつ要るのでまとめません。</div>
+        </div>
+
+        <div class="cfgsec">
+          <h3>入力タブのサンプル読込</h3>
+          <label class="chk"><input type="checkbox" id="sampleBtnChk" onchange="toggleSampleBtns()"> 入力タブに「基本サンプル」「混載デモ」を出す</label>
+          <div class="hint">入力タブの下にあるサンプル読込のボタンです。押すと入力中の伝票が消えるため、実際の作業では出さないほうが安全です。使い方を試すときだけ出してください。</div>
+        </div>
+
+        <div class="cfgsec">
+          <h3>テキスト編集の破棄</h3>
+          <label class="chk"><input type="checkbox" id="sheetEditSilentChk" onchange="toggleSheetEditSilent()"> 配置が変わったら、確認無しでテキスト編集を破棄する</label>
+          <div class="hint">配置図の「✏ テキスト編集」で書き足した文字は、荷物を動かしたり伝票を直したりすると紙から消えます。その状態で新しく書き始めるとき、古い書き足しを捨てる確認を出すかどうかです。「捨てる」「テキスト編集を戻す」を自分で押したときは、この設定にかかわらず確認します。</div>
         </div>
       </div>
     </div>
@@ -1095,7 +1184,7 @@ let scheduleLoadWarning=[];
 let spacesWereReset=false;
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent", sampleBtns:"palletApp.sampleBtns"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
 const SPACES_SAVE_VERSION = 4;   // 現場の実測で置き場が増えたので上げる
@@ -1754,6 +1843,19 @@ function toggleFrac(){
 function toggleSheetEditSilent(){
   sheetEditSilent=document.getElementById("sheetEditSilentChk").checked;
   saveData(STORE_KEY.sheetEditSilent, sheetEditSilent);
+}
+/* 入力タブのサンプル読込ボタンを出すかどうか。既定は off（出さない）。
+   loadSample() は入力中の伝票を捨てるので、実務中に誤って押されると痛い。
+   「そのほかの表示」の他の項目と同じ流儀で、専用の STORE_KEY に保存する。
+   DEFAULT_DISPLAY に相乗りさせない（resetDisplay() で巻き戻ってしまう） */
+function toggleSampleBtns(){
+  const on=document.getElementById("sampleBtnChk").checked;
+  saveData(STORE_KEY.sampleBtns, on);
+  applySampleBtns(on);
+}
+function applySampleBtns(on){
+  const el=document.getElementById("sampleActions");
+  if(el) el.style.display = on ? "" : "none";
 }
 /* 同じ品名のロットを1つの欄にまとめるか。既定は on。
    「そのほかの表示」の他の項目（矢印の先・角の丸み・端数の「半」）と同じ流儀で、
@@ -6090,6 +6192,13 @@ updateSaveStatus();
 (function initSheetEditSilent(){
   const v=loadData(STORE_KEY.sheetEditSilent);
   if(v===true){ sheetEditSilent=true; document.getElementById("sheetEditSilentChk").checked=true; }
+})();
+
+// サンプル読込ボタン：保存があれば復元。既定は off（HTML 側で display:none にしてある）
+(function initSampleBtns(){
+  const on = loadData(STORE_KEY.sampleBtns)===true;
+  document.getElementById("sampleBtnChk").checked = on;
+  applySampleBtns(on);
 })();
 
 /* 表示設定：保存があれば復元。
