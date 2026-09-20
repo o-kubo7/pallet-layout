@@ -575,7 +575,12 @@
      すでに書き足した欄（#fff3c4）を直すときも見分けたいので、
      .sheet.editing td.edited と詳細度を揃えて後ろに置く。
      print-color-adjust は付けないので紙には出ない */
-  .sheet.editing td.editing-cell{background:#ffd6e7}
+  /* 編集中のセル。PC はセル内が入力欄に変わるので、枠線だけで「いまここ」が伝わる。
+     背景を白にして、入力欄のまわりに前の色の縁が残らないようにする */
+  .sheet.editing td.editing-cell{background:#fff}
+  /* スマホの編集バー経路は td の中身を差し替えないので、背景色が唯一の手がかり。
+     openBarEditor() だけが bar-editing を足す */
+  .sheet.editing td.editing-cell.bar-editing{background:#ffd6e7}
   /* セル内編集。圧縮を外して等倍にする。追記欄のまとめ欄は font-size:55%
      ≒7px なので、編集中だけ 13px を下限にする（確定したら元に戻る） */
   .sheet td.editing-cell .fit{transform:none !important}
@@ -586,9 +591,9 @@
      - line-height:inherit … 置き換える .fit と同じ行送りにする。1.2 だと
        見出し（行送り24px）で縮み、行が詰まって別の崩れ方をする
      - border ではなく outline … border は高さに足される。outline は
-       レイアウトに影響しない（offset -1px で欄の内側に引く） */
+       レイアウトに影響しない（offset -2px で欄の内側に引く） */
   .sheet td.editing-cell input,.sheet td.editing-cell textarea{
-    width:100%;box-sizing:border-box;border:0;outline:1px solid #06f;outline-offset:-1px;
+    width:100%;box-sizing:border-box;border:0;outline:2px solid #2563eb;outline-offset:-2px;
     min-height:0;padding:0;margin:0;
     font-family:inherit;font-size:max(13px,1em);line-height:inherit;text-align:center;
     background:#fff;color:#000;resize:none}
@@ -5231,7 +5236,9 @@ function openBarEditor(td){
   document.getElementById("sheetEditInput").replaceWith(el);
 
   document.getElementById("sheetEditLabel").textContent=sheetEditLabelOf(key);
-  td.classList.add("editing-cell");
+  // bar-editing はこの経路だけ。td の中身を差し替えないので、背景色でしか
+  // 「どの欄を直しているか」を出せない。セル内編集（PC）は入力欄の枠で足りる
+  td.classList.add("editing-cell","bar-editing");
   bar.hidden=false;
   sheetEditing={key, td, el, auto};
   positionSheetEditBar();

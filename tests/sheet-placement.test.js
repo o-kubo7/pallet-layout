@@ -2284,6 +2284,13 @@ test("テキスト編集のトグルは文言でも ON/OFF を出す", () => {
   assert.match(fn, /textContent\s*=\s*sheetEditMode\s*\?\s*"✕ テキスト編集終了"\s*:\s*"✏ テキスト編集"/);
 });
 
+test("桃色のハイライトはスマホの編集バー経路だけに出す", () => {
+  // PC のセル内編集は td の中身が入力欄に変わるので、枠線だけで足りる。
+  // 背景まで変えると「水色・黄色・桃色・青い枠」が同時に出て情報過多になる
+  assert.match(functionSource("openBarEditor"), /classList\.add\("editing-cell","bar-editing"\)/);
+  assert.doesNotMatch(functionSource("openInlineEditor"), /bar-editing/);
+});
+
 test("紙に出ていない書き足しの案内は赤ベースにする", () => {
   // 緑（.msg.ok）だと「問題なし」に見える。紙から消えている状態なので赤で出す
   assert.match(functionSource("fitSheetText"), /<div class="msg alert">※ 前の配置に対する書き足しが/);
@@ -2299,7 +2306,7 @@ test("セル内編集で行の高さを変えない", () => {
   const rule = css.slice(0, css.indexOf("}") + 1);
   assert.match(rule, /min-height:0/);
   assert.match(rule, /line-height:inherit/);
-  assert.match(rule, /outline:1px solid #06f/);
+  assert.match(rule, /outline:2px solid #2563eb/);
   assert.doesNotMatch(rule, /border:1px/);
   assert.doesNotMatch(rule, /line-height:1\.2/);
 });
@@ -2316,7 +2323,11 @@ test("いま直している欄は他と違う背景にする。紙には出さ�
   // スマホは td の中身を入力欄に差し替えないので、この背景だけが
   // 「どこを直しているか」の手掛かりになる。#eef6ff（触れる欄）や
   // #fff3c4（書き足し済み）と同じ色だと見分けが付かない
-  assert.match(source, /\.sheet\.editing td\.editing-cell\{background:#ffd6e7\}/);
+  // 編集中のセルは PC では白。枠線だけで「いまここ」を出す（情報過多の整理）。
+  // 桃色はスマホの編集バー経路だけ。あちらは td の中身が変わらないので
+  // 背景色が唯一の手がかりになる
+  assert.match(source, /\.sheet\.editing td\.editing-cell\{background:#fff\}/);
+  assert.match(source, /\.sheet\.editing td\.editing-cell\.bar-editing\{background:#ffd6e7\}/);
   assert.doesNotMatch(source, /td\.editing-cell\{[^}]*print-color-adjust/);
   assert.match(printBlock(), /\.sheet\.editing td\.editing-cell\{background:transparent/);
 });
