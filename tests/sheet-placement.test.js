@@ -2448,6 +2448,22 @@ test("編集バーはソフトキーボードの上に留まる", () => {
   assert.match(fn, /visualViewport/);
   assert.match(fn, /offsetTop/);
   assert.match(fn, /height/);
+  // 下端に置くこと自体を固定する。vh を参照するだけの上端実装でも
+  // 上の3つは通ってしまう
+  assert.match(fn, /vTop\s*\+\s*vh\s*-/);
+});
+
+test("編集バーの余白は visualViewport の過大報告を吸収できる値にする", () => {
+  // Pixel 9a / Android Chrome の実測（2026-09-20）: キーボードが出きって
+  // 値が落ち着いたあとも visualViewport.height が実際に使える高さより
+  // 約23px 大きい。8px の余白では入力欄の下が自動入力バーに潜る。
+  // JS からこの差を取る API が無いので、実測値＋余裕の定数で吸収している
+  const fn = functionSource("positionSheetEditBar");
+  assert.match(fn, /SHEET_EDIT_BAR_GAP/);
+  assert.doesNotMatch(fn, /-\s*8\s*\)\s*\+\s*"px"/);
+  const m = source.match(/const SHEET_EDIT_BAR_GAP\s*=\s*(\d+)/);
+  assert.ok(m, "SHEET_EDIT_BAR_GAP がモジュールスコープに無い");
+  assert.ok(Number(m[1]) >= 24, `実測のずれ 23px を吸収できない余白: ${m[1]}px`);
 });
 
 test("編集バーは2段。入力欄は2段目を丸ごと使う", () => {

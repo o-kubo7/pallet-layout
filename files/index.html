@@ -5233,13 +5233,23 @@ function sheetEditLabelOf(key){
 // リサイズせず Visual Viewport だけ縮める。既存の acPosition() と同じ計算で
 // 可視領域の下端（キーボードのすぐ上）に貼る。上端だと、ハイライトした
 // 欄をバーが覆うことがある
+// 可視領域の下端とバーの間に空ける余白。
+// 8px では足りない。Pixel 9a / Android Chrome の実測（2026-09-20、?kbdebug で
+// 画面に数値を出して確認）では、ソフトキーボードが出きって値が落ち着いたあとも
+// visualViewport.height が実際に使える高さより **約23px 大きい値** を返す。
+//   vh=402 / vTop=0 に対し、キーボード上の自動入力バー（🔑💳📍 の帯）の
+//   上端は実測で約379px。barBot-vBottom=-8 と計算どおりに置いても、
+//   入力欄の下が帯に潜る。
+// この差を JS から取る API は無いので、実測値に余裕を足した定数で吸収する。
+// 過大報告しないブラウザではバーがキーボードより 32px 浮くだけで実害は無い
+const SHEET_EDIT_BAR_GAP=32;
 function positionSheetEditBar(){
   const bar=document.getElementById("sheetEditBar");
   if(!bar || bar.hidden) return;
   const vv=window.visualViewport;
   const vTop=vv?vv.offsetTop:0;
   const vh=vv?vv.height:window.innerHeight;
-  bar.style.top=(vTop+vh-bar.getBoundingClientRect().height-8)+"px";
+  bar.style.top=(vTop+vh-bar.getBoundingClientRect().height-SHEET_EDIT_BAR_GAP)+"px";
 }
 if(window.visualViewport){
   window.visualViewport.addEventListener("resize", positionSheetEditBar);
