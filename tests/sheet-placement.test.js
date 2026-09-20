@@ -2293,7 +2293,7 @@ test("桃色のハイライトはスマホの編集バー経路だけに出す",
 
 test("紙に出ていない書き足しの案内は赤ベースにする", () => {
   // 緑（.msg.ok）だと「問題なし」に見える。紙から消えている状態なので赤で出す
-  assert.match(functionSource("fitSheetText"), /<div class="msg alert">※ 前の配置に対する書き足しが/);
+  assert.match(functionSource("fitSheetText"), /<div class="msg alert">※ 前の配置でテキスト編集が/);
   assert.match(source, /\.msg\.alert\{background:#fef2f2/);
 });
 
@@ -2568,7 +2568,7 @@ test("確認なしで書き足しを捨てる設定を置く", () => {
   const cfgStart = source.indexOf('<div id="cfgpane-display"');
   const pane = source.slice(cfgStart, cfgStart + 4000);
   assert.match(pane, /id="sheetEditSilentChk"[^>]*onchange="toggleSheetEditSilent\(\)"/);
-  assert.match(pane, /確認なしで書き足しを捨てる/);
+  assert.match(pane, /確認無しでテキスト編集を破棄する/);
 });
 
 test("署名が合わない状態で書き始めたら古い書き足しを捨てる", () => {
@@ -2616,10 +2616,58 @@ test("確認は欄を開くときに出す。確定の経路には置かない",
   assert.doesNotMatch(functionSource("flushSheetEdit"), /confirm\(/);
 });
 
-test("紙に出ていない書き足しの件数を画面に知らせる", () => {
+test("設定が ON なら署名が合わなくなった時点で捨てる", () => {
+  // 設定は「配置が変わったら、確認無しでテキスト編集を破棄する」。
+  // 欄を開くときの confirm を抑えるだけだと、古い編集が保存に残り続け、
+  // 「印刷には出ません」の案内と「テキスト編集を戻す（N件）」が出たままになる
+  const drop = new Function(
+    "sheetEditSilent", "schedule", "activeShift", "currentSheetSig", "saveSchedule",
+    functionSource("dropStaleMarksIfSilent") + "; return dropStaleMarksIfSilent;"
+  );
+  const shiftOf = () => ({ sheetEdits: { sig: "s1", marks: { "top|0|name": "A" } } });
+
+  // 設定 OFF なら何もしない
+  let sh = shiftOf();
+  assert.equal(drop(false, {}, () => sh, () => "s2", () => {})(), false);
+  assert.deepEqual(sh.sheetEdits.marks, { "top|0|name": "A" });
+
+  // 設定 ON でも署名が合っていれば何もしない
+  sh = shiftOf();
+  assert.equal(drop(true, {}, () => sh, () => "s1", () => {})(), false);
+  assert.deepEqual(sh.sheetEdits.marks, { "top|0|name": "A" });
+
+  // 設定 ON で署名が違えば捨てる。sig も空にする（孤児 marks を残さない）
+  sh = shiftOf();
+  let saved = 0;
+  assert.equal(drop(true, {}, () => sh, () => "s2", () => { saved++; })(), true);
+  assert.deepEqual(sh.sheetEdits, { sig: "", marks: {} });
+  assert.equal(saved, 1);
+
+  // schedule が無ければ触らない
+  assert.equal(drop(true, null, () => { throw new Error("activeShift を呼んではいけない"); },
+                    () => "s2", () => {})(), false);
+});
+
+test("捨てるのは marks を組み立てるより前", () => {
+  // 後ろに置くと、捨てた直後の1回だけ古い編集が紙に出る
+  const fn = functionSource("renderSheet");
+  const dropAt = fn.indexOf("dropStaleMarksIfSilent(pl)");
+  const marksAt = fn.indexOf("activeSheetMarks(pl)");
+  assert.notEqual(dropAt, -1);
+  assert.notEqual(marksAt, -1);
+  assert.ok(dropAt < marksAt);
+});
+
+test("設定による破棄は確認を出さない", () => {
+  // 印刷の経路（printSheet / beforeprint → renderSheet）も通る。
+  // ここに confirm を置くと紙が白紙になる
+  assert.doesNotMatch(functionSource("dropStaleMarksIfSilent"), /confirm\(/);
+});
+
+test("印刷に出ていないテキスト編集の件数を画面に知らせる", () => {
   // #sheetMsg は印刷CSSで display:none なので紙には出ない
   const fn = functionSource("fitSheetText");
-  assert.match(fn, /前の配置に対する書き足し/);
+  assert.match(fn, /前の配置でテキスト編集が/);
   assert.match(fn, /dropHiddenMarks\(\)/);
 });
 
@@ -2628,7 +2676,7 @@ test("案内は innerHTML への代入より前で組む", () => {
   // 呼ばれる。renderSheet の末尾で後から足すと、表示設定を触った瞬間に消える
   const fn = functionSource("fitSheetText");
   const assignAt = fn.lastIndexOf("box.innerHTML=html");
-  const noticeAt = fn.indexOf("前の配置に対する書き足し");
+  const noticeAt = fn.indexOf("前の配置でテキスト編集が");
   assert.notEqual(assignAt, -1);
   assert.notEqual(noticeAt, -1);
   assert.ok(noticeAt < assignAt);

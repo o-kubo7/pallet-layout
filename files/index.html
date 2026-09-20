@@ -914,7 +914,7 @@
         <div><label class="chk"><input type="checkbox" id="fracChk" onchange="toggleFrac()"> 端数を「半」で表示</label></div>
         <div><label class="chk"><input type="checkbox" id="mergeChk" checked onchange="toggleMerge()"> 同じ品名のロットを1つの欄にまとめる</label></div>
         <div class="hint">品名・入数・種別・置き場所がすべて同じロットだけをまとめます。メインに置いた荷物は、引き出し線が1本ずつ要るのでまとめません。</div>
-        <div><label class="chk"><input type="checkbox" id="sheetEditSilentChk" onchange="toggleSheetEditSilent()"> 配置が変わったら、確認なしで書き足しを捨てる</label></div>
+        <div><label class="chk"><input type="checkbox" id="sheetEditSilentChk" onchange="toggleSheetEditSilent()"> 配置が変わったら、確認無しでテキスト編集を破棄する</label></div>
         <div class="hint">配置図の「✏ テキスト編集」で書き足した文字は、荷物を動かしたり伝票を直したりすると紙から消えます。その状態で新しく書き始めるとき、古い書き足しを捨てる確認を出すかどうかです。「捨てる」「テキスト編集を戻す」を自分で押したときは、この設定にかかわらず確認します。</div>
         <div class="row-actions">
           <button class="btn btn-ghost" onclick="resetDisplay()">文字を初期値に戻す</button>
@@ -4961,7 +4961,7 @@ function fitSheetText(pl,hidden){
   // 引数で渡されない経路（applyDisplay 経由など）では自分で数える
   const hid=(hidden==null) ? (typeof hiddenMarkCount==="function"?hiddenMarkCount():0) : hidden;
   if(hid>0){
-    html+=`<div class="msg alert">※ 前の配置に対する書き足しが ${hid} 件あります。紙には出ません。`
+    html+=`<div class="msg alert">※ 前の配置でテキスト編集が ${hid} 件あります。印刷には出ません。`
         + ` <button class="btn btn-ghost" onclick="dropHiddenMarks()">捨てる</button></div>`;
   }
   // 縦のはみ出し。autoSheetZoom() は Math.max(1,...) で 1 倍を下回らないので、
@@ -5021,6 +5021,22 @@ function hiddenMarkCount(pl){
   const ed=activeShift().sheetEdits;
   if(!ed || !ed.sig || ed.sig===currentSheetSig(pl)) return 0;
   return Object.keys(ed.marks||{}).length;
+}
+// 「配置が変わったら、確認無しでテキスト編集を破棄する」が ON のときは、
+// 署名が合わなくなった時点で捨てる。残したままだと「印刷には出ません」の案内と
+// 「テキスト編集を戻す（N件）」の件数が出続け、設定の文言と食い違う。
+// 確認は出さない（設定がそう言っている）。
+// 注意: これは利用者が押した破棄ではないので、dropHiddenMarks() /
+// clearAllMarks() の「設定にかかわらず確認する」規則とは別物。
+// 印刷の経路（printSheet / beforeprint → renderSheet）も通るので confirm を置かない
+function dropStaleMarksIfSilent(pl){
+  if(!sheetEditSilent || !schedule) return false;
+  const ed=activeShift().sheetEdits;
+  if(!ed.sig || ed.sig===currentSheetSig(pl)) return false;
+  ed.marks={};
+  ed.sig="";
+  saveSchedule();
+  return true;
 }
 // 利用者が自分で押す破棄。sheetEditSilent は見ない。
 // 押した破棄まで黙って実行すると、誤タップで書き足しが消える
@@ -5326,6 +5342,8 @@ function renderSheet(){
   // それでも上段に入りきらない欄は、下段に空きがあればその末尾へ回っている（bottom の末尾）
   const pl=sheetPlacement();
   const top=pl.top, bottom=pl.bottom, lay=pl.lay;
+  // 設定が ON なら、署名が合わなくなった時点でここで捨てる（下の marks より前）
+  dropStaleMarksIfSilent(pl);
   // 書き足し。署名が合わないときは空を渡す（紙には出さないが保存には残す）
   const marks=activeSheetMarks(pl);
   const d=headDate?new Date(headDate+"T00:00:00"):null;
