@@ -328,6 +328,8 @@
   .msg{padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:10px}
   .msg.ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
   .msg.warn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
+  /* 紙に出ていない書き足しの案内。緑（ok）だと「問題なし」に見えるので赤にする */
+  .msg.alert{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
   .summary{font-size:12px;color:var(--muted);margin-top:8px}
   .cfg textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:6px;padding:8px;
                 font-family:ui-monospace,monospace;font-size:13px}
@@ -354,6 +356,8 @@
   .input-head .timing-switch{margin-top:0}
   .sheet-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
   .sheet-toolbar .timing-switch{margin-top:0}
+  /* 操作ボタンは右詰め。狭い画面では入れ物ごと折り返す */
+  .sheet-toolbar-actions{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .sheet-print{width:112px;margin-left:auto}
   .slip-count{margin-top:8px;color:var(--muted);font-weight:700}
   .slip{border:3px solid #cbd5e1;border-radius:12px;background:#fff;margin-bottom:16px;overflow:hidden;min-width:0}
@@ -575,9 +579,18 @@
   /* セル内編集。圧縮を外して等倍にする。追記欄のまとめ欄は font-size:55%
      ≒7px なので、編集中だけ 13px を下限にする（確定したら元に戻る） */
   .sheet td.editing-cell .fit{transform:none !important}
+  /* 行の高さを1pxも変えないこと。編集で行が伸びると表全体が組み替わり、
+     1文字直すたびに紙の見た目が動いて読めなくなる。効かせるのは3点:
+     - min-height:0 … 入力タブ用の td input{min-height:40px}（:45）が
+       セレクタの詳細度で勝ち残る。宣言しないと欄が 40px に膨らむ
+     - line-height:inherit … 置き換える .fit と同じ行送りにする。1.2 だと
+       見出し（行送り24px）で縮み、行が詰まって別の崩れ方をする
+     - border ではなく outline … border は高さに足される。outline は
+       レイアウトに影響しない（offset -1px で欄の内側に引く） */
   .sheet td.editing-cell input,.sheet td.editing-cell textarea{
-    width:100%;box-sizing:border-box;border:1px solid #06f;padding:0;margin:0;
-    font-family:inherit;font-size:max(13px,1em);line-height:1.2;text-align:center;
+    width:100%;box-sizing:border-box;border:0;outline:1px solid #06f;outline-offset:-1px;
+    min-height:0;padding:0;margin:0;
+    font-family:inherit;font-size:max(13px,1em);line-height:inherit;text-align:center;
     background:#fff;color:#000;resize:none}
 
   /* スマホの編集バー。.sheet の外なので zoom も scaleX も掛からない */
@@ -786,9 +799,14 @@
     <div class="card" id="sheetCard">
       <div class="sheet-toolbar">
         <div class="timing-switch" data-timing-switch></div>
-        <button class="btn btn-ghost" id="sheetEditBtn" onclick="toggleSheetEditMode()">✏ 文字を編集</button>
-        <button class="btn btn-ghost sheet-print" id="printBtn" onclick="printSheet()" disabled>🖨 印刷</button>
-        <button class="btn btn-ghost" id="sheetClearBtn" onclick="clearAllMarks()" hidden></button>
+        <!-- 右詰め。右から「印刷」「テキスト編集」「テキスト編集を戻す」。
+             sheetClearBtn は普段 hidden なので、margin-left:auto はボタン個々ではなく
+             この入れ物に掛ける（個々に掛けると隠れた瞬間に右詰めが外れる） -->
+        <div class="sheet-toolbar-actions">
+          <button class="btn btn-ghost" id="sheetClearBtn" onclick="clearAllMarks()" hidden></button>
+          <button class="btn btn-ghost" id="sheetEditBtn" onclick="toggleSheetEditMode()">✏ テキスト編集</button>
+          <button class="btn btn-ghost sheet-print" id="printBtn" onclick="printSheet()" disabled>🖨 印刷</button>
+        </div>
       </div>
 
       <div class="sizectl" id="zoomCtl">
@@ -889,7 +907,7 @@
         <div><label class="chk"><input type="checkbox" id="mergeChk" checked onchange="toggleMerge()"> 同じ品名のロットを1つの欄にまとめる</label></div>
         <div class="hint">品名・入数・種別・置き場所がすべて同じロットだけをまとめます。メインに置いた荷物は、引き出し線が1本ずつ要るのでまとめません。</div>
         <div><label class="chk"><input type="checkbox" id="sheetEditSilentChk" onchange="toggleSheetEditSilent()"> 配置が変わったら、確認なしで書き足しを捨てる</label></div>
-        <div class="hint">配置図の「✏ 文字を編集」で書き足した文字は、荷物を動かしたり伝票を直したりすると紙から消えます。その状態で新しく書き始めるとき、古い書き足しを捨てる確認を出すかどうかです。「捨てる」「書き足しを全部戻す」を自分で押したときは、この設定にかかわらず確認します。</div>
+        <div class="hint">配置図の「✏ テキスト編集」で書き足した文字は、荷物を動かしたり伝票を直したりすると紙から消えます。その状態で新しく書き始めるとき、古い書き足しを捨てる確認を出すかどうかです。「捨てる」「テキスト編集を戻す」を自分で押したときは、この設定にかかわらず確認します。</div>
         <div class="row-actions">
           <button class="btn btn-ghost" onclick="resetDisplay()">文字を初期値に戻す</button>
         </div>
@@ -1718,7 +1736,7 @@ function toggleFrac(){
 /* 配置が変わったときに、書き足しを捨てる確認を出すかどうか。
    既定は off（確認する）。「そのほかの表示」の他の項目と同じ流儀で
    専用の STORE_KEY に保存する。DEFAULT_DISPLAY に相乗りさせない。
-   利用者が自分で押す破棄（「捨てる」「書き足しを全部戻す」）には効かせない。
+   利用者が自分で押す破棄（「捨てる」「テキスト編集を戻す」）には効かせない。
    押した破棄まで黙って実行すると、誤タップで書き足しが消える */
 function toggleSheetEditSilent(){
   sheetEditSilent=document.getElementById("sheetEditSilentChk").checked;
@@ -4935,7 +4953,7 @@ function fitSheetText(pl,hidden){
   // 引数で渡されない経路（applyDisplay 経由など）では自分で数える
   const hid=(hidden==null) ? (typeof hiddenMarkCount==="function"?hiddenMarkCount():0) : hidden;
   if(hid>0){
-    html+=`<div class="msg ok">※ 前の配置に対する書き足しが ${hid} 件あります。紙には出ません。`
+    html+=`<div class="msg alert">※ 前の配置に対する書き足しが ${hid} 件あります。紙には出ません。`
         + ` <button class="btn btn-ghost" onclick="dropHiddenMarks()">捨てる</button></div>`;
   }
   // 縦のはみ出し。autoSheetZoom() は Math.max(1,...) で 1 倍を下回らないので、
@@ -5054,13 +5072,15 @@ function applySheetEditMode(){
     // ボタンの ON は既存の .btn-on で表す
     btn.classList.toggle("btn-on", sheetEditMode);
     btn.setAttribute("aria-pressed", sheetEditMode ? "true" : "false");
+    // 色だけのトグルは ON/OFF が読み取りにくい。今押すと何が起きるかを文言で出す
+    btn.textContent = sheetEditMode ? "✕ テキスト編集終了" : "✏ テキスト編集";
   }
-  // 「書き足しを全部戻す」は編集モードの間だけ、書き足しがあるときだけ出す
+  // 「テキスト編集を戻す」は編集モードの間だけ、書き足しがあるときだけ出す
   const clear=document.getElementById("sheetClearBtn");
   if(clear){
     const n=schedule?Object.keys(activeShift().sheetEdits.marks||{}).length:0;
     clear.hidden=!(sheetEditMode && n>0);
-    clear.textContent=`書き足しを全部戻す（${n}件）`;
+    clear.textContent=`テキスト編集を戻す（${n}件）`;
   }
 }
 // 利用者が自分で押す破棄。sheetEditSilent は見ない

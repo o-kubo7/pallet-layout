@@ -302,7 +302,7 @@ test("印刷の前に編集モードを閉じる。ショートカット経由�
   assert.match(source.slice(beforeStart, beforeStart + 400), /exitSheetEditMode\(\)/);
 });
 
-test("書き足しを全部戻すボタンは編集モードの間だけ出す", () => {
+test("テキスト編集を戻すボタンは編集モードの間だけ出す", () => {
   const sheetStart = source.indexOf('<div id="tab-sheet"');
   const sheetEnd = source.indexOf('<!-- ===== 設定タブ', sheetStart);
   assert.match(source.slice(sheetStart, sheetEnd), /id="sheetClearBtn"[^>]*onclick="clearAllMarks\(\)"/);
@@ -321,7 +321,7 @@ test("編集モードのボタンは既存の .btn-on で ON を表す", () => {
   assert.match(source, /\.btn-on\{background:/);
 });
 
-test("書き足しを全部戻すときは設定にかかわらず確認する", () => {
+test("テキスト編集を戻すときは設定にかかわらず確認する", () => {
   const fn = functionSource("clearAllMarks");
   assert.match(fn, /confirm/);
   assert.doesNotMatch(fn, /sheetEditSilent/);
@@ -2254,12 +2254,54 @@ test("追記欄にも書き足しを差し込める。余り欄には付けな�
   assert.doesNotMatch(plain, /data-ek/);
 });
 
-test("配置表のツールバーに文字を編集するトグルを置く", () => {
+test("配置表のツールバーにテキスト編集のトグルを置く", () => {
   const sheetStart = source.indexOf('<div id="tab-sheet"');
   const sheetEnd = source.indexOf('<!-- ===== 設定タブ', sheetStart);
   const sheetTab = source.slice(sheetStart, sheetEnd);
   assert.match(sheetTab, /id="sheetEditBtn"[^>]*onclick="toggleSheetEditMode\(\)"/);
-  assert.match(sheetTab, /✏ 文字を編集/);
+  assert.match(sheetTab, /✏ テキスト編集/);
+});
+
+test("ツールバーの操作ボタンは右詰めで、右から 印刷・テキスト編集・戻す", () => {
+  // 右詰めは入れ物に掛ける。sheetClearBtn は普段 hidden なので、
+  // ボタン個々に margin-left:auto を掛けると隠れた瞬間に右詰めが外れる
+  const sheetStart = source.indexOf('<div id="tab-sheet"');
+  const sheetEnd = source.indexOf('<!-- ===== 設定タブ', sheetStart);
+  const sheetTab = source.slice(sheetStart, sheetEnd);
+  assert.match(source, /\.sheet-toolbar-actions\{margin-left:auto/);
+  const box = sheetTab.slice(sheetTab.indexOf('sheet-toolbar-actions'));
+  const order = ["sheetClearBtn", "sheetEditBtn", "printBtn"]
+    .map(id => box.indexOf('id="' + id + '"'));
+  order.forEach((at, i) => assert.notEqual(at, -1, `${i} 番目のボタンが入れ物の中に無い`));
+  assert.ok(order[0] < order[1] && order[1] < order[2],
+    "DOM 順は 戻す → テキスト編集 → 印刷（画面では右から 印刷・テキスト編集・戻す）");
+});
+
+test("テキスト編集のトグルは文言でも ON/OFF を出す", () => {
+  // 色だけのトグルは押した状態が読み取りにくい、というユーザー指摘への対応。
+  // 今押すと何が起きるかを文言にする
+  const fn = functionSource("applySheetEditMode");
+  assert.match(fn, /textContent\s*=\s*sheetEditMode\s*\?\s*"✕ テキスト編集終了"\s*:\s*"✏ テキスト編集"/);
+});
+
+test("紙に出ていない書き足しの案内は赤ベースにする", () => {
+  // 緑（.msg.ok）だと「問題なし」に見える。紙から消えている状態なので赤で出す
+  assert.match(functionSource("fitSheetText"), /<div class="msg alert">※ 前の配置に対する書き足しが/);
+  assert.match(source, /\.msg\.alert\{background:#fef2f2/);
+});
+
+test("セル内編集で行の高さを変えない", () => {
+  // 入力タブ用の td input{min-height:40px}（files/index.html:45）が詳細度で
+  // 勝ち残るため、min-height:0 を宣言しないと欄が 40px に膨らんで表が組み替わる。
+  // line-height は置き換える .fit と同じ inherit にする（1.2 だと見出しで縮む）。
+  // 枠は border ではなく outline。border は高さに足される
+  const css = source.slice(source.indexOf(".sheet td.editing-cell input"));
+  const rule = css.slice(0, css.indexOf("}") + 1);
+  assert.match(rule, /min-height:0/);
+  assert.match(rule, /line-height:inherit/);
+  assert.match(rule, /outline:1px solid #06f/);
+  assert.doesNotMatch(rule, /border:1px/);
+  assert.doesNotMatch(rule, /line-height:1\.2/);
 });
 
 test("編集モードの印は画面だけに出し、紙には出さない", () => {
