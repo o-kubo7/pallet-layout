@@ -327,10 +327,10 @@ test("テキスト編集を戻すときは設定にかかわらず確認する",
   assert.doesNotMatch(fn, /sheetEditSilent/);
 });
 
-test("編集ツールバーのボタンは画面だけに出し、紙には出さない", () => {
-  // .sheet-toolbar 自体は隠さない（#printBtn は既存どおり紙に出す）ので、
-  // 新しく足した2つのボタンを名指しで消す必要がある
-  assert.match(printBlock(), /#sheetEditBtn,#sheetClearBtn\{display:none/);
+test("ツールバーは画面だけに出し、紙には出さない", () => {
+  // .btn は display を指定しないので、名指ししないボタンは紙に出てしまう。
+  // 個別に挙げるとボタンを足すたびに漏れるため、入れ物ごと消す
+  assert.match(printBlock(), /\.sheet-toolbar\{display:none/);
 });
 
 function functionSource(name) {

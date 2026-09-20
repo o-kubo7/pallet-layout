@@ -647,9 +647,11 @@
     .sheet td.editing-cell input,.sheet td.editing-cell textarea{border:0 !important;font-size:inherit !important}
     .sheet td.editing-cell .fit{transform:revert !important}
     #sheetEditBar{display:none !important}
-    /* .sheet-toolbar 自体は隠さない（#printBtn は既存どおり紙に出す）。
-       .btn は display を指定しないのでここで名指ししないと紙に出てしまう */
-    #sheetEditBtn,#sheetClearBtn{display:none !important}
+    /* ツールバーごと消す。.btn は display を指定しないので、名指ししないボタンは
+       紙に出てしまう。個別に挙げるとボタンを足すたびに漏れるため、入れ物を消す。
+       中身は「あさ/ひる」「テキスト編集」「テキスト編集を戻す」「印刷」で、
+       どれも操作用。紙に出す意味がない */
+    .sheet-toolbar{display:none !important}
     body{background:#fff}
   }
   #updateBar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:#111827;color:#fff;
