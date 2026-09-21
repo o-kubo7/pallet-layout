@@ -1152,7 +1152,7 @@ const DEFAULT_SPACES = [
   // 自動配置では使わず（areaCandidates）、配置図の表にも欄を作らない（sheet:"none"）。
   // 列は足りなくなったら ensureStashRoom() が足す。
   {name:"退避", zone:"stash", orient:"v", block:99, align:"top", sheet:"none",
-   cols:[{h:7},{h:7},{h:7}]},
+   cols:[{h:5},{h:5},{h:5}]},
 ];
 // 運用上ひとつづきに使うエリア。①が埋まったら②へ、と列を連結して連続窓を探す。
 // 設定でスペース名を変えるとこの連結は外れ、別エリア扱いになる。
@@ -3774,7 +3774,11 @@ document.addEventListener("pointercancel",e=>{ if(drag && e.pointerId===drag.id)
 document.addEventListener("lostpointercapture",e=>{ if(drag && e.pointerId===drag.id) endDrag(); });
 
 /* ---------- [試作] 退避スペース ---------- */
-const STASH_COL_H=4;            // 退避の1列の高さ。隅の小さな盤に収まる高さにする
+/* 退避の1列の高さ。数えやすさを優先して 5 にしてある（5・10・15…と
+   5の段で読めるので、退避に何枚あるかを目で数えられる）。
+   受け皿（#stashDock）は狭いが .sb-body が overflow:auto なので、
+   入りきらないぶんはスクロールで見る。 */
+const STASH_COL_H=5;
 function lotKey(l){ return l.sourceKey || ((l.name||"")+"\u0000"+(l.lot||"")); }
 function stashSpaces(sp){ return (sp||[]).filter(s=>s.zone==="stash"); }
 // 指定した配置の退避枚数を {ロットの識別キー: 枚数} で返す
