@@ -3671,13 +3671,13 @@ function applyMove(spaceName, colIndex){
   const spBefore=snapshotSpaces(lastSp), selBefore=selSnapshot();
   // [試作] 退避スペースは倉庫に実在しないので、列の高さは制約ではない。
   // 落とす枚数が入るところまで伸ばす（倉庫のエリアには何もしない）。
-  growStashCol(spaceName, colIndex, movingCount(counts, spaceName, colIndex));
+  const ungrow=growStashCol(spaceName, colIndex, movingCount(counts, spaceName, colIndex));
   const v=validateMove(lastSp, sel.lotId, counts, spaceName, colIndex);
-  if(!v.ok) return;
+  if(!v.ok){ ungrow(); return; }
   if(v.needConfirm){
     const lot=lastLots.find(l=>l.id===sel.lotId);
     const name=lot?`${lot.name} / ${lot.lot||"—"}`:"このロット";
-    if(!confirm(`${name} が ${v.before}か所から ${v.after}か所に分かれます。このまま移動しますか？`)) return;
+    if(!confirm(`${name} が ${v.before}か所から ${v.after}か所に分かれます。このまま移動しますか？`)){ ungrow(); return; }
   }
   lastSp=v.next;
   pushMoveStep(spBefore, selBefore);
@@ -3791,12 +3791,17 @@ function firstFreeStashCol(){
   for(let i=0;i<s.cols.length;i++) if(used(s.cols[i])<s.cols[i].h) return i;
   return s.cols.length-1;
 }
-// 退避の列だけ、落とす枚数が入るまで高さを伸ばす
+/* 退避の列だけ、落とす枚数が入るまで高さを伸ばす。
+   lastSp の列を直接書き換えるので、伸ばした高さを元に戻す関数を返す。
+   検証に落ちたときと分割の確認を取り消したときは、呼び出し側がそれを呼ぶ
+   （移動が成立していないのに lastSp だけが伸びた状態にしないため）。 */
 function growStashCol(spaceName, colIndex, n){
-  const s=stashSpaces(lastSp).find(x=>x.name===spaceName); if(!s) return;
-  const c=s.cols[colIndex]; if(!c) return;
+  const s=stashSpaces(lastSp).find(x=>x.name===spaceName); if(!s) return ()=>{};
+  const c=s.cols[colIndex]; if(!c) return ()=>{};
+  const before=c.h;
   const need=used(c)+n;
   if(need>c.h) c.h=Math.min(need, STASH_COL_MAX_H);
+  return ()=>{ c.h=before; };
 }
 function overStashDock(x,y){
   const d=document.getElementById("stashDock");
