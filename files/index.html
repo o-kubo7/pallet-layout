@@ -306,8 +306,14 @@
   .flagbtns button{min-width:44px}
   /* 矢印だけ大きくする。文字を付けたときに「戻す」「進む」まで大きくならないよう、
      矢印は span.ar に入れてそちらにだけ効かせる。line-height:1 を付けないと
-     20px の行送りでボタンの高さが増える。 */
+     20px の行送りでボタンの高さが増える。
+     回転は .arrot に分けてある。 */
   .flagundo .ar{font-size:20px;line-height:1}
+  /* ↩ ↪ を 180 度回して、曲がる向きを上側にする。描画ソフトの戻す・進むと同じ形。
+     帯のボタンと「そのほかの表示」の説明文で同じ向きに出したいので、大きさを決める
+     .ar とは分けた汎用クラスにする。transform は inline 要素には効かないため
+     display:inline-block が必要。 */
+  .arrot{display:inline-block;transform:rotate(180deg)}
   .flagundo:disabled{opacity:.4;cursor:default}
   /* 選択数は帯の背景と区別が付くように白抜きにする */
   .flagcount{background:rgba(255,255,255,.22);border-radius:6px;padding:3px 9px;
@@ -865,9 +871,9 @@
         <div class="toolflag" id="toolFlag">
           <span class="flagbtns">
             <button class="flagundo" id="undoBtn" aria-label="元に戻す" title="元に戻す"
-                    onclick="doUndo()"><span class="ar">↩</span></button>
+                    onclick="doUndo()"><span class="ar arrot">↪</span></button>
             <button class="flagundo" id="redoBtn" aria-label="やり直す" title="やり直す"
-                    onclick="doRedo()"><span class="ar">↪</span></button>
+                    onclick="doRedo()"><span class="ar arrot">↩</span></button>
           </span>
           <span id="toolFlagCount" class="flagcount"></span>
         </div>
@@ -1063,7 +1069,7 @@
         <div class="cfgsec">
           <h3>配置編集の戻す・進む</h3>
           <label class="chk"><input type="checkbox" id="undoLabelChk" onchange="toggleUndoLabel()"> ボタンに文字を付ける</label>
-          <div class="hint">盤の上の帯にある「↩」「↪」を「↩ 戻す」「進む ↪」にします。画面が狭いと、選んでいるマス数が隠れます。押したときの動きは変わりません。</div>
+          <div class="hint">盤の上の帯にある「<span class="arrot">↪</span>」「<span class="arrot">↩</span>」を「<span class="arrot">↪</span> 戻す」「進む <span class="arrot">↩</span>」にします。画面が狭いと、選んでいるマス数が隠れます。押したときの動きは変わりません。</div>
         </div>
 
         <div class="cfgsec">
@@ -1962,7 +1968,7 @@ function toggleUndoLabel(){
 function fillUndoBtn(btn, arrow, label, arrowFirst){
   btn.textContent="";
   const a=document.createElement("span");
-  a.className="ar";
+  a.className="ar arrot";
   a.textContent=arrow;
   if(arrowFirst){
     btn.appendChild(a);
@@ -1974,10 +1980,12 @@ function fillUndoBtn(btn, arrow, label, arrowFirst){
 }
 function applyUndoLabel(on){
   const u=document.getElementById("undoBtn"), r=document.getElementById("redoBtn");
-  // 戻すは「↩ 戻す」、進むは「進む ↪」。矢印を進む向きの外側に置くと、
-  // 2つ並べたときに矢印が左右の端に来て、どちらへ動くかが形で分かる
-  if(u) fillUndoBtn(u, "↩", on ? "戻す" : "", true);
-  if(r) fillUndoBtn(r, "↪", on ? "進む" : "", false);
+  // 戻すは「↪ 戻す」、進むは「進む ↩」。記号は .flagundo .ar の
+  // rotate(180deg) で 180 度回して表示するので、左へ曲がる形になるのは ↪ の方。
+  // 矢印を進む向きの外側に置くと、2つ並べたときに矢印が左右の端に来て、
+  // どちらへ動くかが形で分かる
+  if(u) fillUndoBtn(u, "↪", on ? "戻す" : "", true);
+  if(r) fillUndoBtn(r, "↩", on ? "進む" : "", false);
   // ボタンが太くなって選択数が入らなくなることがある。測り直して決める
   if(typeof updateFlag==="function") updateFlag();
 }

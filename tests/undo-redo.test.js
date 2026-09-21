@@ -430,7 +430,7 @@ test("矢印は span.ar に入れて矢印だけ大きくする", () => {
   // textContent へ "↩ 戻す" と入れると矢印と「戻す」が同じ大きさになる。
   // 矢印だけ 20px にするため、矢印を別の要素にする
   const fn = functionSource("fillUndoBtn");
-  assert.match(fn, /className="ar"/);
+  assert.match(fn, /className="ar arrot"/);
   assert.match(fn, /createElement\("span"\)/);
   // 文字を足すときも矢印は span のまま（innerHTML でまとめて入れない）
   assert.match(fn, /createTextNode/);
@@ -441,8 +441,23 @@ test("矢印は span.ar に入れて矢印だけ大きくする", () => {
   // 20px の行送りでボタンの高さが増えないようにする
   assert.match(css[0], /line-height:1/);
   // マークアップ側の初期値にも span.ar を入れておく
-  assert.match(source, /id="undoBtn"[\s\S]*?<span class="ar">↩<\/span>/);
-  assert.match(source, /id="redoBtn"[\s\S]*?<span class="ar">↪<\/span>/);
+  assert.match(source, /id="undoBtn"[\s\S]*?<span class="ar arrot">↪<\/span>/);
+  assert.match(source, /id="redoBtn"[\s\S]*?<span class="ar arrot">↩<\/span>/);
+});
+
+test("矢印は 180 度回して曲がる向きを上側にする", () => {
+  // ↩ ↪ のままだと曲がる向きが下側で、描画ソフトの戻す・進むと形が違う。
+  // 回すのは .arrot の役目。大きさを決める .flagundo .ar とは分けてある
+  const css = source.match(/\.arrot\{[^}]*\}/);
+  assert.notEqual(css, null, ".arrot の指定がない");
+  assert.match(css[0], /transform:rotate\(180deg\)/);
+  // transform は inline 要素に効かない。付け忘れると回らない
+  assert.match(css[0], /display:inline-block/);
+  // 設定タブの説明文の記号も同じ向きで出す（帯と形が違うと迷う）
+  const hint = source.match(/id="undoLabelChk"[\s\S]{0,400}?<\/div>/);
+  assert.notEqual(hint, null, "ボタンに文字を付ける設定の説明文がない");
+  assert.match(hint[0], /<span class="arrot">↪<\/span>/);
+  assert.match(hint[0], /<span class="arrot">↩<\/span>/);
 });
 
 test("PC 幅では選択数に「選択中」まで出す", () => {

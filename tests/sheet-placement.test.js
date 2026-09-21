@@ -287,8 +287,9 @@ test("ボタンと帯と見出しの上では矩形を始めない", () => {
 
 test("帯には戻すと進むのボタンを置く", () => {
   // 既定は記号だけ。文字を付けるかは設定タブで切り替える（設計書 §7-4）
-  assert.match(source, /id="undoBtn"[\s\S]{0,200}>↩</);
-  assert.match(source, /id="redoBtn"[\s\S]{0,200}>↪</);
+  // 記号は .arrot で 180 度回して出すので、左へ曲がる形になるのは ↪ の方
+  assert.match(source, /id="undoBtn"[\s\S]{0,200}>↪</);
+  assert.match(source, /id="redoBtn"[\s\S]{0,200}>↩</);
 });
 test("矩形の側判定は退避の余白（ドックとフロア）も退避側とみなす", () => {
   const start = functionSource("startRubber");
