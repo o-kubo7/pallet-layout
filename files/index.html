@@ -301,6 +301,18 @@
   .flagcount{background:rgba(255,255,255,.22);border-radius:6px;padding:3px 9px;
              font-size:14px;font-weight:800;white-space:nowrap}
   .flagcount:empty{display:none}
+  /* ボタンに文字を付けると、戻す・進むが 69.9px ずつに太る。375px 幅では帯の
+     内側が 162.3px しかなく、ボタン2個＋隙間で 159.8px を使うため、選択数に
+     残るのは 2.5px（実測）。ところが .flagcount の左右 padding 9px＋9px は
+     flex では縮まない床なので（min-width:0 は padding を削らない）、15.5px の
+     はみ出しが justify-content:center で左右へ 7.75px ずつ配られ、帯の
+     左右の余白 12px が 4.2px まで食い潰される。しかも中身の幅は 0px になり、
+     数字が1文字も出ない空の白い角丸だけが残る。
+     出せないものは消す。gap も畳まれ、ボタンが本来の 12px の位置へ戻る。
+     実機（Pixel 9a・412px）はこの幅に入らないので、見え方は変わらない。 */
+  @media (max-width:399px){
+    .toolflag.lbl .flagcount{display:none}
+  }
   .toolflag{background:#334155}
   .toolflag.hasSel{background:#2563eb}
   /* 運んでいる間は、選んだマスを薄くして「いま持ち上げている」ことを示す。
@@ -1939,6 +1951,10 @@ function applyUndoLabel(on){
   const u=document.getElementById("undoBtn"), r=document.getElementById("redoBtn");
   if(u) u.textContent = on ? "↩ 戻す" : "↩";
   if(r) r.textContent = on ? "進む ↪" : "↪";
+  // 文字を付けた状態を CSS から見えるようにする。狭い幅で選択数を隠す
+  // @media (max-width:399px) .toolflag.lbl .flagcount の目印。
+  const f=document.getElementById("toolFlag");
+  if(f) f.classList.toggle("lbl", on);
 }
 /* 同じ品名のロットを1つの欄にまとめるか。既定は on。
    「そのほかの表示」の他の項目（矢印の先・角の丸み・端数の「半」）と同じ流儀で、

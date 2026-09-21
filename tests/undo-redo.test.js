@@ -393,3 +393,19 @@ test("記号のときと文字のときの両方の表記がある", () => {
   assert.match(fn, /"↩ 戻す"/);
   assert.match(fn, /"進む ↪"/);
 });
+
+test("文字を付けた状態を帯のクラスで CSS に伝える", () => {
+  const fn = functionSource("applyUndoLabel");
+  // 「文字ON かつ狭い幅」は CSS 側の条件なので、状態を目印として渡す必要がある。
+  assert.match(fn, /classList\.toggle\("lbl", on\)/);
+  assert.match(fn, /getElementById\("toolFlag"\)/);
+});
+
+test("狭い幅で文字を付けたときは選択数を隠す", () => {
+  // 375px 幅では帯の内側が 162.3px しかなく、文字を付けたボタン2個＋隙間で
+  // 159.8px を使うため選択数に残るのは 2.5px（実測）。.flagcount の左右 padding
+  // 9px＋9px は flex で縮まない床なので、はみ出しが帯の左右の余白 12px を
+  // 4.2px まで食い潰し、しかも中身の幅は 0px で数字が1文字も出ない。
+  // 実機（Pixel 9a・412px）はこの幅に入らないので見え方は変わらない。
+  assert.match(source, /@media \(max-width:399px\)\{\s*\.toolflag\.lbl \.flagcount\{display:none\}/);
+});
