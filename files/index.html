@@ -3157,6 +3157,17 @@ function moveCells(next, lotId, counts, destSpaceName, destColIndex){
   return total;
 }
 
+/* clone() は JSON 経由なので blockedRows(Set) が消える。
+   落としたまま空き判定に使うと、配置不可の行を無視して緩くなる。
+   複製したらその場で貼り直す。 */
+function cloneSpaces(sp){
+  const next=clone(sp);
+  sp.forEach((space,spaceIndex)=>space.cols.forEach((col,colIndex)=>{
+    next[spaceIndex].cols[colIndex].blockedRows=col.blockedRows instanceof Set ? new Set(col.blockedRows) : new Set();
+  }));
+  return next;
+}
+
 // 移動の可否を判定する。sp は書き換えない。
 // ok:true のとき next に移動適用済みのコピーが入るので、呼び出し側はそれを lastSp に入れる。
 function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
@@ -3170,10 +3181,7 @@ function validateMove(sp, lotId, counts, destSpaceName, destColIndex){
   // 二重に数えることはない。
   if(n > columnFreeCount(dc,dc.blockedRows)) return {ok:false, reason:"移動先の空きが足りません"};
   const before=blockCountOf(sp, lotId);
-  const next=clone(sp);
-  sp.forEach((space,spaceIndex)=>space.cols.forEach((col,colIndex)=>{
-    next[spaceIndex].cols[colIndex].blockedRows=col.blockedRows instanceof Set ? new Set(col.blockedRows) : new Set();
-  }));
+  const next=cloneSpaces(sp);
   moveCells(next, lotId, counts, destSpaceName, destColIndex);
   const after=blockCountOf(next, lotId);
   // before が 0 になるのは、そのロットが倉庫に1マスも無いとき（退避スペースに
