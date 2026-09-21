@@ -6134,6 +6134,41 @@ function drawLeaders(anchors, slotIds){
 
 /* ---------- utils ---------- */
 function clone(o){return JSON.parse(JSON.stringify(o));}
+
+/* ---------- 配置編集の履歴（戻す・進む） ----------
+   steps[cursor] が「いまの状態」。cursor が -1 なら履歴なし。
+   ステップは2種類ある。
+     kind:"move"   … 荷物を動かした。sp は新しい配列
+     kind:"select" … マスを選んだ・外した。sp は前のステップと同じ参照
+   選択だけが変わったときに sp をコピーしないので、選択を何十回繰り返しても
+   メモリは増えない。設計書: docs/superpowers/specs/2026-09-21-undo-redo-design.md §4
+   DOM もグローバル変数も見ない。呼ぶ側（pushMoveStep など）が面倒を見る。 */
+const HISTORY_LIMIT = 50;
+function historyMake(){ return {steps:[], cursor:-1}; }
+function historyPush(hist, step){
+  // やり直せる分（cursor より後ろ）を捨ててから足す。
+  // 戻ってから別の操作をしたら、元の枝には戻れない。
+  hist.steps.length = hist.cursor + 1;
+  hist.steps.push(step);
+  // 上限を超えたぶんを先頭から落とし、cursor も同じ数だけ詰める
+  const over = hist.steps.length - HISTORY_LIMIT;
+  if(over > 0){ hist.steps.splice(0, over); }
+  hist.cursor = hist.steps.length - 1;
+  return hist;
+}
+function historyCanUndo(hist){ return !!hist && hist.cursor > 0; }
+function historyCanRedo(hist){ return !!hist && hist.cursor >= 0 && hist.cursor < hist.steps.length - 1; }
+function historyUndo(hist){
+  if(!historyCanUndo(hist)) return null;
+  hist.cursor--;
+  return hist.steps[hist.cursor];
+}
+function historyRedo(hist){
+  if(!historyCanRedo(hist)) return null;
+  hist.cursor++;
+  return hist.steps[hist.cursor];
+}
+
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 
 /* ---------- init ---------- */

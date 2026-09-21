@@ -1,0 +1,154 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const test = require("node:test");
+
+const source = fs.readFileSync("files/index.html", "utf8");
+
+// 関数をソースから切り出す。既存テスト（tests/sheet-placement.test.js:339）と同じ実装。
+function functionSource(name) {
+  const start = source.indexOf(`function ${name}(`);
+  assert.notEqual(start, -1, `${name} must exist`);
+  const brace = source.indexOf("{", start);
+  let depth = 0, quote = null, escaped = false;
+  for (let i = brace; i < source.length; i++) {
+    const char = source[i];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === "`") { quote = char; continue; }
+    if (char === "{") depth++;
+    if (char === "}" && --depth === 0) return source.slice(start, i + 1);
+  }
+  throw new Error(`${name} has no closing brace`);
+}
+
+// 履歴の5関数をまとめて取り出して動かす。上限は定数なのでソースから読む。
+function loadHistory() {
+  const limit = source.match(/const HISTORY_LIMIT\s*=\s*(\d+)/);
+  assert.notEqual(limit, null, "HISTORY_LIMIT must exist");
+  const src = `const HISTORY_LIMIT=${limit[1]};`
+    + functionSource("historyMake")
+    + functionSource("historyPush")
+    + functionSource("historyUndo")
+    + functionSource("historyRedo")
+    + functionSource("historyCanUndo")
+    + functionSource("historyCanRedo")
+    + "; return {HISTORY_LIMIT, historyMake, historyPush, historyUndo, historyRedo,"
+    + " historyCanUndo, historyCanRedo};";
+  return new Function(src)();
+}
+
+const step = (kind, tag) => ({kind, tag, sel:{lotId:null, cells:[]}, sp:[tag]});
+
+test("新しい履歴は空でカーソルが -1", () => {
+  const H = loadHistory();
+  const h = H.historyMake();
+  assert.deepEqual(h.steps, []);
+  assert.equal(h.cursor, -1);
+});
+
+test("push するとカーソルが末尾に進む", () => {
+  const H = loadHistory();
+  const h = H.historyMake();
+  H.historyPush(h, step("move", "a"));
+  assert.equal(h.steps.length, 1);
+  assert.equal(h.cursor, 0);
+  H.historyPush(h, step("move", "b"));
+  assert.equal(h.steps.length, 2);
+  assert.equal(h.cursor, 1);
+});
+
+test("undo はひとつ前のステップを返す", () => {
+  const H = loadHistory();
+  const h = H.historyMake();
+  H.historyPush(h, step("move", "a"));
+  H.historyPush(h, step("move", "b"));
+  const got = H.historyUndo(h);
+  assert.equal(got.tag, "a");
+  assert.equal(h.cursor, 0);
+});
+
+test("redo は戻したステップに進み直す", () => {
+  const H = loadHistory();
+  const h = H.historyMake();
+  H.historyPush(h, step("move", "a"));
+  H.historyPush(h, step("move", "b"));
+  H.historyUndo(h);
+  const got = H.historyRedo(h);
+  assert.equal(got.tag, "b");
+  assert.equal(h.cursor, 1);
+});
+
+test("先頭で undo しても何も返さずカーソルも動かない", () => {
+  const H = loadHistory();
+  const h = H.historyMake();
+  H.historyPush(h, step("move", "a"));
+  assert.equal(H.historyUndo(h), null);
+  assert.equal(h.cursor, 0);
+});
+
+test("末尾で redo しても何も返さずカーソルも動かない", () => {
+  const H = loadHistory();
+  const h = H.historyMake();
+  H.historyPush(h, step("move", "a"));
+  assert.equal(H.historyRedo(h), null);
+  assert.equal(h.cursor, 0);
+});
+
+test("空の履歴で undo と redo を呼んでも壊れない", () => {
+  const H = loadHistory();
+  const h = H.historyMake();
+  assert.equal(H.historyUndo(h), null);
+  assert.equal(H.historyRedo(h), null);
+  assert.equal(h.cursor, -1);
+  assert.equal(h.steps.length, 0);
+});
+
+test("undo した後に push すると、やり直せる分が捨てられる", () => {
+  const H = loadHistory();
+  const h = H.historyMake();
+  H.historyPush(h, step("move", "a"));
+  H.historyPush(h, step("move", "b"));
+  H.historyPush(h, step("move", "c"));
+  H.historyUndo(h);                       // cursor=1（b）
+  H.historyPush(h, step("move", "d"));
+  assert.deepEqual(h.steps.map(s => s.tag), ["a", "b", "d"]);
+  assert.equal(h.cursor, 2);
+  assert.equal(H.historyCanRedo(h), false);
+});
+
+test("上限を超えると古いほうから落ち、カーソルも詰まる", () => {
+  const H = loadHistory();
+  const h = H.historyMake();
+  for (let i = 0; i < H.HISTORY_LIMIT + 5; i++) H.historyPush(h, step("move", "s" + i));
+  assert.equal(h.steps.length, H.HISTORY_LIMIT);
+  assert.equal(h.cursor, H.HISTORY_LIMIT - 1);
+  assert.equal(h.steps[0].tag, "s5");
+  assert.equal(h.steps[h.steps.length - 1].tag, "s" + (H.HISTORY_LIMIT + 4));
+});
+
+test("上限で落ちた後も undo が正しいステップを返す", () => {
+  const H = loadHistory();
+  const h = H.historyMake();
+  for (let i = 0; i < H.HISTORY_LIMIT + 1; i++) H.historyPush(h, step("move", "s" + i));
+  // s0 が落ちて s1..sN が残る。末尾は sN なので、ひとつ戻ると s(N-1)
+  const got = H.historyUndo(h);
+  assert.equal(got.tag, "s" + (H.HISTORY_LIMIT - 1));
+});
+
+test("canUndo と canRedo が境界で正しい", () => {
+  const H = loadHistory();
+  const h = H.historyMake();
+  assert.equal(H.historyCanUndo(h), false);
+  assert.equal(H.historyCanRedo(h), false);
+  H.historyPush(h, step("move", "a"));
+  assert.equal(H.historyCanUndo(h), false);   // 1件だけなら戻れない
+  H.historyPush(h, step("move", "b"));
+  assert.equal(H.historyCanUndo(h), true);
+  assert.equal(H.historyCanRedo(h), false);
+  H.historyUndo(h);
+  assert.equal(H.historyCanRedo(h), true);
+});
