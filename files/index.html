@@ -18,12 +18,12 @@
        -webkit-text-size-adjust:100%}
   header{background:#111827;color:#fff;padding:12px 16px}
   header h1{margin:0;font-size:16px}
-  header p{margin:3px 0 0;font-size:11px;color:#cbd5e1}
+  header p{margin:3px 0 0;font-size:14px;color:#cbd5e1}
   .wrap{max-width:1240px;margin:0 auto;padding:14px 16px calc(96px + var(--safe));min-width:0}
   #tab-input{max-width:1000px;margin:0 auto}
   .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px;min-width:0}
   .card h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .badge{font-size:11px;background:#eef2ff;color:#3730a3;border-radius:99px;padding:2px 8px}
+  .badge{font-size:14px;background:#eef2ff;color:#3730a3;border-radius:99px;padding:2px 8px}
 
   /* ---- タブ ---- */
   .tabs{display:flex;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
@@ -34,13 +34,13 @@
   .tab:not(:last-child)::before{content:"";position:absolute;top:12px;right:0;bottom:12px;width:1px;background:var(--line)}
   .tab:hover{background:#eff6ff;color:#1d4ed8}
   .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
-  .tab .dot{display:inline-block;margin-left:5px;font-size:11px;background:#eef2ff;color:#3730a3;
+  .tab .dot{display:inline-block;margin-left:5px;font-size:14px;background:#eef2ff;color:#3730a3;
             border-radius:99px;padding:1px 7px;font-weight:700}
 
   /* ---- テーブル（PC） ---- */
   table{border-collapse:collapse;width:100%}
   th,td{border:1px solid var(--line);padding:6px 8px;text-align:center}
-  th{background:#f3f4f6;font-weight:600;font-size:12px}
+  th{background:#f3f4f6;font-weight:600;font-size:14px}
   /* セルの罫線と入力欄の枠が二重線に見えるので、入力欄の枠は透明にする。
      枠そのものは残す（.err の border-color と :focus をここに乗せるため）。 */
   td input,td select{width:100%;border:1px solid transparent;border-radius:6px;padding:7px 5px;
@@ -94,9 +94,9 @@
   .ac-list[hidden]{display:none}
   .ac-item{padding:10px 12px;border-radius:6px;font-size:14px;cursor:pointer;min-height:44px;
            display:flex;align-items:center;gap:8px}
-  .ac-item span{margin-left:auto;font-size:11px;color:var(--muted);flex:none}
+  .ac-item span{margin-left:auto;font-size:14px;color:var(--muted);flex:none}
   .ac-item.on{background:#eef2ff}
-  .zone-title{font-weight:700;margin:6px 0;padding:4px 10px;border-radius:6px;display:inline-block;font-size:13px}
+  .zone-title{font-weight:700;margin:6px 0;padding:4px 10px;border-radius:6px;display:inline-block;font-size:15px}
   .zone-near{background:#e8f5e9;color:#1b5e20}
   .zone-far{background:#fff3e0;color:#8a5300}
   .scroller{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;
@@ -113,7 +113,7 @@
   .fl-wall span{position:absolute;right:6px;top:-1px;font-size:9px;color:#fff;letter-spacing:.3em}
   .spaces{display:grid;grid-auto-flow:row;gap:16px 26px;
           align-items:start;justify-items:start;width:max-content;padding:2px}
-  .space .name{font-size:12px;font-weight:700;margin-bottom:4px;color:var(--muted)}
+  .space .name{font-size:15px;font-weight:700;margin-bottom:4px;color:var(--muted)}
   .grid{display:flex;gap:5px;align-items:flex-end}
   .grid.top{align-items:flex-start}
   .grid-h{display:flex;flex-direction:column;gap:5px}
@@ -164,7 +164,7 @@
   .colwrap.drop-ok .col,.colwrap.drop-ok .hrow{outline:3px solid #16a34a}
   .colwrap.drop-ng .col,.colwrap.drop-ng .hrow{outline:3px solid #dc2626}
   .dragghost{position:fixed;z-index:70;pointer-events:none;background:rgba(17,24,39,.9);color:#fff;
-             border-radius:6px;padding:4px 8px;font-size:12px;font-weight:700;
+             border-radius:6px;padding:4px 8px;font-size:14px;font-weight:700;
              transform:translate(-50%,-160%);white-space:nowrap}
   .cell.segline{border-top:2px dashed #374151}
   .cell.segline-h{border-left:2px dashed #374151}
@@ -180,14 +180,14 @@
                         margin-bottom:8px;
                         padding:8px 10px;border:1px solid #f59e0b;border-radius:8px;background:#fffbeb}
   .blocked-edit-actions[hidden]{display:none}
-  .blocked-edit-help{font-size:12px;color:#78350f;flex:1 1 220px}
+  .blocked-edit-help{font-size:14px;color:#78350f;flex:1 1 220px}
   .editcfg{border:1px solid var(--line);border-radius:10px;padding:10px 12px;
            margin-bottom:10px;background:#fcfcfd}
   /* .editcfg に display を書かない。書くと hidden より強くなって閉じられなくなる */
   .editcfg[hidden]{display:none}
   .editcfg .sizectl:last-child{margin-bottom:0}
   .sizectl{display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
-  .sizectl .lbl{font-size:12px;color:var(--muted)}
+  .sizectl .lbl{font-size:14px;color:var(--muted)}
   /* ラベルとボタンの組。行が折り返しても組の途中で切れないようにする */
   .sizectl .grp{display:inline-flex;gap:6px;align-items:center;margin-left:12px}
   /* .dspgrid の入力欄の幅指定はグリッドの中だけなので、ここにも要る */
@@ -218,7 +218,7 @@
   /* 設定タブの文字。現場で読む画面なので、説明文・見出し・表の頭が 11〜13px では小さい。
      他のタブの .hint / .badge / th は据え置き（紙に寄せた画面は行の高さが変わるため）。 */
   #tab-settings .hint{font-size:14px}
-  #tab-settings .badge{font-size:12px}
+  #tab-settings .badge{font-size:14px}
   #tab-settings th{font-size:14px}
   #tab-settings .summary{font-size:14px}
   #tab-settings .cfg textarea{font-size:14px}
@@ -250,11 +250,11 @@
   .zone-stash{background:#eef2ff;color:#3730a3}
   /* 倉庫のフロア図とは別立て。実在しない場所だと一目で分かるようにする */
   .stashfloor{margin-top:14px;border-style:dashed;border-color:#a5b4fc;background:#fbfbff}
-  .stashlead{margin:6px 0 10px;font-size:11px;color:var(--muted)}
+  .stashlead{margin:6px 0 10px;font-size:14px;color:var(--muted)}
   /* 倉庫に実在しない置き場なので、枠を破線にして実際のエリアと区別する */
   #zone-stash .col,#zone-stash .hrow{border-style:dashed;background:#f8fafc}
   #zone-stash .space .name{color:#4f46e5}
-  .stashbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted);
+  .stashbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px;color:var(--muted);
             margin:6px 0 0}
   .stashbar b{color:#3730a3}
   /* ===== [試作] なぞって選ぶ ===== */
@@ -274,16 +274,16 @@
      この帯とは無関係にふつうに流れる。 */
   /* 取り消しは帯の中に入れる。盤をたどっている最中でも指の近くに残る */
   .toolflag{position:fixed;z-index:65;display:none;padding:9px 12px;border-radius:8px;
-            font-size:13px;font-weight:700;color:#fff;text-align:center;
+            font-size:14px;font-weight:700;color:#fff;text-align:center;
             left:var(--flagleft,16px);width:var(--flagwidth,calc(100% - 32px));
             /* タブ列の直下。PC 幅は @media (min-width:700px) で横幅だけを調整する */
             top:var(--flagtopm,110px);
             gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
   .flagundo{border:0;border-radius:6px;padding:7px 12px;background:#fff;color:#1f2937;
-            font-weight:700;font-size:12px;cursor:pointer;min-height:44px}
+            font-weight:700;font-size:14px;cursor:pointer;min-height:44px}
   /* 選択数は説明文と区別が付くように白抜きにする。案内を切っても残る要素 */
   .flagcount{background:rgba(255,255,255,.22);border-radius:6px;padding:3px 9px;
-             font-size:13px;font-weight:800;white-space:nowrap}
+             font-size:14px;font-weight:800;white-space:nowrap}
   .flagcount:empty{display:none}
   .toolflag{background:#334155}
   .toolflag.hasSel{background:#2563eb}
@@ -358,17 +358,17 @@
   .stashdock.big.pos-tr,.stashdock.big.pos-tl{width:72vw;height:56vh;max-width:520px;max-height:560px;--cell:20px}
   .sb-head{display:flex;align-items:center;gap:4px;flex:none}
   /* 「退避スペース 12P」は狭い枠に入りきらないことがあるので、折り返しを許す */
-  .sb-title{font-weight:700;font-size:13px;line-height:1.3;color:#312e81;flex:1;min-width:0}
+  .sb-title{font-weight:700;font-size:14px;line-height:1.3;color:#312e81;flex:1;min-width:0}
   .sb-exp{border:1px solid #c7d2fe;background:#fff;color:#312e81;border-radius:6px;
-          min-width:30px;min-height:28px;font-size:12px;font-weight:700;cursor:pointer;flex:none}
+          min-width:30px;min-height:28px;font-size:14px;font-weight:700;cursor:pointer;flex:none}
   .sb-body{flex:1;min-height:0;overflow:auto;background:#fff;border-radius:6px;padding:4px}
   .stashdock.pos-bottom .sb-body{max-height:96px}
   .sb-body .spaces{gap:6px}
   .sb-body .space .name{display:none}
   .sb-body .colcap{font-size:9px;margin-top:1px}
-  .sb-empty{color:#6b7280;font-size:13px;line-height:1.4;padding:6px 2px;text-align:center}
+  .sb-empty{color:#6b7280;font-size:14px;line-height:1.4;padding:6px 2px;text-align:center}
   .sb-back{display:none;flex:none;border:0;border-radius:6px;background:#2563eb;color:#fff;
-           font-weight:700;font-size:12px;min-height:34px;cursor:pointer}
+           font-weight:700;font-size:14px;min-height:34px;cursor:pointer}
   .stashdock.acting .sb-back{display:block}
   .stashdock.acting{background:#fef3c7;border-color:#f59e0b}
   /* 掴んでいる間は中身をそのまま見せ、枠だけで「ここに落とせる」と知らせる。
@@ -380,22 +380,22 @@
   /* 下に置いたときだけ、バーのぶんの余白を作る */
   #mapBody.dock-bottom{padding-bottom:130px}
 
-  .msg{padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:10px}
+  .msg{padding:9px 12px;border-radius:8px;font-size:14px;margin-bottom:10px}
   .msg.ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
   .msg.warn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
   /* 紙に出ていない書き足しの案内。緑（ok）だと「問題なし」に見えるので赤にする */
   .msg.alert{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
-  .summary{font-size:12px;color:var(--muted);margin-top:8px}
+  .summary{font-size:14px;color:var(--muted);margin-top:8px}
   .cfg textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:6px;padding:8px;
-                font-family:ui-monospace,monospace;font-size:13px}
-  .hint{font-size:12px;color:var(--muted)}
-  .note{font-size:11px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+                font-family:ui-monospace,monospace;font-size:14px}
+  .hint{font-size:14px;color:var(--muted)}
+  .note{font-size:14px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
   .note b{color:#374151}
-  .regcount{font-size:12px;color:var(--muted);margin-bottom:4px}
+  .regcount{font-size:14px;color:var(--muted);margin-bottom:4px}
   .regcount.warn{color:#b45309}
-  .savestat{font-size:11px;color:#9ca3af;margin:0 0 12px}
+  .savestat{font-size:14px;color:#9ca3af;margin:0 0 12px}
   .savestat.warn{color:#b45309}
-  .empty{padding:26px 10px;text-align:center;color:var(--muted);font-size:13px}
+  .empty{padding:26px 10px;text-align:center;color:var(--muted);font-size:14px}
 
   /* ---- 伝票単位の入力 ---- */
   .input-head{padding-bottom:10px}
@@ -428,7 +428,7 @@
   .slip[data-status="provisional"] .slip-head{background:#ffedd5;border-bottom-color:#f97316;color:#9a3412}
   .slip-head .item-count{margin-left:auto;font-size:16px;color:var(--muted)}
   .slip[data-status="provisional"] .slip-head .item-count{color:#9a3412}
-  .slip-head .unreceived{font-size:11px;background:#f97316;color:#fff;border-radius:99px;padding:2px 8px;font-weight:700}
+  .slip-head .unreceived{font-size:14px;background:#f97316;color:#fff;border-radius:99px;padding:2px 8px;font-weight:700}
   .slip-table{table-layout:fixed;min-width:0}
   /* テーブル外周の枠線は .slip の枠と二重になるので消す。内部の仕切り線は残す */
   .slip-table thead th{border-top:0}
@@ -461,7 +461,7 @@
      top は .tabs の実測高を updateErrBanner() が入れる（.tabs 自身が sticky top:0 z-index:30 で、
      0 にすると裏に潜り込む）。.card にも .wrap にも overflow は無いので sticky は素直に効く */
   .inputerr{position:sticky;z-index:20;margin:0 0 10px;padding:9px 12px;border-radius:8px;
-            font-size:13px;font-weight:600;
+            font-size:14px;font-weight:600;
             background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
 
   @media (max-width:600px){
@@ -683,7 +683,7 @@
      に勝つ。これを書かないと bar.hidden=true が効かない
      （.ac-list[hidden] などと同じ回避） */
   #sheetEditBar[hidden]{display:none}
-  #sheetEditBar .lbl{flex:0 0 auto;font-size:12px;color:#333;white-space:nowrap}
+  #sheetEditBar .lbl{flex:0 0 auto;font-size:14px;color:#333;white-space:nowrap}
   /* order:1 で見出しとボタン（既定の 0）より後ろへ回し、flex:1 1 100% で
      2段目を丸ごと使う。1段目は見出し＋確定＋取り消し */
   #sheetEditBar input,#sheetEditBar textarea{flex:1 1 100%;order:1;min-width:0;font-size:16px;
@@ -725,9 +725,9 @@
     body{background:#fff}
   }
   #updateBar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:#111827;color:#fff;
-             padding:11px 16px calc(11px + var(--safe));font-size:13px;display:none;
+             padding:11px 16px calc(11px + var(--safe));font-size:14px;display:none;
              align-items:center;gap:12px;justify-content:center}
-  #updateBar button{border:0;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:700;
+  #updateBar button{border:0;border-radius:6px;padding:8px 14px;font-size:14px;font-weight:700;
                     background:#fbbf24;color:#111827;cursor:pointer;min-height:40px}
 </style>
 </head>
@@ -852,12 +852,12 @@
         <div id="legend" class="legend"></div>
 
         <div class="floor">
-          <div class="zone-title zone-far">倉庫外（収納庫から遠い）</div>
+          <div class="zone-title zone-far">倉庫外</div>
           <div class="scroller"><div class="spaces" id="zone-far"></div></div>
 
           <div class="fl-wall"><span>壁</span></div>
 
-          <div class="zone-title zone-near">倉庫内（収納庫に近い）</div>
+          <div class="zone-title zone-near">倉庫内</div>
           <div class="scroller"><div class="spaces" id="zone-near"></div></div>
         </div>
 
