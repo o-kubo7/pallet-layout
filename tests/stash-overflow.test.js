@@ -133,11 +133,12 @@ test("まとめ欄は値が空でも4列の行数をそろえる", () => {
   assert.doesNotMatch(lots[1], /L3/);
 });
 
-test("退避の実効容量は列数×列高から数える", () => {
+test("退避の実効容量はその日の入力総パレット数から数える", () => {
   const fn = functionSource("stashFreeRoom");
-  // 初期列は h:7 だが repackStash() が h:4 で積み直すので、実効は 14×4=56P
-  assert.match(fn, /STASH_MAX_COLS\s*\*\s*STASH_COL_H/);
+  // 列数では数えない。列は repackStash() が中身から決める
+  assert.match(fn, /stashCapacity\(/);
   assert.match(fn, /stashTotal\(/);
+  assert.doesNotMatch(fn, /STASH_MAX_COLS/);
 });
 
 test("退避にも入りきらない分は知らせる", () => {

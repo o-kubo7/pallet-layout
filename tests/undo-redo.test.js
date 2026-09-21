@@ -242,17 +242,22 @@ test("履歴の適用は redraw のあとに選択を戻す", () => {
   assert.ok(selAt < paintAt, "repaintSel() より後に選択を戻している");
 });
 
-test("移動は growStashCol より前の配置を控える", () => {
-  // growStashCol は lastSp を直接書き換える。後で控えると、
-  // 退避スペースの列が伸びた後の状態しか残らない。設計書 §5-1
-  const fn = functionSource("applyMove");
-  const before = fn.indexOf("snapshotSpaces(lastSp)");
-  // 実装コメントにも「growStashCol」という語が出てくるため、素の文字列だと
-  // コメント側にマッチして誤判定になる。実際の呼び出し（開き括弧つき）を探す。
-  const grow = fn.indexOf("growStashCol(spaceName");
-  assert.notEqual(before, -1, "移動前の配置を控えていない");
-  assert.notEqual(grow, -1);
-  assert.ok(before < grow, "控えるのが growStashCol より後になっている");
+test("移動は lastSp を差し替える前に配置を控える", () => {
+  // かつては growStashCol が lastSp の列を直接書き換えていたため、
+  // 検証より前に控えないと「列が伸びた後の状態」しか戻せなかった
+  // （このテストは元は growStashCol を基準にしていた）。
+  // 退避への移動を専用の経路（applyMoveToStash）に切り出し、退避スペース全体を
+  // 落とし先にしたことで growStashCol 自体が無くなり、lastSp が検証の前に
+  // 書き換わる状態そのものが消えた。ただし「控えるのは書き換えより前」という
+  // 不変条件は変わらず両方の経路に残るので、lastSp=v.next を基準に見る。
+  ["applyMove", "applyMoveToStash"].forEach(name => {
+    const fn = functionSource(name);
+    const before = fn.indexOf("snapshotSpaces(lastSp)");
+    const assign = fn.indexOf("lastSp=v.next");
+    assert.notEqual(before, -1, `${name}: 移動前の配置を控えていない`);
+    assert.notEqual(assign, -1, `${name}: lastSp を差し替えていない`);
+    assert.ok(before < assign, `${name}: 控えるのが lastSp の差し替えより後になっている`);
+  });
 });
 
 test("移動後のステップは選択を空で積む", () => {
@@ -265,11 +270,14 @@ test("移動後のステップは選択を空で積む", () => {
 });
 
 test("移動が確定してから履歴に積む", () => {
-  const fn = functionSource("applyMove");
-  const assign = fn.indexOf("lastSp=v.next");
-  const push = fn.indexOf("pushMoveStep(");
-  assert.ok(assign !== -1 && push !== -1);
-  assert.ok(assign < push, "配置が確定する前に積んでいる");
+  // 退避への移動も同じ順序を守る必要がある（applyMoveToStash も同じ後始末を持つ）
+  ["applyMove", "applyMoveToStash"].forEach(name => {
+    const fn = functionSource(name);
+    const assign = fn.indexOf("lastSp=v.next");
+    const push = fn.indexOf("pushMoveStep(");
+    assert.ok(assign !== -1 && push !== -1, `${name}: 差し替えか履歴の呼び出しが無い`);
+    assert.ok(assign < push, `${name}: 配置が確定する前に積んでいる`);
+  });
 });
 
 test("タップの選択を履歴に積む", () => {
