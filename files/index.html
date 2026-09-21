@@ -2771,7 +2771,11 @@ function run(goMap,deferSave=false){
   clearHistory();          // 配置を作り直したので、前の履歴は使えない
   // 倉庫へ置く分だけを place() に渡したので、退避分をここで積み戻し、
   // 合計表示のためにパレット数も元に戻す。
-  lots.forEach(l=>{ if(l.stashed){ putToStash(lastSp,l.id,l.stashed); l.pallets+=l.stashed; } });
+  // stashCapacity() は Σ lot.pallets を見るので、積み戻す前に全ロットのパレット数を戻す。
+  // 戻す前に putToStash() を呼ぶと、まだ戻していない退避分だけ上限が目減りし、
+  // 退避の中身が黙って消える
+  lots.forEach(l=>{ if(l.stashed) l.pallets+=l.stashed; });
+  lots.forEach(l=>{ if(l.stashed) putToStash(lastSp,l.id,l.stashed); });
   // あふれた分は退避スペースへ逃がす。倉庫に置き場所が無い荷物は
   // 紙に「未定」として載せる必要があり、退避がその受け皿になる。
   // 前回の退避を積み戻したあとに置くこと。先に置くと前回分の居場所を食う。
@@ -3752,7 +3756,6 @@ document.addEventListener("lostpointercapture",e=>{ if(drag && e.pointerId===dra
 
 /* ---------- [試作] 退避スペース ---------- */
 const STASH_COL_H=4;            // 退避の1列の高さ。隅の小さな盤に収まる高さにする
-const STASH_MAX_COLS=14;        // 際限なく伸ばさない
 const STASH_COL_MAX_H=21;       // 1列に積める上限（架空の場所なので倉庫より緩い）
 function lotKey(l){ return l.sourceKey || ((l.name||"")+"\u0000"+(l.lot||"")); }
 function stashSpaces(sp){ return (sp||[]).filter(s=>s.zone==="stash"); }
@@ -3783,16 +3786,14 @@ function stashCapacity(lots){
 function stashFreeRoom(sp){
   return Math.max(0, stashCapacity()-stashTotal(sp));
 }
-// 退避スペースへ直に積む。自動配置のあとから呼ぶ
+// 退避スペースへ直に積む。自動配置のあとと、退避への移動から呼ぶ
 function putToStash(sp,lotId,count){
   const s=stashSpaces(sp)[0]; if(!s) return;
-  let rem=count;
+  // 上限を超える分は積まない。呼び出し側が数えていても、ここでも止める
+  let rem=Math.min(count, stashFreeRoom(sp));
   while(rem>0){
     let col=s.cols.find(c=>used(c)<c.h);
-    if(!col){
-      if(s.cols.length>=STASH_MAX_COLS) return;
-      col={h:STASH_COL_H,aisle:false,fills:[]}; s.cols.push(col);
-    }
+    if(!col){ col={h:STASH_COL_H,aisle:false,fills:[]}; s.cols.push(col); }
     const put=Math.min(rem,col.h-used(col));
     col.fills.push({id:lotId,count:put}); rem-=put;
   }
@@ -3859,7 +3860,7 @@ function ensureStashRoom(sp){
     while(s.cols.length>1 && used(s.cols[s.cols.length-1])===0
                           && used(s.cols[s.cols.length-2])===0) s.cols.pop();
     const last=s.cols[s.cols.length-1];
-    if((!last || used(last)>0) && s.cols.length<STASH_MAX_COLS)
+    if((!last || used(last)>0) && stashFreeRoom(sp)>0)
       s.cols.push({h:STASH_COL_H,aisle:false,fills:[]});
   });
 }

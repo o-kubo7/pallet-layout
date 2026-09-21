@@ -102,3 +102,61 @@ test("上限を列数から数えない", () => {
   assert.match(fn, /stashCapacity\(/);
   assert.doesNotMatch(fn, /STASH_MAX_COLS/);
 });
+
+function emptyStash() {
+  return [{ name: "退避", zone: "stash", cols: [{ h: 4, aisle: false, fills: [] }] }];
+}
+
+const STASH_PIECES = ["clone", "used", "stashSpaces", "stashTotal", "stashCapacity",
+  "stashFreeRoom", "normalizeFills", "putToStash"];
+
+test("putToStash は列数の上限で止まらない", () => {
+  const spaces = emptyStash();
+  const { putToStash } = load(STASH_PIECES, { spaces, lots: [{ pallets: 100 }] });
+  putToStash(spaces, "L1", 100);
+  const total = spaces[0].cols.reduce((a, c) => a + c.fills.reduce((x, f) => x + f.count, 0), 0);
+  assert.equal(total, 100, "100P 入っていない");
+  assert.equal(spaces[0].cols.length, 25, "h:4 の列が 25 本にならない");
+});
+
+test("putToStash は上限を超えては積まない", () => {
+  const spaces = emptyStash();
+  const { putToStash } = load(STASH_PIECES, { spaces, lots: [{ pallets: 30 }] });
+  putToStash(spaces, "L1", 40);
+  const total = spaces[0].cols.reduce((a, c) => a + c.fills.reduce((x, f) => x + f.count, 0), 0);
+  assert.equal(total, 30, "上限を超えて積んでいる");
+});
+
+test("ensureStashRoom は容量が残っていれば末尾に空き列を残す", () => {
+  const spaces = stashWith(8);
+  const { ensureStashRoom } = load(
+    [...STASH_PIECES, "repackStash", "ensureStashRoom"],
+    { spaces, lots: [{ pallets: 20 }] }
+  );
+  ensureStashRoom(spaces);
+  const cols = spaces[0].cols;
+  assert.equal(cols[cols.length - 1].fills.length, 0, "末尾に空き列が無い");
+});
+
+test("ensureStashRoom は満杯なら空き列を足さない", () => {
+  const spaces = stashWith(8);
+  const { ensureStashRoom } = load(
+    [...STASH_PIECES, "repackStash", "ensureStashRoom"],
+    { spaces, lots: [{ pallets: 8 }] }
+  );
+  ensureStashRoom(spaces);
+  assert.equal(spaces[0].cols.length, 2, "満杯なのに空き列を足している");
+});
+
+// R1: putToStash() が読む stashCapacity() は Σ lot.pallets を見るので、
+// run() は「全ロットの pallets を戻す」→「退避へ積み戻す」の順でないといけない。
+// 順序が入れ替わると、まだ戻していない退避分だけ上限が目減りして、
+// 退避の中身が黙って消える（task-3-brief.md 追記 R1 参照）。
+test("run は退避を積み戻す前に l.pallets を戻す", () => {
+  const fn = functionSource("run");
+  const restore = fn.indexOf("l.pallets+=l.stashed");
+  const restack = fn.indexOf("putToStash(lastSp,l.id,l.stashed)");
+  assert.ok(restore !== -1, "l.pallets を戻す行が無い");
+  assert.ok(restack !== -1, "退避への積み戻しが無い");
+  assert.ok(restore < restack, "パレット数を戻すのが積み戻しより後になっている");
+});
