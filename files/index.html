@@ -6209,6 +6209,39 @@ function pushSelectStep(){
   historyPush(h, {kind:"select", sel:selSnapshot(), sp:sp});
 }
 
+/* 履歴のステップを画面に反映する。kind で分けない。
+   選択だけのステップは sp が前と同じ参照なので、結果として配置は変わらない。
+   分岐を作らないほうが間違えにくい。設計書 §6 */
+function applyHistoryStep(step){
+  if(!step) return;
+  // steps の中の配列をそのまま載せると、以後の move が履歴を書き換えてしまう
+  lastSp = clone(step.sp);
+  // 配置不可は履歴に持たない。いつも「いまの設定」から合成する
+  hydrateBlockedRows(lastSp, activeShift().blocked);
+  sel.lotId = step.sel.lotId;
+  sel.cells = new Set(step.sel.cells);
+  saveManual();
+  redraw();
+  repaintSel();
+  updateFlag();
+}
+/* 入力が変わっていたら履歴は使えない。捨ててから抜ける。
+   見るのは isActiveFresh()（files/index.html:3440）。
+   ステップに積んだ fp と lastFp を比べても意味がない。lastFp が変わるのは
+   run()（履歴を捨てる）と restoreActiveShift() だけで、伝票を書き換えても
+   lastFp は据え置かれ、inputFingerprint() の側だけが変わるため。
+   その状態で戻すと、saveManual() も redraw() も isActiveFresh() で弾かれて
+   何も保存されず、配置ごと消える。 */
+function historyUsable(){ return isActiveFresh(); }
+function doUndo(){
+  if(!historyUsable()){ clearHistory(); updateFlag(); return; }
+  applyHistoryStep(historyUndo(activeHistory()));
+}
+function doRedo(){
+  if(!historyUsable()){ clearHistory(); updateFlag(); return; }
+  applyHistoryStep(historyRedo(activeHistory()));
+}
+
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 
 /* ---------- init ---------- */

@@ -190,3 +190,41 @@ test("履歴を捨てる関数がある", () => {
   const fn = functionSource("clearHistory");
   assert.match(fn, /historyMake\(\)/);
 });
+
+test("履歴の適用は配置をコピーしてから載せる", () => {
+  const fn = functionSource("applyHistoryStep");
+  // steps に入っている配列をそのまま lastSp にすると、以後の操作が履歴を壊す
+  assert.match(fn, /lastSp\s*=\s*clone\(step\.sp\)/);
+});
+
+test("履歴の適用は配置不可をいまの値から合成する", () => {
+  // 配置不可は履歴に持たない。戻した配置にいまの blocked を混ぜる
+  const fn = functionSource("applyHistoryStep");
+  assert.match(fn, /hydrateBlockedRows\(lastSp,\s*activeShift\(\)\.blocked\)/);
+});
+
+test("履歴の適用は選択を Set に戻す", () => {
+  const fn = functionSource("applyHistoryStep");
+  assert.match(fn, /sel\.cells\s*=\s*new Set\(/);
+  assert.match(fn, /sel\.lotId\s*=/);
+});
+
+test("履歴の適用は手動調整の保存と描き直しまでやる", () => {
+  const fn = functionSource("applyHistoryStep");
+  assert.match(fn, /saveManual\(\)/);
+  assert.match(fn, /redraw\(\)/);
+});
+
+test("入力が変わっていたら履歴を捨てて何もしない", () => {
+  // 伝票を書き換えると isActiveFresh() が false になる。そのまま戻すと
+  // saveManual() も redraw() も弾かれ、配置ごと消える
+  assert.match(functionSource("historyUsable"), /isActiveFresh\(\)/);
+  const u = functionSource("doUndo");
+  assert.match(u, /historyUsable\(\)/);
+  assert.match(u, /clearHistory\(\)/);
+});
+
+test("戻すと進むは履歴の関数を呼ぶ", () => {
+  assert.match(functionSource("doUndo"), /historyUndo\(activeHistory\(\)\)/);
+  assert.match(functionSource("doRedo"), /historyRedo\(activeHistory\(\)\)/);
+});
