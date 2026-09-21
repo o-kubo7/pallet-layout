@@ -3814,6 +3814,10 @@ function validateStashMove(sp, lotId, counts){
   // 入りきらないときは1マスも動かさない。理由は呼び出し側が出す
   if(n>room) return {ok:false, reason:`退避スペースに入りきりません。\n選んだのは ${n}P、いま空いているのは ${room}P です。`};
   const next=cloneSpaces(sp);
+  // moveCells() と同じく、実際に減らせた分だけを積む側へ渡す。
+  // counts の値をそのまま信じると、選択が壊れていたときに
+  // 減った以上の枚数が退避に湧いて出る（無から複製される）。
+  let moved=0;
   Object.keys(counts).forEach(key=>{
     const p=key.split("|");
     if(p[0]===s.name) return;
@@ -3823,10 +3827,10 @@ function validateStashMove(sp, lotId, counts){
     col.fills.forEach(f=>{
       if(need<=0 || f.id!==lotId) return;
       const take=Math.min(need, f.count);
-      f.count-=take; need-=take;
+      f.count-=take; need-=take; moved+=take;
     });
   });
-  putToStash(next, lotId, n);
+  putToStash(next, lotId, moved);
   // 退避は blockCountOf() が数えないので、倉庫側の箇所数が増えることはない。
   // したがって分割の確認は原理的に出ない
   return {ok:true, needConfirm:false, next};

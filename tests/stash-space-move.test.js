@@ -224,6 +224,24 @@ test("空の退避に22枚を落とせる", () => {
   assert.equal(v.ok, true, v.reason);
   assert.equal(stashTotalOf(v.next), 22);
   assert.equal(stashTotalOf(spaces), 0, "元の配置を書き換えている");
+  // 減算は next 側の複製にしか起きないはず。元の棟A の fill が
+  // そのまま残っていることまで見ないと、cloneSpaces が fills を
+  // 複製せず参照を共有するように壊れても検知できない。
+  assert.equal(spaces[0].cols[0].fills[0].count, 25, "元の倉庫の fill を書き換えている");
+});
+
+test("列の実際の枚数を超える選択でも、減った分しか退避に積まない", () => {
+  // 棟A の列0 には L1 が5枚しか無いのに、counts では20枚選んだことにする
+  // （選択が壊れている状況を想定）。積む枚数は「選んだ数」ではなく
+  // 「実際に倉庫から引けた数」でなければならない。
+  const spaces = warehouseAndStash(5);
+  const { validateStashMove } = load(VALIDATE_PIECES, { spaces, lots: [{ pallets: 25 }] });
+  const v = validateStashMove(spaces, "L1", { "棟A|0": 20 });
+  assert.equal(v.ok, true, v.reason);
+  const warehouse = v.next.find(s => s.name === "棟A").cols[0];
+  const warehouseLeft = warehouse.fills.reduce((a, f) => a + f.count, 0);
+  assert.equal(warehouseLeft, 0, "倉庫から引けたのは5枚だけ");
+  assert.equal(stashTotalOf(v.next), 5, "倉庫から減った分より多く退避に積んでいる");
 });
 
 test("1列に積める枚数を超えても入る", () => {
