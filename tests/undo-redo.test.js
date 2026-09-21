@@ -359,6 +359,7 @@ test("押せないときは消さずに disabled にする", () => {
 
 test("履歴があるときは選択が無くても帯を出す", () => {
   const fn = functionSource("updateFlag");
-  // 移動の直後は選択が解除される。そこで帯が消えると「戻す」を押せない
-  assert.match(fn, /historyCanUndo\(|historyCanRedo\(/);
+  // 移動の直後は選択が解除される。そこで帯が消えると「戻す」を押せない。
+  // n===0 だけで消していないか（§7-3 の退行）を直接見る
+  assert.match(fn, /if\(n===0 && !canU && !canR\)/);
 });

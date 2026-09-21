@@ -1224,6 +1224,10 @@ const TIMING_KEYS=["am","pm"];
 const TIMING_LABEL={am:"あさ",pm:"ひる"};
 const SCHEDULE_VERSION=1;
 let activeTiming="am", schedule=null, stableSeq=0;
+// 履歴（あさ・ひる別）。帯の初期化がスクリプト評価中に読むため、宣言だけを前に出す。
+// historyMake は関数宣言（ホイストされる）なのでここで呼べる。ほかの履歴関数・
+// activeHistory() 等の定義は files/index.html:6097 付近「配置編集の履歴（戻す・進む）」を参照。
+let histories = { am:historyMake(), pm:historyMake() };
 let scheduleLoadWarning=[];
 let spacesWereReset=false;
 
@@ -6129,8 +6133,9 @@ function historyRedo(hist){
 }
 
 /* いまの時間帯の履歴。保存はしない（読み込み直すと消える）。
-   あさ・ひるを別々に持つので、切り替えて戻ってきても、その時間帯でした操作を戻せる。 */
-let histories = { am:historyMake(), pm:historyMake() };
+   あさ・ひるを別々に持つので、切り替えて戻ってきても、その時間帯でした操作を戻せる。
+   let histories 自体の宣言は files/index.html:1226 付近（activeTiming の隣）に前出しして
+   ある。帯の初期化がスクリプト評価中にここより先に読むため。 */
 function activeHistory(){ return histories[activeTiming]; }
 function clearHistory(){ histories[activeTiming] = historyMake(); }
 function selSnapshot(){ return {lotId: sel.lotId, cells:[...sel.cells]}; }
