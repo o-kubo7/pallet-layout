@@ -2700,3 +2700,56 @@ test("自分で押す破棄は設定にかかわらず確認する", () => {
   assert.match(fn, /confirm\(/);
   assert.doesNotMatch(fn, /sheetEditSilent/);
 });
+
+test("表示倍率はツールバーの中、あさ／ひるの右に置く", () => {
+  // 412px 幅では あさ／ひる(116px) と 操作ボタン(252px) が1行に入らず、
+  // 倍率が別行だと3行になる。倍率を1行目へ入れて2行に収める
+  const sheetStart = source.indexOf('<div id="tab-sheet"');
+  const sheetEnd = source.indexOf('<!-- ===== 設定タブ', sheetStart);
+  const sheetTab = source.slice(sheetStart, sheetEnd);
+  const bar = sheetTab.indexOf('<div class="sheet-toolbar">');
+  assert.notEqual(bar, -1);
+  const timing = sheetTab.indexOf('data-timing-switch', bar);
+  const zoom = sheetTab.indexOf('id="zoomCtl"', bar);
+  const actions = sheetTab.indexOf('sheet-toolbar-actions', bar);
+  assert.notEqual(zoom, -1, "#zoomCtl がツールバーより後ろに無い");
+  assert.ok(timing < zoom, "倍率は あさ／ひる の後ろに置く");
+  assert.ok(zoom < actions, "倍率は操作ボタンの入れ物より前に置く");
+  // 印刷CSS が .sizectl を消すので、クラスは残したまま移す
+  assert.match(sheetTab.slice(zoom - 40, zoom), /class="sizectl"/);
+});
+
+test("表示倍率はセレクトボックスで選ぶ", () => {
+  // ボタン4つ(328px)では あさ／ひる の右に入らない。select なら約85px
+  const start = source.indexOf('id="zoomCtl"');
+  const ctl = source.slice(start, source.indexOf('</div>', source.indexOf('</select>', start)));
+  assert.match(ctl, /<select id="zoomSel"[^>]*onchange="setSheetZoom\(this\.value\)"/);
+  ["auto", "1", "1.5", "2"].forEach(v =>
+    assert.match(ctl, new RegExp(`<option value="${v}"`), `value="${v}" の選択肢が無い`));
+  // ボタン方式の名残を残さない
+  assert.doesNotMatch(source, /data-zoom=/);
+  assert.doesNotMatch(source, /id="zoomNow"/);
+});
+
+test("倍率の選択状態は select の値で持つ", () => {
+  const set = functionSource("setSheetZoom");
+  assert.match(set, /zoomSel/);
+  assert.doesNotMatch(set, /sizebtn/);
+  // 保存キーと保存する値は変えない（既存ユーザーの保存が復元できなくなる）
+  assert.match(set, /saveData\(STORE_KEY\.zoom, ?z\)/);
+});
+
+test("自動のときは選択肢の文言に実倍率を出す", () => {
+  // 別枠の（115%）を廃した分、閉じたままでも実倍率が読めるようにする
+  const apply = functionSource("applySheetZoom");
+  assert.match(apply, /zoomSel/);
+  assert.match(apply, /自動（\$\{Math\.round\(z\*100\)\}%）/);
+});
+
+test("保存された倍率は select に復元する", () => {
+  const start = source.indexOf("(function initZoom()");
+  assert.notEqual(start, -1);
+  const init = source.slice(start, source.indexOf("})();", start));
+  assert.match(init, /zoomSel/);
+  assert.doesNotMatch(init, /sizebtn/);
+});

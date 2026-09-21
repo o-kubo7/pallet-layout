@@ -413,6 +413,11 @@
   .sheet-toolbar .timing-switch{margin-top:0}
   /* 操作ボタンは右詰め。狭い画面では入れ物ごと折り返す */
   .sheet-toolbar-actions{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  /* 行の中に入れるので、.sizectl の既定の下余白は落とす */
+  .sheet-toolbar .sizectl{margin-bottom:0}
+  /* 表示倍率の選択。枠と高さは .sizebtn に揃えて、同じ行のボタンと並びを合わせる */
+  #zoomSel{border:1px solid var(--line);background:#fff;border-radius:8px;
+           padding:8px 10px;font-size:14px;min-height:40px;color:#374151;cursor:pointer}
   .sheet-print{width:112px;margin-left:auto}
   .slip-count{margin-top:8px;color:var(--muted);font-weight:700}
   .slip{border:1px solid #cbd5e1;border-radius:12px;background:#fff;margin-bottom:16px;overflow:hidden;min-width:0}
@@ -883,6 +888,19 @@
     <div class="card" id="sheetCard">
       <div class="sheet-toolbar">
         <div class="timing-switch" data-timing-switch></div>
+        <!-- 表示倍率。ボタン4つ（ラベル込みで328px）では 412px 幅の画面で
+             「あさ／ひる」の右に入らないので、select 1個にしてこの行へ入れる。
+             「自動」のときの実倍率は選択肢の文言に出す（別枠の #zoomNow は廃止）。
+             .sizectl のままにするのは、印刷CSSがこのクラスで消しているため。 -->
+        <div class="sizectl" id="zoomCtl">
+          <span class="lbl">表示倍率</span>
+          <select id="zoomSel" onchange="setSheetZoom(this.value)">
+            <option value="auto">自動</option>
+            <option value="1">100%</option>
+            <option value="1.5">150%</option>
+            <option value="2">200%</option>
+          </select>
+        </div>
         <!-- 右詰め。右から「印刷」「テキスト編集」「テキスト編集を戻す」。
              sheetClearBtn は普段 hidden なので、margin-left:auto はボタン個々ではなく
              この入れ物に掛ける（個々に掛けると隠れた瞬間に右詰めが外れる） -->
@@ -891,15 +909,6 @@
           <button class="btn btn-ghost" id="sheetEditBtn" onclick="toggleSheetEditMode()">✏ テキスト編集</button>
           <button class="btn btn-ghost sheet-print" id="printBtn" onclick="printSheet()" disabled>🖨 印刷</button>
         </div>
-      </div>
-
-      <div class="sizectl" id="zoomCtl">
-        <span class="lbl">表示倍率</span>
-        <button class="sizebtn on" data-zoom="auto" onclick="setSheetZoom('auto')">自動</button>
-        <button class="sizebtn" data-zoom="1" onclick="setSheetZoom('1')">100%</button>
-        <button class="sizebtn" data-zoom="1.5" onclick="setSheetZoom('1.5')">150%</button>
-        <button class="sizebtn" data-zoom="2" onclick="setSheetZoom('2')">200%</button>
-        <span class="lbl" id="zoomNow"></span>
       </div>
 
       <!-- スマホ（600px以下）の編集バー。欄の実幅は95pxで品名は5.6文字しか
@@ -4696,8 +4705,8 @@ let sheetZoom="auto";   // "auto" または倍率の文字列
 
 function setSheetZoom(z){
   sheetZoom=z;
-  document.querySelectorAll(".sizebtn[data-zoom]").forEach(b=>
-    b.classList.toggle("on", b.dataset.zoom===z));
+  const sel=document.getElementById("zoomSel");
+  if(sel) sel.value=z;
   saveData(STORE_KEY.zoom, z);
   applySheetZoom();
 }
@@ -4716,8 +4725,10 @@ function applySheetZoom(){
   const z=(sheetZoom==="auto")?autoSheetZoom():(parseFloat(sheetZoom)||1);
   if(z==null) return;
   el.style.setProperty("--sheet-zoom", z);
-  const now=document.getElementById("zoomNow");
-  if(now) now.textContent = (sheetZoom==="auto")?`（${Math.round(z*100)}%）`:"";
+  // 「自動」がいま何%で出しているかは、選択肢の文言に入れる。
+  // 閉じたままでも実倍率が読めるようにするため（別枠の表示は持たない）
+  const auto=document.querySelector('#zoomSel option[value="auto"]');
+  if(auto) auto.textContent = (sheetZoom==="auto")?`自動（${Math.round(z*100)}%）`:"自動";
 }
 window.addEventListener("resize", ()=>{ if(sheetZoom==="auto") applySheetZoom(); });
 
@@ -6198,8 +6209,12 @@ updateSaveStatus();
 (function initZoom(){
   const z=loadData(STORE_KEY.zoom);
   if(z) sheetZoom=z;
-  document.querySelectorAll(".sizebtn[data-zoom]").forEach(b=>
-    b.classList.toggle("on", b.dataset.zoom===sheetZoom));
+  const sel=document.getElementById("zoomSel");
+  if(sel){
+    sel.value=sheetZoom;
+    // 選択肢に無い値が保存されていると value は "" になる。自動へ戻す
+    if(!sel.value){ sheetZoom="auto"; sel.value="auto"; }
+  }
   applySheetZoom();
 })();
 
