@@ -1041,6 +1041,12 @@
         </div>
 
         <div class="cfgsec">
+          <h3>配置編集の戻す・進む</h3>
+          <label class="chk"><input type="checkbox" id="undoLabelChk" onchange="toggleUndoLabel()"> ボタンに文字を付ける</label>
+          <div class="hint">盤の上の帯にある「↩」「↪」を「↩ 戻す」「進む ↪」にします。画面が狭いと、選んでいるマス数が隠れます。押したときの動きは変わりません。</div>
+        </div>
+
+        <div class="cfgsec">
           <h3>ロットのまとめ</h3>
           <label class="chk"><input type="checkbox" id="mergeChk" checked onchange="toggleMerge()"> 同じ品名のロットを1つの欄にまとめる</label>
           <div class="hint">品名・入数・種別・置き場所がすべて同じロットだけをまとめます。メインに置いた荷物は、引き出し線が1本ずつ要るのでまとめません。</div>
@@ -1232,7 +1238,7 @@ let scheduleLoadWarning=[];
 let spacesWereReset=false;
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", mix:"palletApp.mix", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent", sampleBtns:"palletApp.sampleBtns"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", mix:"palletApp.mix", undoLabel:"palletApp.undoLabel", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent", sampleBtns:"palletApp.sampleBtns"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
 const SPACES_SAVE_VERSION = 4;   // 現場の実測で置き場が増えたので上げる
@@ -1919,6 +1925,20 @@ function applySampleBtns(on){
    戻っていたので、設定タブへ移して端末に保存する。読むのは run() の1か所だけ。 */
 function toggleMix(){
   saveData(STORE_KEY.mix, document.getElementById("mixChk").checked);
+}
+/* 戻す・進むのボタンに文字を付けるか。既定はオフ（記号だけ）。
+   375px では帯が 186px しかなく、文字を付けると選んでいるマス数に 18px しか
+   残らない（設計書 §7-1）。aria-label と title は変えないので、
+   記号だけでも読み上げと長押しで意味が分かる。 */
+function toggleUndoLabel(){
+  const on=document.getElementById("undoLabelChk").checked;
+  saveData(STORE_KEY.undoLabel, on);
+  applyUndoLabel(on);
+}
+function applyUndoLabel(on){
+  const u=document.getElementById("undoBtn"), r=document.getElementById("redoBtn");
+  if(u) u.textContent = on ? "↩ 戻す" : "↩";
+  if(r) r.textContent = on ? "進む ↪" : "↪";
 }
 /* 同じ品名のロットを1つの欄にまとめるか。既定は on。
    「そのほかの表示」の他の項目（矢印の先・角の丸み・端数の「半」）と同じ流儀で、
@@ -6364,6 +6384,13 @@ updateSaveStatus();
 // 混載の許可：保存があれば復元。既定は on なので false のときだけ落とす
 (function initMix(){
   if(loadData(STORE_KEY.mix)===false) document.getElementById("mixChk").checked=false;
+})();
+
+// 戻す・進むの文字：保存があれば復元。既定はオフなので true のときだけ立てる
+(function initUndoLabel(){
+  const on=loadData(STORE_KEY.undoLabel)===true;
+  if(on) document.getElementById("undoLabelChk").checked=true;
+  applyUndoLabel(on);
 })();
 
 // ロットのまとめ：保存があれば復元。既定は on なので false のときだけ落とす

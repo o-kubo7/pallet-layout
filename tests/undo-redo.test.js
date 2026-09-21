@@ -363,3 +363,33 @@ test("履歴があるときは選択が無くても帯を出す", () => {
   // n===0 だけで消していないか（§7-3 の退行）を直接見る
   assert.match(fn, /if\(n===0 && !canU && !canR\)/);
 });
+
+test("ボタンに文字を付ける設定が設定タブにある", () => {
+  const settings = source.slice(
+    source.indexOf('<div id="tab-settings"'),
+    source.indexOf('<div class="actionbar"')
+  );
+  assert.match(settings, /id="undoLabelChk"/);
+  assert.match(settings, /onchange="toggleUndoLabel\(\)"/);
+});
+
+test("ボタンの文字の設定はこの端末に保存する", () => {
+  assert.match(source, /undoLabel:"palletApp\.undoLabel"/);
+  assert.match(source, /saveData\(STORE_KEY\.undoLabel/);
+  assert.match(source, /loadData\(STORE_KEY\.undoLabel\)/);
+});
+
+test("文字を付けても aria-label は変えない", () => {
+  const fn = functionSource("applyUndoLabel");
+  // ボタンの中身だけ差し替える。読み上げと長押しの説明はどちらでも同じ
+  assert.match(fn, /textContent/);
+  assert.equal(fn.includes("aria-label"), false);
+});
+
+test("記号のときと文字のときの両方の表記がある", () => {
+  const fn = functionSource("applyUndoLabel");
+  assert.match(fn, /"↩"/);
+  assert.match(fn, /"↪"/);
+  assert.match(fn, /"↩ 戻す"/);
+  assert.match(fn, /"進む ↪"/);
+});

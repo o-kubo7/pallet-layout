@@ -2572,7 +2572,9 @@ test("欄を開く入口は mousedown だけ。touchstart を足さない", () =
 test("確認なしで書き足しを捨てる設定を置く", () => {
   assert.match(source, /sheetEditSilent:"palletApp\.sheetEditSilent"/);
   const cfgStart = source.indexOf('<div id="cfgpane-display"');
-  const pane = source.slice(cfgStart, cfgStart + 4000);
+  // 表示設定ペインは最後のペインなので、下部バーの手前までが範囲。
+  // 固定長で切ると、ペインに項目を足しただけでこの検査が落ちる
+  const pane = source.slice(cfgStart, source.indexOf('<div class="actionbar"'));
   assert.match(pane, /id="sheetEditSilentChk"[^>]*onchange="toggleSheetEditSilent\(\)"/);
   assert.match(pane, /確認無しでテキスト編集を破棄する/);
 });
