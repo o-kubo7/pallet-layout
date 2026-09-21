@@ -228,3 +228,16 @@ test("戻すと進むは履歴の関数を呼ぶ", () => {
   assert.match(functionSource("doUndo"), /historyUndo\(activeHistory\(\)\)/);
   assert.match(functionSource("doRedo"), /historyRedo\(activeHistory\(\)\)/);
 });
+
+test("履歴の適用は redraw のあとに選択を戻す", () => {
+  // drawZone が clearSel() を呼ぶので、redraw より前に戻した選択は消える
+  const fn = functionSource("applyHistoryStep");
+  const redrawAt = fn.indexOf("redraw()");
+  const selAt = fn.indexOf("sel.cells = new Set(");
+  const paintAt = fn.indexOf("repaintSel()");
+  assert.notEqual(redrawAt, -1);
+  assert.notEqual(selAt, -1);
+  assert.notEqual(paintAt, -1);
+  assert.ok(redrawAt < selAt, "redraw() より前に選択を戻している");
+  assert.ok(selAt < paintAt, "repaintSel() より後に選択を戻している");
+});

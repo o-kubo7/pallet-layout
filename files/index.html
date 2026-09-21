@@ -6218,10 +6218,11 @@ function applyHistoryStep(step){
   lastSp = clone(step.sp);
   // 配置不可は履歴に持たない。いつも「いまの設定」から合成する
   hydrateBlockedRows(lastSp, activeShift().blocked);
-  sel.lotId = step.sel.lotId;
-  sel.cells = new Set(step.sel.cells);
   saveManual();
   redraw();
+  // drawZone が clearSel() を呼んで sel を空にするため、選択の復元は redraw の後でやる
+  sel.lotId = step.sel.lotId;
+  sel.cells = new Set(step.sel.cells);
   repaintSel();
   updateFlag();
 }
