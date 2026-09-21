@@ -152,3 +152,41 @@ test("canUndo と canRedo が境界で正しい", () => {
   H.historyUndo(h);
   assert.equal(H.historyCanRedo(h), true);
 });
+
+test("履歴はあさ・ひるで別々に持つ", () => {
+  assert.match(source, /let histories\s*=\s*\{\s*am:historyMake\(\)\s*,\s*pm:historyMake\(\)\s*\}/);
+  assert.match(source, /function activeHistory\(\)\{[^}]*histories\[activeTiming\]/);
+});
+
+test("選択は配列に写して履歴へ入れる", () => {
+  // sel.cells は Set。履歴には配列で入れ、戻すときに new Set() で復元する
+  const fn = functionSource("selSnapshot");
+  assert.match(fn, /lotId:\s*sel\.lotId/);
+  assert.match(fn, /cells:\s*\[\.\.\.sel\.cells\]/);
+});
+
+test("移動のステップは新しい sp を持ち、選択のステップは前の sp を使い回す", () => {
+  const move = functionSource("pushMoveStep");
+  assert.match(move, /kind:"move"/);
+  // 移動後の配置をそのまま持つ（呼ぶ側が控えた spBefore ではない）
+  assert.match(move, /snapshotSpaces\(lastSp\)/);
+
+  const sel = functionSource("pushSelectStep");
+  assert.match(sel, /kind:"select"/);
+  // 履歴が空のときの土台だけは実配置を控える。それ以外ではコピーしない（設計書 §4）
+  assert.equal((sel.match(/snapshotSpaces\(/g) || []).length, 1);
+  assert.match(sel, /currentStepSp\(\)\s*\|\|/);
+  assert.match(sel, /currentStepSp\(\)/);
+});
+
+test("移動のステップは移動前の配置も積む", () => {
+  // 1件目で戻れないと「動かした直後に戻す」ができない。
+  // 履歴が空のときは、移動前の配置を先に1件積んでから移動後を積む。
+  const fn = functionSource("pushMoveStep");
+  assert.match(fn, /spBefore/);
+});
+
+test("履歴を捨てる関数がある", () => {
+  const fn = functionSource("clearHistory");
+  assert.match(fn, /historyMake\(\)/);
+});

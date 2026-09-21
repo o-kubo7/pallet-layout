@@ -6169,6 +6169,46 @@ function historyRedo(hist){
   return hist.steps[hist.cursor];
 }
 
+/* いまの時間帯の履歴。保存はしない（読み込み直すと消える）。
+   あさ・ひるを別々に持つので、切り替えて戻ってきても、その時間帯でした操作を戻せる。 */
+let histories = { am:historyMake(), pm:historyMake() };
+function activeHistory(){ return histories[activeTiming]; }
+function clearHistory(){ histories[activeTiming] = historyMake(); }
+function selSnapshot(){ return {lotId: sel.lotId, cells:[...sel.cells]}; }
+/* いまのカーソルが指すステップの配置。選択だけのステップはこれを使い回す。 */
+function currentStepSp(){
+  const h = activeHistory();
+  return h.cursor >= 0 ? h.steps[h.cursor].sp : null;
+}
+/* 荷物を動かしたときに積む。spBefore は動かす前の配置（呼ぶ側が控える）。
+   履歴が空のときは、先に「動かす前」を1件積む。そうしないと 1 件目で
+   cursor が 0 になり、historyCanUndo が false のままで戻せない。 */
+function pushMoveStep(spBefore, selBefore){
+  const h = activeHistory();
+  // 履歴が空なら「動かす前」を土台として先に積む。選択も動かす前のものを持たせるので、
+  // 戻ったときにそのまま選び直さずに操作を続けられる
+  if(h.cursor < 0 && spBefore){
+    historyPush(h, {kind:"move", sel:selBefore, sp:spBefore});
+  }
+  // 移動後は clearSel() で選択が消える。ここで移動前の選択を持たせると、
+  // やり直したときに「移動元のマス」のキーが戻り、荷物が無いのに
+  // 帯に「NP」と出てしまう。実体のない選択を作らないため空にする
+  historyPush(h, {kind:"move", sel:{lotId:null, cells:[]}, sp:snapshotSpaces(lastSp)});
+}
+/* 選択が変わったときに積む。配置は変わらないので、いまのステップの sp を
+   そのまま指す（コピーしない）。履歴が空のときは、いまの配置を基準として持つ。 */
+function pushSelectStep(){
+  const h = activeHistory();
+  const sp = currentStepSp() || (lastSp ? snapshotSpaces(lastSp) : null);
+  if(!sp) return;                       // まだ配置が無いときは積まない
+  // 履歴が空なら「選ぶ前」を土台として先に積む。そうしないと cursor が 0 のままで
+  // historyCanUndo が false になり、最初の1回だけ戻せない（移動と挙動が変わる）
+  if(h.cursor < 0){
+    historyPush(h, {kind:"select", sel:{lotId:null, cells:[]}, sp:sp});
+  }
+  historyPush(h, {kind:"select", sel:selSnapshot(), sp:sp});
+}
+
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 
 /* ---------- init ---------- */
