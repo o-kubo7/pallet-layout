@@ -201,3 +201,75 @@ test("run の退避積み戻しは、倉庫の空きが無いロットが複数�
   assert.equal(total, wantTotal, "退避の中身が取りこぼされている");
   lots.forEach(l => assert.equal(l.pallets, l.stashed, `${l.id} の pallets が元に戻っていない`));
 });
+
+const VALIDATE_PIECES = [...STASH_PIECES, "cloneSpaces", "validateStashMove"];
+
+// 倉庫1エリアと退避スペース。棟A の列0 に 25 枚入っている
+function warehouseAndStash(count = 25) {
+  return [
+    { name: "棟A", zone: "near", cols: [{ h: 30, aisle: false, fills: [{ id: "L1", count }] }] },
+    { name: "退避", zone: "stash", cols: [{ h: 4, aisle: false, fills: [] }] },
+  ];
+}
+
+function stashTotalOf(sp) {
+  return sp.find(s => s.zone === "stash").cols
+    .reduce((a, c) => a + c.fills.reduce((x, f) => x + f.count, 0), 0);
+}
+
+test("空の退避に22枚を落とせる", () => {
+  const spaces = warehouseAndStash(25);
+  const { validateStashMove } = load(VALIDATE_PIECES, { spaces, lots: [{ pallets: 25 }] });
+  const v = validateStashMove(spaces, "L1", { "棟A|0": 22 });
+  assert.equal(v.ok, true, v.reason);
+  assert.equal(stashTotalOf(v.next), 22);
+  assert.equal(stashTotalOf(spaces), 0, "元の配置を書き換えている");
+});
+
+test("1列に積める枚数を超えても入る", () => {
+  const spaces = warehouseAndStash(60);
+  const { validateStashMove } = load(VALIDATE_PIECES, { spaces, lots: [{ pallets: 60 }] });
+  const v = validateStashMove(spaces, "L1", { "棟A|0": 60 });
+  assert.equal(v.ok, true, v.reason);
+  assert.equal(stashTotalOf(v.next), 60);
+});
+
+test("上限を超える選択は1マスも動かさず、空き容量を理由に出す", () => {
+  const spaces = warehouseAndStash(25);
+  // 入力は 10P しかないので、25 枚は入らない
+  const { validateStashMove } = load(VALIDATE_PIECES, { spaces, lots: [{ pallets: 10 }] });
+  const v = validateStashMove(spaces, "L1", { "棟A|0": 25 });
+  assert.equal(v.ok, false);
+  assert.equal(v.same, undefined, "「動くマスが無い」と混同している");
+  assert.match(v.reason, /25P/, "選んだ枚数が理由に無い");
+  assert.match(v.reason, /10P/, "空き容量が理由に無い");
+  assert.equal(v.next, undefined, "動かさないのに配置を返している");
+});
+
+test("退避の中のマスだけを選んでも動かない", () => {
+  const spaces = warehouseAndStash(25);
+  spaces[1].cols[0].fills.push({ id: "L1", count: 3 });
+  const { validateStashMove } = load(VALIDATE_PIECES, { spaces, lots: [{ pallets: 25 }] });
+  const v = validateStashMove(spaces, "L1", { "退避|0": 3 });
+  assert.equal(v.ok, false);
+  assert.equal(v.same, true, "「動くマスが無い」になっていない");
+});
+
+test("倉庫と退避が混ざった選択では倉庫側だけが動く", () => {
+  const spaces = warehouseAndStash(25);
+  spaces[1].cols[0].fills.push({ id: "L1", count: 3 });
+  const { validateStashMove } = load(VALIDATE_PIECES, { spaces, lots: [{ pallets: 28 }] });
+  const v = validateStashMove(spaces, "L1", { "棟A|0": 5, "退避|0": 3 });
+  assert.equal(v.ok, true, v.reason);
+  // 退避にあった 3 枚はそのまま、倉庫から 5 枚が増えて 8 枚
+  assert.equal(stashTotalOf(v.next), 8);
+  const warehouse = v.next.find(s => s.name === "棟A").cols[0];
+  assert.equal(warehouse.fills.reduce((a, f) => a + f.count, 0), 20);
+});
+
+test("退避への移動では分割の確認を出さない", () => {
+  const spaces = warehouseAndStash(25);
+  const { validateStashMove } = load(VALIDATE_PIECES, { spaces, lots: [{ pallets: 25 }] });
+  const v = validateStashMove(spaces, "L1", { "棟A|0": 10 });
+  assert.equal(v.needConfirm, false);
+});

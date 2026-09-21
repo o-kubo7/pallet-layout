@@ -3799,6 +3799,38 @@ function putToStash(sp,lotId,count){
   }
   normalizeFills(sp);
 }
+/* 退避スペースへの移動の可否を判定する。sp は書き換えない。
+   退避は倉庫に実在しないので、落とし先は列ではなくスペース全体になる。
+   空きは全体で見て、積み方は putToStash() と同じにする。
+   ok:true のとき next に移動適用済みのコピーが入るので、呼び出し側はそれを lastSp に入れる。 */
+function validateStashMove(sp, lotId, counts){
+  const s=stashSpaces(sp)[0];
+  if(!s) return {ok:false, reason:"退避スペースがありません"};
+  // すでに退避にあるマスは動かない（退避の中では位置に意味が無い）
+  let n=0;
+  Object.keys(counts).forEach(k=>{ if(k.split("|")[0]!==s.name) n+=counts[k]; });
+  if(n<=0) return {ok:false, same:true, reason:"動くマスがありません"};
+  const room=stashFreeRoom(sp);
+  // 入りきらないときは1マスも動かさない。理由は呼び出し側が出す
+  if(n>room) return {ok:false, reason:`退避スペースに入りきりません。\n選んだのは ${n}P、いま空いているのは ${room}P です。`};
+  const next=cloneSpaces(sp);
+  Object.keys(counts).forEach(key=>{
+    const p=key.split("|");
+    if(p[0]===s.name) return;
+    const space=next.find(x=>x.name===p[0]); if(!space) return;
+    const col=space.cols[parseInt(p[1])]; if(!col) return;
+    let need=counts[key];
+    col.fills.forEach(f=>{
+      if(need<=0 || f.id!==lotId) return;
+      const take=Math.min(need, f.count);
+      f.count-=take; need-=take;
+    });
+  });
+  putToStash(next, lotId, n);
+  // 退避は blockCountOf() が数えないので、倉庫側の箇所数が増えることはない。
+  // したがって分割の確認は原理的に出ない
+  return {ok:true, needConfirm:false, next};
+}
 function firstFreeStashCol(){
   const s=stashSpaces(lastSp)[0]; if(!s) return 0;
   for(let i=0;i<s.cols.length;i++) if(used(s.cols[i])<s.cols[i].h) return i;
