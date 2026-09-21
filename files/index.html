@@ -3674,22 +3674,40 @@ function endDrag(){
   showStashDock(false);
   if(typeof setMoving==="function") setMoving(false);
 }
-// 検証して lastSp を更新する。動くマスが無い場合と容量不足は黙って中止する。
-function applyMove(spaceName, colIndex){
+/* 退避スペースへの移動。落とし先は列ではなくスペース全体なので、
+   applyMove() とは別の経路にする（倉庫側の移動処理には触らない）。
+   applyMove() と同じ後始末（履歴・保存・選択解除・描き直し）をここでも行う。 */
+function applyMoveToStash(){
   if(!isActiveFresh()){ refreshFreshness(); return; }
   const counts=selCounts(sel.cells);
-  // growStashCol は lastSp を直接書き換えるので、その前に控える。
-  // 後で控えると、退避スペースの列が伸びた後の状態しか戻せない
   const spBefore=snapshotSpaces(lastSp), selBefore=selSnapshot();
-  // [試作] 退避スペースは倉庫に実在しないので、列の高さは制約ではない。
-  // 落とす枚数が入るところまで伸ばす（倉庫のエリアには何もしない）。
-  const ungrow=growStashCol(spaceName, colIndex, movingCount(counts, spaceName, colIndex));
+  const v=validateStashMove(lastSp, sel.lotId, counts);
+  if(!v.ok){
+    // 入りきらないときは理由を出す。黙って中止すると壊れたように見える。
+    // 「動くマスが無い」は退避の中で動かしたときに必ず起きるので出さない
+    if(!v.same) alert(v.reason);
+    return;
+  }
+  lastSp=v.next;
+  pushMoveStep(spBefore, selBefore);
+  saveManual();
+  clearSel();
+  redraw();
+}
+// 検証して lastSp を更新する。動くマスが無い場合と容量不足は黙って中止する。
+function applyMove(spaceName, colIndex){
+  // 退避スペースは倉庫に実在せず、どの列に置くかは何の情報も持たない。
+  // 列ではなくスペース全体を落とし先にする
+  if(stashSpaces(lastSp).some(s=>s.name===spaceName)){ applyMoveToStash(); return; }
+  if(!isActiveFresh()){ refreshFreshness(); return; }
+  const counts=selCounts(sel.cells);
+  const spBefore=snapshotSpaces(lastSp), selBefore=selSnapshot();
   const v=validateMove(lastSp, sel.lotId, counts, spaceName, colIndex);
-  if(!v.ok){ ungrow(); return; }
+  if(!v.ok) return;
   if(v.needConfirm){
     const lot=lastLots.find(l=>l.id===sel.lotId);
     const name=lot?`${lot.name} / ${lot.lot||"—"}`:"このロット";
-    if(!confirm(`${name} が ${v.before}か所から ${v.after}か所に分かれます。このまま移動しますか？`)){ ungrow(); return; }
+    if(!confirm(`${name} が ${v.before}か所から ${v.after}か所に分かれます。このまま移動しますか？`)) return;
   }
   lastSp=v.next;
   pushMoveStep(spBefore, selBefore);
@@ -3741,11 +3759,7 @@ document.addEventListener("pointerup",e=>{
   const onDock = started && overStashDock(x,y);   // [試作] 受け皿の上で離したか
   endDrag();
   if(!started) return;                          // 動いていなければタップ（click 側で処理）
-  if(onDock){
-    const s=stashSpaces(lastSp)[0];
-    if(s) applyMove(s.name, firstFreeStashCol());
-    return;
-  }
+  if(onDock){ applyMoveToStash(); return; }
   const w=wrapAt(x,y); if(!w) return;
   applyMove(w.dataset.space, parseInt(w.dataset.col));
 });
@@ -3756,7 +3770,6 @@ document.addEventListener("lostpointercapture",e=>{ if(drag && e.pointerId===dra
 
 /* ---------- [試作] 退避スペース ---------- */
 const STASH_COL_H=4;            // 退避の1列の高さ。隅の小さな盤に収まる高さにする
-const STASH_COL_MAX_H=21;       // 1列に積める上限（架空の場所なので倉庫より緩い）
 function lotKey(l){ return l.sourceKey || ((l.name||"")+"\u0000"+(l.lot||"")); }
 function stashSpaces(sp){ return (sp||[]).filter(s=>s.zone==="stash"); }
 // 指定した配置の退避枚数を {ロットの識別キー: 枚数} で返す
@@ -3834,23 +3847,6 @@ function validateStashMove(sp, lotId, counts){
   // 退避は blockCountOf() が数えないので、倉庫側の箇所数が増えることはない。
   // したがって分割の確認は原理的に出ない
   return {ok:true, needConfirm:false, next};
-}
-function firstFreeStashCol(){
-  const s=stashSpaces(lastSp)[0]; if(!s) return 0;
-  for(let i=0;i<s.cols.length;i++) if(used(s.cols[i])<s.cols[i].h) return i;
-  return s.cols.length-1;
-}
-/* 退避の列だけ、落とす枚数が入るまで高さを伸ばす。
-   lastSp の列を直接書き換えるので、伸ばした高さを元に戻す関数を返す。
-   検証に落ちたときと分割の確認を取り消したときは、呼び出し側がそれを呼ぶ
-   （移動が成立していないのに lastSp だけが伸びた状態にしないため）。 */
-function growStashCol(spaceName, colIndex, n){
-  const s=stashSpaces(lastSp).find(x=>x.name===spaceName); if(!s) return ()=>{};
-  const c=s.cols[colIndex]; if(!c) return ()=>{};
-  const before=c.h;
-  const need=used(c)+n;
-  if(need>c.h) c.h=Math.min(need, STASH_COL_MAX_H);
-  return ()=>{ c.h=before; };
 }
 function overStashDock(x,y){
   const d=document.getElementById("stashDock");

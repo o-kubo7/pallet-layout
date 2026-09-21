@@ -291,3 +291,79 @@ test("退避への移動では分割の確認を出さない", () => {
   const v = validateStashMove(spaces, "L1", { "棟A|0": 10 });
   assert.equal(v.needConfirm, false);
 });
+
+/* applyMoveToStash を実際に動かす。検証の中身は Task 4 のテストの範囲なので、
+   ここでは validateStashMove の返り値を差し替えて、後始末だけを見る。 */
+function loadApplyToStash({ spaces, validate }) {
+  const log = { alerted: [], pushed: 0, saved: 0, redrawn: 0, cleared: 0 };
+  const src = `
+    let lastSp=spaces;
+    const sel={lotId:"L1", cells:new Set(["棟A|0"])};
+    ${functionSource("stashSpaces")}
+    ${functionSource("applyMoveToStash")}
+    function isActiveFresh(){ return true; }
+    function refreshFreshness(){}
+    function selCounts(){ return { "棟A|0": 1 }; }
+    function selSnapshot(){ return null; }
+    function snapshotSpaces(sp){ return sp; }
+    function validateStashMove(){ return validate; }
+    function alert(m){ log.alerted.push(m); }
+    function pushMoveStep(){ log.pushed++; }
+    function saveManual(){ log.saved++; }
+    function clearSel(){ log.cleared++; }
+    function redraw(){ log.redrawn++; }
+    return { applyMoveToStash, spaces:()=>lastSp };
+  `;
+  const made = new Function("spaces", "validate", "log", src)(spaces, validate, log);
+  return { ...made, log };
+}
+
+test("入りきらないときは理由を出して、何も変えない", () => {
+  const spaces = emptyStash();
+  const app = loadApplyToStash({
+    spaces,
+    validate: { ok: false, reason: "退避スペースに入りきりません。\n選んだのは 30P、いま空いているのは 12P です。" },
+  });
+  app.applyMoveToStash();
+  assert.equal(app.log.alerted.length, 1, "理由を出していない");
+  assert.match(app.log.alerted[0], /入りきりません/);
+  assert.equal(app.log.pushed, 0);
+  assert.equal(app.log.saved, 0);
+  assert.equal(app.spaces(), spaces, "配置を差し替えている");
+});
+
+test("動くマスが無いときは黙って中止する", () => {
+  const app = loadApplyToStash({
+    spaces: emptyStash(),
+    validate: { ok: false, same: true, reason: "動くマスがありません" },
+  });
+  app.applyMoveToStash();
+  assert.equal(app.log.alerted.length, 0, "退避の中で動かすたびにダイアログが出る");
+  assert.equal(app.log.pushed, 0);
+});
+
+test("成立したら検証後の配置を採り、履歴に積む", () => {
+  const next = [{ name: "退避", zone: "stash", cols: [] }];
+  const app = loadApplyToStash({ spaces: emptyStash(), validate: { ok: true, next } });
+  app.applyMoveToStash();
+  assert.equal(app.spaces(), next, "検証後の配置を採っていない");
+  assert.equal(app.log.pushed, 1, "履歴に積んでいない");
+  assert.equal(app.log.saved, 1);
+  assert.equal(app.log.cleared, 1);
+  assert.equal(app.log.redrawn, 1);
+});
+
+test("applyMove は退避が宛先なら専用の経路へ渡す", () => {
+  const fn = functionSource("applyMove");
+  assert.match(fn, /applyMoveToStash\(\)/);
+  assert.match(fn, /stashSpaces\(/);
+});
+
+test("受け皿に落とす経路は列を渡さない", () => {
+  assert.doesNotMatch(source, /firstFreeStashCol/);
+});
+
+test("退避の列を伸ばす仕掛けは残っていない", () => {
+  assert.doesNotMatch(source, /growStashCol/);
+  assert.doesNotMatch(source, /STASH_COL_MAX_H/);
+});
