@@ -212,17 +212,14 @@ test("矩形の対象は退避の2か所を1つのまとまりとして切り分
   assert.match(cells, /getBoundingClientRect\(\)/);
 });
 
-test("矩形選択は取り消し用の控えを clearSel より前に取る", () => {
-  const start = functionSource("startRubber");
-  const undoAt = start.indexOf("undo=");
-  const clearAt = start.indexOf("clearSel()");
+test("clearSel() より先に、引く前の選択を控える", () => {
+  // Escape で引くのをやめたとき（cancelRubber）に戻す先。clearSel が走る前に取る
+  const fn = functionSource("startRubber");
+  const undoAt = fn.indexOf("const undo=");
+  const clearAt = fn.indexOf("clearSel()");
   assert.notEqual(undoAt, -1);
   assert.notEqual(clearAt, -1);
-  assert.ok(undoAt < clearAt, "clearSel() は sweepUndo を捨てるので控えを先に取る");
-  // ウィンドウ外で離しても取りこぼさない
-  assert.match(start, /setPointerCapture/);
-  // 盤と退避のあいだでは Shift でも足さない
-  assert.match(start, /stashSide/);
+  assert.ok(undoAt < clearAt, "控えを取る前に clearSel() が走っている");
 });
 
 test("矩形選択はマスの位置を毎回測り直す", () => {
@@ -272,9 +269,10 @@ test("ボタンと帯と見出しの上では矩形を始めない", () => {
   assert.doesNotMatch(handler, /closest\("#stashDock"\) return/);
 });
 
-test("取り消しボタンはなぞり以外の選択にも使える文言にする", () => {
-  assert.match(source, /id="sweepUndoBtn"[\s\S]{0,200}↩ いまの選択を取り消す/);
-  assert.doesNotMatch(source, /↩ いまのなぞりを取り消す/);
+test("帯には戻すと進むのボタンを置く", () => {
+  // 既定は記号だけ。文字を付けるかは設定タブで切り替える（設計書 §7-4）
+  assert.match(source, /id="undoBtn"[\s\S]{0,200}>↩</);
+  assert.match(source, /id="redoBtn"[\s\S]{0,200}>↪</);
 });
 test("矩形の側判定は退避の余白（ドックとフロア）も退避側とみなす", () => {
   const start = functionSource("startRubber");

@@ -296,3 +296,69 @@ test("時間帯の切替では履歴を捨てない", () => {
   // あさ・ひるで別々に持つので、切り替えただけで消してはいけない
   assert.equal(functionSource("setActiveTiming").includes("clearHistory()"), false);
 });
+
+test("帯の古い中身を消す", () => {
+  assert.equal(source.includes('id="flagClearBtn"'), false);
+  assert.equal(source.includes('id="sweepUndoBtn"'), false);
+  assert.equal(source.includes("sweepUndo"), false);
+  assert.equal(source.includes("undoSweep"), false);
+  // 説明文は帯に出さない
+  assert.equal(source.includes("toolFlagText"), false);
+  // 説明文が無くなると「案内 表示／非表示」は制御対象を失う
+  assert.equal(source.includes("navShow"), false);
+  assert.equal(source.includes("setNav"), false);
+});
+
+test("帯に戻すと進むのボタンを置く", () => {
+  assert.match(source, /<button[^>]*id="undoBtn"[^>]*onclick="doUndo\(\)"/);
+  assert.match(source, /<button[^>]*id="redoBtn"[^>]*onclick="doRedo\(\)"/);
+  // 記号だけでも読み上げと長押しで意味が分かるようにする
+  assert.match(source, /id="undoBtn"[^>]*aria-label="元に戻す"/);
+  assert.match(source, /id="redoBtn"[^>]*aria-label="やり直す"/);
+});
+
+test("ボタンは入れ物にまとめて右端に固定する", () => {
+  // 選択数の有無で位置が動かないようにする。設計書 §7-1
+  const css = source.match(/\.flagbtns\{[^}]*\}/);
+  assert.notEqual(css, null, ".flagbtns の指定がない");
+  assert.match(css[0], /margin-left:auto/);
+  assert.match(css[0], /flex:none/);
+  const btn = source.match(/\.flagbtns button\{[^}]*\}/);
+  assert.notEqual(btn, null);
+  assert.match(btn[0], /min-width:44px/);
+});
+
+test("帯は折り返さず、選択数のほうが縮む", () => {
+  // wrap のままだと、幅が足りないときに選択数が縮まずに折り返し、
+  // ボタンが2行目へ回って 38px 跳ねる（実測）
+  const wrap = source.match(/\n  \.toolflag\{flex-wrap:nowrap\}/);
+  assert.notEqual(wrap, null, "@media の外に .toolflag{flex-wrap:nowrap} がない");
+  const css = source.match(/\.toolflag \.flagcount\{[^}]*\}/);
+  assert.notEqual(css, null);
+  assert.match(css[0], /flex:1 1 0/);
+  assert.match(css[0], /min-width:0/);
+  assert.match(css[0], /text-overflow:ellipsis/);
+});
+
+test("選択数に絵文字を使わない", () => {
+  const fn = functionSource("updateFlag");
+  assert.equal(fn.includes("✋"), false);
+  // 数字から先に書く。帯が狭いと後ろから … で切れるため
+  assert.match(fn, /n\+"P"/);
+  assert.match(fn, /n\+"P 運搬中"/);
+});
+
+test("押せないときは消さずに disabled にする", () => {
+  const fn = functionSource("updateFlag");
+  assert.match(fn, /historyCanUndo\(activeHistory\(\)\)/);
+  assert.match(fn, /historyCanRedo\(activeHistory\(\)\)/);
+  assert.match(fn, /\.disabled\s*=/);
+  // 消すと位置がずれて押し間違える
+  assert.equal(/undoBtn[^\n]*style\.display/.test(fn), false);
+});
+
+test("履歴があるときは選択が無くても帯を出す", () => {
+  const fn = functionSource("updateFlag");
+  // 移動の直後は選択が解除される。そこで帯が消えると「戻す」を押せない
+  assert.match(fn, /historyCanUndo\(|historyCanRedo\(/);
+});
