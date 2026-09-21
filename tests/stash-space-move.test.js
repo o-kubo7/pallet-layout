@@ -367,3 +367,72 @@ test("退避の列を伸ばす仕掛けは残っていない", () => {
   assert.doesNotMatch(source, /growStashCol/);
   assert.doesNotMatch(source, /STASH_COL_MAX_H/);
 });
+
+/* tests/stash-grow.test.js の生き残り。あのファイルは growStashCol と
+   STASH_COL_MAX_H を本物で動かして「列を伸ばしたら検証後に元へ戻す」ことを
+   見ていたが、退避への移動が applyMoveToStash() に切り出されて growStashCol
+   自体が無くなったため、その観点はもう成立しない。ただしあのファイルは
+   applyMove() を実際に new Function で動かして呼ぶ、唯一のテストでもあった。
+   ここに残すのはその役目 ── 「分割の確認を取り消したら何もしない」
+   「成立したら検証後の配置をそのまま採る」という2分岐の実行確認 ── だけを
+   倉庫の宛先（退避への振り分けを踏まない宛先）で引き継ぐ。 */
+function loadApplyMove({ spaces, counts, validate, confirmAnswer }) {
+  const log = { pushed: 0, saved: 0, redrawn: 0, confirmed: 0 };
+  const src = `
+    let lastSp=spaces, lastLots=[];
+    const sel={lotId:"L1", cells:new Set(["棟A|0"])};
+    ${functionSource("clone")}
+    ${functionSource("stashSpaces")}
+    ${functionSource("snapshotSpaces")}
+    ${functionSource("applyMove")}
+    function isActiveFresh(){ return true; }
+    function refreshFreshness(){}
+    function selCounts(){ return counts; }
+    function selSnapshot(){ return null; }
+    function validateMove(){ return validate; }
+    function confirm(){ log.confirmed++; return confirmAnswer; }
+    function pushMoveStep(){ log.pushed++; }
+    function saveManual(){ log.saved++; }
+    function clearSel(){}
+    function redraw(){ log.redrawn++; }
+    return { applyMove, spaces:()=>lastSp };
+  `;
+  const made = new Function("spaces", "counts", "validate", "confirmAnswer", "log", src)(
+    spaces, counts, validate, confirmAnswer, log
+  );
+  return { ...made, log };
+}
+
+// 倉庫の1マスだけの配置。zone が "stash" ではないので、applyMove 先頭の
+// 退避振り分けを踏まずに applyMove 自身の分岐へ進む
+function warehouseOnly() {
+  return [{ name: "棟A", zone: "warehouse", cols: [{ h: 4, aisle: false, fills: [{ id: "L1", count: 3 }] }] }];
+}
+
+test("分割の確認を取り消したら、何も変えない", () => {
+  const app = loadApplyMove({
+    spaces: warehouseOnly(),
+    counts: { "棟A|0": 5 },
+    validate: { ok: true, needConfirm: true, before: 1, after: 2, next: [] },
+    confirmAnswer: false,
+  });
+  app.applyMove("棟A", 0);
+  assert.equal(app.log.confirmed, 1, "確認を出していない");
+  assert.equal(app.log.pushed, 0, "確認を取り消したのに履歴に積んでいる");
+  assert.equal(app.log.saved, 0, "確認を取り消したのに保存している");
+});
+
+test("移動が成立したら検証後の配置をそのまま採る", () => {
+  const next = [{ name: "棟A", zone: "warehouse", cols: [{ h: 4, aisle: false, fills: [{ id: "L1", count: 8 }] }] }];
+  const app = loadApplyMove({
+    spaces: warehouseOnly(),
+    counts: { "棟A|0": 5 },
+    validate: { ok: true, needConfirm: false, next },
+    confirmAnswer: true,
+  });
+  app.applyMove("棟A", 0);
+  assert.equal(app.spaces(), next, "検証後の配置を採っていない");
+  assert.equal(app.log.pushed, 1, "履歴に積んでいない");
+  assert.equal(app.log.saved, 1);
+  assert.equal(app.log.redrawn, 1);
+});

@@ -3695,6 +3695,7 @@ function applyMoveToStash(){
   redraw();
 }
 // 検証して lastSp を更新する。動くマスが無い場合と容量不足は黙って中止する。
+// 退避が宛先のときは applyMoveToStash() へ渡す（そちらは黙って中止せず理由を出す）。
 function applyMove(spaceName, colIndex){
   // 退避スペースは倉庫に実在せず、どの列に置くかは何の情報も持たない。
   // 列ではなくスペース全体を落とし先にする
