@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="./icon-192.png">
 <title>パレット配置図 自動作成</title>
 <style>
-  :root{--bg:#f5f6f8;--card:#fff;--line:#d0d5dd;--ink:#1f2937;--muted:#6b7280;--accent:#2563eb;--cell:30px;--safe:env(safe-area-inset-bottom,0px);}
+  :root{--bg:#f5f6f8;--card:#fff;--line:#d0d5dd;--ink:#1f2937;--muted:#6b7280;--accent:#2563eb;--cell:30px;--safe:env(safe-area-inset-bottom,0px);--updatebar-h:0px;}
   *{box-sizing:border-box}
   body{margin:0;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
        background:var(--bg);color:var(--ink);font-size:14px;line-height:1.6;
@@ -34,8 +34,6 @@
   .tab:not(:last-child)::before{content:"";position:absolute;top:12px;right:0;bottom:12px;width:1px;background:var(--line)}
   .tab:hover{background:#eff6ff;color:#1d4ed8}
   .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
-  .tab .dot{display:inline-block;margin-left:5px;font-size:14px;background:#eef2ff;color:#3730a3;
-            border-radius:99px;padding:1px 7px;font-weight:700}
 
   /* ---- テーブル（PC） ---- */
   table{border-collapse:collapse;width:100%}
@@ -168,7 +166,10 @@
              transform:translate(-50%,-160%);white-space:nowrap}
   .cell.segline{border-top:2px dashed #374151}
   .cell.segline-h{border-left:2px dashed #374151}
-  .colcap{font-size:10px;color:#9ca3af;text-align:center;margin-top:2px}
+  /* 列にあと何枚入るかは、盤の上でいちばん見たい数字。10px・#9ca3af では
+     白地でコントラストが約2.5:1 しかなく読めないので、14px・#4b5563 にする。
+     line-height を詰めるのは、通路マスのある列で2行になっても高さを抑えるため */
+  .colcap{font-size:14px;color:#4b5563;text-align:center;margin-top:2px;line-height:1.15}
   /* 配置編集タブの ⚙。盤より上に常に出るのはこのボタンだけ */
   /* 「あさ／ひる」と操作ボタンを1行に収める入れ物。狭い画面では折り返す */
   .edit-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
@@ -365,7 +366,9 @@
   .stashdock.pos-bottom .sb-body{max-height:96px}
   .sb-body .spaces{gap:6px}
   .sb-body .space .name{display:none}
-  .sb-body .colcap{font-size:9px;margin-top:1px}
+  /* 退避スペースの枠は狭い（--cell:16〜20px）ので盤の 14px は入らない。
+     それでも 9px は小さすぎるため 12px にする */
+  .sb-body .colcap{font-size:12px;margin-top:1px}
   .sb-empty{color:#6b7280;font-size:14px;line-height:1.4;padding:6px 2px;text-align:center}
   .sb-back{display:none;flex:none;border:0;border-radius:6px;background:#2563eb;color:#fff;
            font-weight:700;font-size:14px;min-height:34px;cursor:pointer}
@@ -390,6 +393,13 @@
                 font-family:ui-monospace,monospace;font-size:14px}
   .hint{font-size:14px;color:var(--muted)}
   .note{font-size:14px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+  /* 配置のルールは毎回読むものではないので畳んでおく。
+     summary は指で押す見出しなので、他のボタンと同じ 44px を確保する */
+  .note-fold>summary{font-size:14px;font-weight:700;color:#374151;cursor:pointer;
+                     list-style:none;display:flex;align-items:center;gap:6px;min-height:44px}
+  .note-fold>summary::-webkit-details-marker{display:none}
+  .note-fold>summary::before{content:"▸";color:var(--muted)}
+  .note-fold[open]>summary::before{content:"▾"}
   .note b{color:#374151}
   .regcount{font-size:14px;color:var(--muted);margin-bottom:4px}
   .regcount.warn{color:#b45309}
@@ -729,6 +739,13 @@
              align-items:center;gap:12px;justify-content:center}
   #updateBar button{border:0;border-radius:6px;padding:8px 14px;font-size:14px;font-weight:700;
                     background:#fbbf24;color:#111827;cursor:pointer;min-height:40px}
+  /* 更新バナー（z-index:60）は .actionbar（40）と同じ bottom:0 に出るので、
+     そのままでは「▶ 自動配置を作成」を覆って押せなくする。バナーが出ている間だけ、
+     下部バーと本文の下余白をバナーの高さぶん押し上げる。
+     高さは safe-area 込みで端末ごとに変わるため、出した時点で実測して入れる
+     （showUpdateBar）。既定の 0px は、バナーが出ていないときの見た目を変えないため */
+  body.has-update .actionbar{bottom:var(--updatebar-h)}
+  body.has-update .wrap{padding-bottom:calc(96px + var(--safe) + var(--updatebar-h))}
 </style>
 </head>
 <body>
@@ -741,7 +758,7 @@
   <button class="tab active" id="tabbtn-input" onclick="leaveEdit('input')">入力</button>
   <button class="tab" id="tabbtn-edit" onclick="leaveEdit('edit')">配置編集</button>
   <button class="tab" id="tabbtn-sheet" onclick="leaveEdit('sheet')">配置図</button>
-  <button class="tab" id="tabbtn-settings" onclick="leaveEdit('settings')">設定<span class="dot" id="regDot">0</span></button>
+  <button class="tab" id="tabbtn-settings" onclick="leaveEdit('settings')">設定</button>
 </div>
 
 <div class="wrap">
@@ -760,7 +777,6 @@
     <div class="row-actions input-add-actions">
       <button class="btn btn-slip-add" onclick="addSlip('fax')">＋ FAX伝票を追加</button>
       <button class="btn btn-slip-add btn-slip-add-provisional" onclick="addSlip('provisional')">＋ 仮伝票を追加</button>
-      <label class="chk"><input type="checkbox" id="mixChk" checked> 満杯時に混載を許可</label>
       <button class="btn btn-primary" id="runBtnInline" onclick="runFromButton()">▶ 自動配置を作成</button>
     </div>
     <div class="card">
@@ -771,8 +787,10 @@
         <button class="btn btn-ghost" onclick="loadSample('mix')">混載デモ</button>
       </div>
 
+      <details class="note-fold">
+        <summary>配置のルール</summary>
       <div class="note">
-        <span><b>ルール:</b> メイン → 軒下 → PC横・EV横 → あふれ受け(出庫口横・5棟壁際) の順に配置</span>
+        <span>メイン → 軒下 → PC横・EV横 → あふれ受け(出庫口横・5棟壁際) の順に配置</span>
         <span>原則 1列＝1品目</span>
         <span><b>ロット単位</b>で連続した列にまとめる</span>
         <span>通路はメインが埋まってから使用</span>
@@ -780,6 +798,7 @@
         <span>パレット数＝<b>切り上げ</b>(個数 ÷ SNP)</span>
         <span><b>品名＋ロット</b>が違えば別物として配置</span>
       </div>
+      </details>
     </div>
   </div>
 
@@ -1033,6 +1052,12 @@
         </div>
 
         <div class="cfgsec">
+          <h3>配置のしかた</h3>
+          <label class="chk"><input type="checkbox" id="mixChk" checked onchange="toggleMix()"> 満杯時に混載を許可</label>
+          <div class="hint">混載は、列が満杯のときに別の品目と1列を分け合うことです。許可しないと、入りきらない荷物は「あふれ」になります。配置編集の盤では、混ざった列の境目が破線で出ます。</div>
+        </div>
+
+        <div class="cfgsec">
           <h3>ロットのまとめ</h3>
           <label class="chk"><input type="checkbox" id="mergeChk" checked onchange="toggleMerge()"> 同じ品名のロットを1つの欄にまとめる</label>
           <div class="hint">品名・入数・種別・置き場所がすべて同じロットだけをまとめます。メインに置いた荷物は、引き出し線が1本ずつ要るのでまとめません。</div>
@@ -1220,7 +1245,7 @@ let scheduleLoadWarning=[];
 let spacesWereReset=false;
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent", sampleBtns:"palletApp.sampleBtns"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", mix:"palletApp.mix", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent", sampleBtns:"palletApp.sampleBtns"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
 const SPACES_SAVE_VERSION = 4;   // 現場の実測で置き場が増えたので上げる
@@ -1661,7 +1686,6 @@ function loadMaster(){
 }
 function updateRegCount(){
   const names=new Set(MASTER.map(m=>m.name));
-  document.getElementById("regDot").textContent=names.size;
   const info=document.getElementById("regInfo");
   if(!info)return;
   info.innerHTML = names.size===0
@@ -1764,9 +1788,20 @@ function addItemRow(slipOrId,item){
   return tr;
 }
 
+/* 品名・ロット・SNP・個数がどれも空の行。消しても失うものがないので確認しない。
+   種別（充填品／製品）は既定値が入っているだけなので見ない。 */
+function itemRowIsEmpty(tr){
+  return [...tr.querySelectorAll("input")].every(input=>!input.value.trim());
+}
 function removeItemRow(button){
   const tr=button.closest("tr"), slip=button.closest(".slip");
   if(!tr||!slip)return;
+  // ×は狭い列に並ぶので誤って押しやすい。入力済みの行は取り消せないため確認する。
+  if(!itemRowIsEmpty(tr)){
+    const cells=[...tr.querySelectorAll("input")].map(input=>input.value.trim());
+    const label=[cells[0],cells[1]].filter(Boolean).join(" / ") || "この品目";
+    if(!confirm(`${label} を削除します。よろしいですか？`)) return;
+  }
   if(acInput && tr.contains(acInput)) acClose();
   tr.remove();
   if(!slip.querySelector("tbody tr")) slip.querySelector("tbody").appendChild(createItemRow({type:"充填品"}));
@@ -1892,6 +1927,11 @@ function toggleSampleBtns(){
 function applySampleBtns(on){
   const el=document.getElementById("sampleActions");
   if(el) el.style.display = on ? "" : "none";
+}
+/* 満杯時の混載を許すか。既定は on。入力タブのボタン行に混ざっていて毎回 on に
+   戻っていたので、設定タブへ移して端末に保存する。読むのは run() の1か所だけ。 */
+function toggleMix(){
+  saveData(STORE_KEY.mix, document.getElementById("mixChk").checked);
 }
 /* 同じ品名のロットを1つの欄にまとめるか。既定は on。
    「そのほかの表示」の他の項目（矢印の先・角の丸み・端数の「半」）と同じ流儀で、
@@ -2799,7 +2839,11 @@ function drawZone(elId, spaces, colorOf){
               +` style="${bg?'background:'+bg:''}">${label}</div>`;
       });
       const inner = horizontal ? `<div class="hrow">${cells}</div>` : `<div class="col${topAlign?' top':''}">${cells}</div>`;
-      const cap = `<div class="colcap">${used(col)}/${usableCount(col,col.blockedRows)}${col.aisle||aisleRowCount(col,col.blockedRows)?' 通':''}</div>`;
+      /* 列そのものが通路（col.aisle）なら、破線の枠で通路と分かるので何も足さない。
+         列の中に緊急用の通路マスがあるときだけ「+通路」と書く。メインの列は幅が
+         44px しかなく、1行に足すとあふれるので改行して下に置く */
+      const capNote = !col.aisle && aisleRowCount(col,col.blockedRows) ? "<br>+通路" : "";
+      const cap = `<div class="colcap">${used(col)}/${usableCount(col,col.blockedRows)}${capNote}</div>`;
       const gapCls = blockStart? " blockgap":"";
       const style = place ? ` style="${place}"` : "";
       return `<div class="colwrap${col.aisle?' aisle':''}${gapCls}"`
@@ -6244,6 +6288,11 @@ updateSaveStatus();
   if(f){ fracMode=true; document.getElementById("fracChk").checked=true; recalcAllRows(); }
 })();
 
+// 混載の許可：保存があれば復元。既定は on なので false のときだけ落とす
+(function initMix(){
+  if(loadData(STORE_KEY.mix)===false) document.getElementById("mixChk").checked=false;
+})();
+
 // ロットのまとめ：保存があれば復元。既定は on なので false のときだけ落とす
 (function initMergeLots(){
   const m=loadData(STORE_KEY.merge);
@@ -6300,11 +6349,21 @@ showMapState();
 /* ---------- PWA ---------- */
 let waitingSW=null;
 function applyUpdate(){ if(waitingSW){ waitingSW.postMessage("SKIP_WAITING"); } else { location.reload(); } }
+/* 更新バナーを出す。バナーは下部バー（.actionbar）と同じ位置に固定されるので、
+   高さを測って --updatebar-h に入れ、has-update で下部バーを押し上げる。
+   display を先に変えないと、まだ display:none のバナーは高さ 0 で返る。 */
+function showUpdateBar(){
+  const bar=document.getElementById("updateBar");
+  if(!bar) return;
+  bar.style.display="flex";
+  document.documentElement.style.setProperty("--updatebar-h", bar.offsetHeight+"px");
+  document.body.classList.add("has-update");
+}
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
   window.addEventListener("load",()=>{
     navigator.serviceWorker.register("./sw.js").then(reg=>{
       function check(){
-        if(reg.waiting){ waitingSW=reg.waiting; document.getElementById("updateBar").style.display="flex"; }
+        if(reg.waiting){ waitingSW=reg.waiting; showUpdateBar(); }
       }
       check();
       reg.addEventListener("updatefound",()=>{

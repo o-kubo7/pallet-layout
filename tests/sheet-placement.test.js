@@ -1062,8 +1062,13 @@ test("盤のマスは緊急用の通路マスが空の間だけクラスを付�
   assert.match(source, /if\(!filled&&a\.aisleRow\)cls\.push\("aisle-cell"\)/);
 });
 
-test("緊急用マスがある列の列キャップにも通の印を付ける", () => {
-  assert.match(source, /col\.aisle\|\|aisleRowCount\(col,col\.blockedRows\)\?' 通':''/);
+test("緊急用マスがある列の列キャップだけに通路の印を付ける", () => {
+  // 列そのものが通路のときは破線の枠で分かるので印を足さない。
+  // 列の中に緊急用の通路マスがあるときだけ「+通路」と書く（狭いので改行して下に置く）
+  assert.match(
+    source,
+    /const capNote = !col\.aisle && aisleRowCount\(col,col\.blockedRows\) \? "<br>\+通路" : "";/
+  );
 });
 
 test("上に飛び出す列は下げず、飛び出さない列を1マス下げる", () => {
