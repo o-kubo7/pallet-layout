@@ -277,42 +277,48 @@
   /* 取り消しは帯の中に入れる。盤をたどっている最中でも指の近くに残る */
   .toolflag{position:fixed;z-index:65;display:none;padding:9px 12px;border-radius:8px;
             font-size:14px;font-weight:700;color:#fff;text-align:center;
-            left:var(--flagleft,16px);width:var(--flagwidth,calc(100% - 32px));
+            left:var(--flagleft,16px);
+            /* 中身ぶんの幅にする。--flagwidth（#editCard の内側から退避スペースを
+               除いた実測幅）は上限としてだけ使う。以前は width に入れていたため、
+               「3P」と小さなボタン2個しか無くても帯が #editCard の端まで伸び、
+               横に間延びしていた。上限に達したときは .flagcount が … で切れる。 */
+            width:max-content;max-width:var(--flagwidth,calc(100% - 32px));
             /* タブ列の直下。PC 幅は @media (min-width:700px) で横幅だけを調整する */
             top:var(--flagtopm,110px);
-            gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
+            gap:10px;align-items:center;justify-content:flex-start;flex-wrap:wrap}
   .flagundo{border:0;border-radius:6px;padding:7px 12px;background:#fff;color:#1f2937;
             font-weight:700;font-size:14px;cursor:pointer;min-height:44px}
-  /* 戻す・進むは入れ物にまとめ、margin-left:auto で右端に固定する。
+  /* 戻す・進むは入れ物にまとめて帯の左端に置き、選択数はその右に流す。
+     押す場所を帯の左端に固定しておくと、選択数の文言が「3P」「3P 選択中」
+     「3P 運搬中」と伸び縮みしてもボタンの位置が動かず、押し間違えない。
      nowrap にしないと、幅が足りないときに選択数が縮まずに折り返し、ボタンが
      2行目へ回る。選択を外した瞬間にボタンが 38px 跳ね上がる（実測）。
-     縮む役割は選択数に持たせる。幅が足りなければ選択数が … で切れ、
-     ボタンは右端に残る。
+     縮む役割は選択数に持たせる。幅が足りなければ選択数が … で切れる。
      min-width は指で押せる大きさ。記号だけだと 38px まで縮むため。
      この4つは @media の外に置くこと。@media (min-width:700px) の中だけに書くと
      375px で効かず、帯が崩れる（設計書 §7-1） */
   .toolflag{flex-wrap:nowrap}
-  .toolflag .flagcount{flex:1 1 0;min-width:0;overflow:hidden;
+  /* flex:0 1 auto。width:max-content の帯では基準を 0 にすると意図が濁るので、
+     ふだんは中身ぶん、上限に当たったときだけ縮んで … で切れる形にする。 */
+  .toolflag .flagcount{flex:0 1 auto;min-width:0;overflow:hidden;
                        white-space:nowrap;text-overflow:ellipsis;text-align:left}
-  .flagbtns{flex:none;display:flex;gap:10px;margin-left:auto}
+  .flagbtns{flex:none;display:flex;gap:10px}
   .flagbtns button{min-width:44px}
+  /* 矢印だけ大きくする。文字を付けたときに「戻す」「進む」まで大きくならないよう、
+     矢印は span.ar に入れてそちらにだけ効かせる。line-height:1 を付けないと
+     20px の行送りでボタンの高さが増える。 */
+  .flagundo .ar{font-size:20px;line-height:1}
   .flagundo:disabled{opacity:.4;cursor:default}
   /* 選択数は帯の背景と区別が付くように白抜きにする */
   .flagcount{background:rgba(255,255,255,.22);border-radius:6px;padding:3px 9px;
              font-size:14px;font-weight:800;white-space:nowrap}
   .flagcount:empty{display:none}
-  /* ボタンに文字を付けると、戻す・進むが 69.9px ずつに太る。375px 幅では帯の
-     内側が 162.3px しかなく、ボタン2個＋隙間で 159.8px を使うため、選択数に
-     残るのは 2.5px（実測）。ところが .flagcount の左右 padding 9px＋9px は
-     flex では縮まない床なので（min-width:0 は padding を削らない）、15.5px の
-     はみ出しが justify-content:center で左右へ 7.75px ずつ配られ、帯の
-     左右の余白 12px が 4.2px まで食い潰される。しかも中身の幅は 0px になり、
-     数字が1文字も出ない空の白い角丸だけが残る。
-     出せないものは消す。gap も畳まれ、ボタンが本来の 12px の位置へ戻る。
-     実機（Pixel 9a・412px）はこの幅に入らないので、見え方は変わらない。 */
-  @media (max-width:399px){
-    .toolflag.lbl .flagcount{display:none}
-  }
+  /* 選択数が入りきらないときは fitFlagCount()（JS）が消す。幅の境を CSS に
+     書くのはやめた。必要量は文言（「3P」「3P 選択中」「12P 運搬中」）と
+     ボタンの太さ（記号 98px・文字 161.8px）で変わり、幅だけでは決まらないため。
+     .flagcount の左右 padding 9px＋9px は flex では縮まない床なので
+     （min-width:0 は padding を削らない）、入らないまま置くと中身の幅が 0px の
+     空の白い角丸だけが残り、はみ出しが帯の左右の余白 12px を食い潰す。 */
   .toolflag{background:#334155}
   .toolflag.hasSel{background:#2563eb}
   /* 運んでいる間は、選んだマスを薄くして「いま持ち上げている」ことを示す。
@@ -351,7 +357,9 @@
          右側だけ固定値で空ける。134px = 右 padding16px + ボタン幅100px(実測) +
          隙間18px（task-8 で実測した値をそのまま踏襲。#cfgToggleBtn の文言は
          変わらないので実測値のずれは想定していない）。 */
-      width:calc(var(--flagwidth,600px) - 134px);
+      /* ここも width ではなく上限。帯は中身ぶんの幅で、⚙ に届きそうなときだけ
+         この値で頭打ちになり、選択数が … で切れる。 */
+      max-width:calc(var(--flagwidth,600px) - 134px);
       justify-content:flex-start;text-align:left}
   }
   .stashdock.big.pos-tr,.stashdock.big.pos-tl{width:72vw;height:56vh;max-width:520px;max-height:560px;--cell:20px}
@@ -855,13 +863,13 @@
         </div>
         <!-- 帯の中身は選択数と、戻す・進むの2ボタン。 -->
         <div class="toolflag" id="toolFlag">
-          <span id="toolFlagCount" class="flagcount"></span>
           <span class="flagbtns">
             <button class="flagundo" id="undoBtn" aria-label="元に戻す" title="元に戻す"
-                    onclick="doUndo()">↩</button>
+                    onclick="doUndo()"><span class="ar">↩</span></button>
             <button class="flagundo" id="redoBtn" aria-label="やり直す" title="やり直す"
-                    onclick="doRedo()">↪</button>
+                    onclick="doRedo()"><span class="ar">↪</span></button>
           </span>
+          <span id="toolFlagCount" class="flagcount"></span>
         </div>
         <div id="legend" class="legend"></div>
 
@@ -1947,14 +1955,31 @@ function toggleUndoLabel(){
   saveData(STORE_KEY.undoLabel, on);
   applyUndoLabel(on);
 }
+/* ボタンの中身を作り直す。矢印は span.ar に入れる。.flagundo .ar だけ
+   font-size:20px にしてあるので、文字を付けても「戻す」「進む」は 14px のまま
+   矢印だけが大きくなる。textContent へ "↩ 戻す" と入れると矢印と文字が同じ
+   大きさになってしまうため、ここで組み立てる。 */
+function fillUndoBtn(btn, arrow, label, arrowFirst){
+  btn.textContent="";
+  const a=document.createElement("span");
+  a.className="ar";
+  a.textContent=arrow;
+  if(arrowFirst){
+    btn.appendChild(a);
+    if(label) btn.appendChild(document.createTextNode(" "+label));
+  }else{
+    if(label) btn.appendChild(document.createTextNode(label+" "));
+    btn.appendChild(a);
+  }
+}
 function applyUndoLabel(on){
   const u=document.getElementById("undoBtn"), r=document.getElementById("redoBtn");
-  if(u) u.textContent = on ? "↩ 戻す" : "↩";
-  if(r) r.textContent = on ? "進む ↪" : "↪";
-  // 文字を付けた状態を CSS から見えるようにする。狭い幅で選択数を隠す
-  // @media (max-width:399px) .toolflag.lbl .flagcount の目印。
-  const f=document.getElementById("toolFlag");
-  if(f) f.classList.toggle("lbl", on);
+  // 戻すは「↩ 戻す」、進むは「進む ↪」。矢印を進む向きの外側に置くと、
+  // 2つ並べたときに矢印が左右の端に来て、どちらへ動くかが形で分かる
+  if(u) fillUndoBtn(u, "↩", on ? "戻す" : "", true);
+  if(r) fillUndoBtn(r, "↪", on ? "進む" : "", false);
+  // ボタンが太くなって選択数が入らなくなることがある。測り直して決める
+  if(typeof updateFlag==="function") updateFlag();
 }
 /* 同じ品名のロットを1つの欄にまとめるか。既定は on。
    「そのほかの表示」の他の項目（矢印の先・角の丸み・端数の「半」）と同じ流儀で、
@@ -3868,6 +3893,14 @@ function syncDockTop(){
   syncFlagRect();
 }
 window.addEventListener("resize",syncDockTop);
+/* 幅が変わったら帯も測り直す。--flagwidth（帯の上限）は #editCard と退避スペースの
+   実測から作るので、窓の大きさが変われば合わなくなる。あわせて updateFlag() も
+   呼ぶ。選択数の文言が 700px を境に「3P」と「3P 選択中」で入れ替わるため、
+   描き直さないと境をまたいだときだけ古い文言が残る。 */
+window.addEventListener("resize", function(){
+  if(typeof syncFlagRect==="function") syncFlagRect();
+  if(typeof updateFlag==="function") updateFlag();
+});
 /* 選択の帯（#toolFlag）は position:fixed。ビューポート基準の座標が要るので、
    #editCard（左端・幅）と #editCtl＝⚙ の行（横幅・スマホ縦位置の基準）を
    実測して CSS 変数へ入れる。100vw は使わない（スクロールバー幅を含みずれる
@@ -4164,13 +4197,63 @@ function updateFlag(){
     return;
   }
   // 選択数。絵文字は使わない。帯が狭いと … で切れるが、切れて困るのは
-  // 数字より後ろの語なので、数字から先に書く
-  if(c) c.textContent = n ? (moving ? n+"P 運搬中" : n+"P") : "";
+  // 数字より後ろの語なので、数字から先に書く。
+  // PC 幅（退避スペースと ⚙ を避けても余裕がある）では「選択中」まで出す。
+  // 狭い幅で同じ文言にすると、上限に当たって「3P 選…」と切れるだけで役に立たない。
+  // 判定は CSS の PC 分岐と同じ 700px。ずれると文言だけ先に変わる
+  const wide = window.matchMedia("(min-width:700px)").matches;
+  if(c) c.textContent = n ? (moving ? n+"P 運搬中" : (wide ? n+"P 選択中" : n+"P")) : "";
   // 押せないときも消さずに残す。消えると位置がずれて押し間違える
   if(ub) ub.disabled = !canU;
   if(rb) rb.disabled = !canR;
   f.style.display="flex";
   f.classList.toggle("hasSel", n>0);
+  fitFlagCount();
+}
+/* 選択数の自然な幅を測るための控え。作り直すと測るたびに DOM が増えるので使い回す。
+   .flagcount を付けてあるので、font-size・font-weight・padding は本物と同じになる。
+   帯の外に置くため .toolflag .flagcount の flex 指定は効かず、縮まない素の幅が出る。 */
+let flagProbe=null;
+function flagCountWidth(text){
+  if(!flagProbe){
+    flagProbe=document.createElement("span");
+    flagProbe.className="flagcount";
+    flagProbe.style.cssText="position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap";
+    document.body.appendChild(flagProbe);
+  }
+  flagProbe.textContent=text;
+  return flagProbe.getBoundingClientRect().width;
+}
+/* 選択数が帯に入りきるかを実測して決める。入らなければ消す。
+   幅の境を CSS に書くのはやめた。必要量は文言とボタンの太さの両方で変わり、
+   画面の幅だけでは決まらないため（実測・選択3P、必要量＝帯の左右padding 24
+   ＋ボタン＋gap 10＋文言）:
+     記号98px  「3P」169.9  「3P 運搬中」216.6  「12P 運搬中」226.6
+     文字161.8 「3P」233.7  「3P 選択中」280.4  「12P 運搬中」290.4
+   これに対し帯の上限は 375px→186.3 / 412px→211.0 / 500px→270.0 / 1024px→554.0。
+   記号のままでも 375・412px では「運搬中」が入らない。
+   上限は帯の max-width をそのまま読む。PC 幅では @media (min-width:700px) が
+   ⚙ ボタンのぶん 134px 引いた値で上書きするので、--flagwidth を直接見ると
+   PC 幅だけ過大になる。
+   入らないまま置くと、.flagcount の左右 padding 9px＋9px が flex では縮まない床
+   なので（min-width:0 は padding を削らない）、中身の幅が 0px の空の白い角丸だけが
+   残り、はみ出しが帯の左右の余白 12px を食い潰す。 */
+function fitFlagCount(){
+  const f=document.getElementById("toolFlag");
+  const c=document.getElementById("toolFlagCount");
+  if(!f || !c) return;
+  const b=f.querySelector(".flagbtns");
+  if(!b){ c.hidden=false; return; }
+  // 文言が無いときは .flagcount:empty が消す。ここで hidden を立てると、
+  // 次に文言が入ったときに消えたままになる
+  if(!c.textContent){ c.hidden=false; return; }
+  const cs=getComputedStyle(f);
+  const cap=parseFloat(cs.maxWidth);
+  if(!isFinite(cap)){ c.hidden=false; return; }   // none のときは上限なし＝必ず入る
+  const pad=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+  const gap=parseFloat(cs.columnGap)||0;
+  const need=pad+b.getBoundingClientRect().width+gap+flagCountWidth(c.textContent);
+  c.hidden = need>cap;
 }
 // sel の中身どおりに .sel を貼り直す
 function repaintSel(){

@@ -317,15 +317,37 @@ test("帯に戻すと進むのボタンを置く", () => {
   assert.match(source, /id="redoBtn"[^>]*aria-label="やり直す"/);
 });
 
-test("ボタンは入れ物にまとめて右端に固定する", () => {
-  // 選択数の有無で位置が動かないようにする。設計書 §7-1
+test("ボタンは入れ物にまとめて帯の左端に置く", () => {
+  // 選択数の文言が「3P」「3P 選択中」「3P 運搬中」と伸び縮みしても
+  // ボタンの位置が動かないようにする。押し間違えを防ぐのが目的
   const css = source.match(/\.flagbtns\{[^}]*\}/);
   assert.notEqual(css, null, ".flagbtns の指定がない");
-  assert.match(css[0], /margin-left:auto/);
   assert.match(css[0], /flex:none/);
+  // 右端に寄せる指定は外した。左端は帯の justify-content:flex-start で決まる
+  assert.equal(css[0].includes("margin-left:auto"), false);
   const btn = source.match(/\.flagbtns button\{[^}]*\}/);
   assert.notEqual(btn, null);
   assert.match(btn[0], /min-width:44px/);
+  // マークアップも .flagbtns が選択数より先に来ること
+  const flag = source.match(/<div class="toolflag" id="toolFlag">[\s\S]*?<\/div>/);
+  assert.notEqual(flag, null);
+  assert.ok(flag[0].indexOf('class="flagbtns"') < flag[0].indexOf('id="toolFlagCount"'),
+    "マークアップでボタンが選択数より後ろにある");
+});
+
+test("帯は中身ぶんの幅にし、--flagwidth は上限としてだけ使う", () => {
+  // width に入れると「3P」と小さなボタン2個しか無くても #editCard の端まで
+  // 伸びて横に間延びする（1024px で 554px、中身は 216.6px しかない）
+  const css = source.match(/\.toolflag\{position:fixed[\s\S]*?\}/);
+  assert.notEqual(css, null);
+  assert.match(css[0], /width:max-content/);
+  assert.match(css[0], /max-width:var\(--flagwidth/);
+  // max-width: の一部を拾わないよう直前の1文字も見る
+  assert.equal(/[^-]width:var\(--flagwidth/.test(css[0]), false);
+  // PC 幅の ⚙ 回避も width ではなく上限
+  assert.match(source, /max-width:calc\(var\(--flagwidth,600px\) - 134px\)/);
+  // ここも max-width: の一部を拾わないよう直前の1文字を見る
+  assert.equal(/[^-]width:calc\(var\(--flagwidth,600px\) - 134px\)/.test(source), false);
 });
 
 test("帯は折り返さず、選択数のほうが縮む", () => {
@@ -335,7 +357,9 @@ test("帯は折り返さず、選択数のほうが縮む", () => {
   assert.notEqual(wrap, null, "@media の外に .toolflag{flex-wrap:nowrap} がない");
   const css = source.match(/\.toolflag \.flagcount\{[^}]*\}/);
   assert.notEqual(css, null);
-  assert.match(css[0], /flex:1 1 0/);
+  // width:max-content の帯では基準を 0 にすると意図が濁る。
+  // ふだんは中身ぶん、上限に当たったときだけ縮む
+  assert.match(css[0], /flex:0 1 auto/);
   assert.match(css[0], /min-width:0/);
   assert.match(css[0], /text-overflow:ellipsis/);
 });
@@ -380,7 +404,7 @@ test("ボタンの文字の設定はこの端末に保存する", () => {
 });
 
 test("文字を付けても aria-label は変えない", () => {
-  const fn = functionSource("applyUndoLabel");
+  const fn = functionSource("applyUndoLabel") + functionSource("fillUndoBtn");
   // ボタンの中身だけ差し替える。読み上げと長押しの説明はどちらでも同じ
   assert.match(fn, /textContent/);
   assert.equal(fn.includes("aria-label"), false);
@@ -390,22 +414,66 @@ test("記号のときと文字のときの両方の表記がある", () => {
   const fn = functionSource("applyUndoLabel");
   assert.match(fn, /"↩"/);
   assert.match(fn, /"↪"/);
-  assert.match(fn, /"↩ 戻す"/);
-  assert.match(fn, /"進む ↪"/);
+  assert.match(fn, /"戻す"/);
+  assert.match(fn, /"進む"/);
 });
 
-test("文字を付けた状態を帯のクラスで CSS に伝える", () => {
-  const fn = functionSource("applyUndoLabel");
-  // 「文字ON かつ狭い幅」は CSS 側の条件なので、状態を目印として渡す必要がある。
-  assert.match(fn, /classList\.toggle\("lbl", on\)/);
-  assert.match(fn, /getElementById\("toolFlag"\)/);
+test("矢印は span.ar に入れて矢印だけ大きくする", () => {
+  // textContent へ "↩ 戻す" と入れると矢印と「戻す」が同じ大きさになる。
+  // 矢印だけ 20px にするため、矢印を別の要素にする
+  const fn = functionSource("fillUndoBtn");
+  assert.match(fn, /className="ar"/);
+  assert.match(fn, /createElement\("span"\)/);
+  // 文字を足すときも矢印は span のまま（innerHTML でまとめて入れない）
+  assert.match(fn, /createTextNode/);
+  assert.equal(fn.includes("innerHTML"), false);
+  const css = source.match(/\.flagundo \.ar\{[^}]*\}/);
+  assert.notEqual(css, null, ".flagundo .ar の指定がない");
+  assert.match(css[0], /font-size:20px/);
+  // 20px の行送りでボタンの高さが増えないようにする
+  assert.match(css[0], /line-height:1/);
+  // マークアップ側の初期値にも span.ar を入れておく
+  assert.match(source, /id="undoBtn"[\s\S]*?<span class="ar">↩<\/span>/);
+  assert.match(source, /id="redoBtn"[\s\S]*?<span class="ar">↪<\/span>/);
 });
 
-test("狭い幅で文字を付けたときは選択数を隠す", () => {
-  // 375px 幅では帯の内側が 162.3px しかなく、文字を付けたボタン2個＋隙間で
-  // 159.8px を使うため選択数に残るのは 2.5px（実測）。.flagcount の左右 padding
-  // 9px＋9px は flex で縮まない床なので、はみ出しが帯の左右の余白 12px を
-  // 4.2px まで食い潰し、しかも中身の幅は 0px で数字が1文字も出ない。
-  // 実機（Pixel 9a・412px）はこの幅に入らないので見え方は変わらない。
-  assert.match(source, /@media \(max-width:399px\)\{\s*\.toolflag\.lbl \.flagcount\{display:none\}/);
+test("PC 幅では選択数に「選択中」まで出す", () => {
+  const fn = functionSource("updateFlag");
+  // 判定は CSS の PC 分岐と同じ 700px。ずれると文言だけ先に変わる
+  assert.match(fn, /matchMedia\("\(min-width:700px\)"\)/);
+  assert.match(fn, /"P 選択中"/);
+  assert.match(fn, /"P 運搬中"/);
+});
+
+test("選択数が入りきらないときは実測して消す", () => {
+  // 必要量は文言（「3P」「3P 選択中」「12P 運搬中」）とボタンの太さ
+  // （記号 98px・文字 161.8px）の両方で変わり、画面の幅だけでは決まらない。
+  // 実測（選択3P、必要量＝帯の左右padding 24 ＋ボタン＋gap 10 ＋文言）:
+  //   記号  「3P」169.9  「3P 運搬中」216.6
+  //   文字  「3P」233.7  「3P 選択中」280.4
+  // 帯の上限は 375px→186.3 / 412px→211.0 / 500px→270.0 / 1024px→554.0。
+  // 記号のままでも 375・412px では「運搬中」が入らない。
+  const fn = functionSource("fitFlagCount");
+  // 上限は帯の max-width をそのまま読む。PC 幅では ⚙ のぶん 134px 引いた値で
+  // 上書きされるので、--flagwidth を直接見ると PC 幅だけ過大になる
+  assert.match(fn, /parseFloat\(cs\.maxWidth\)/);
+  assert.match(fn, /paddingLeft/);
+  assert.match(fn, /columnGap/);
+  assert.match(fn, /c\.hidden = need>cap/);
+  // 文言が空のときは :empty が消す。ここで hidden を立てると戻らなくなる
+  assert.match(fn, /if\(!c\.textContent\)\{ c\.hidden=false; return; \}/);
+  // updateFlag から必ず通る
+  assert.match(functionSource("updateFlag"), /fitFlagCount\(\)/);
+  // 幅の境を CSS に書く方式はやめた
+  assert.equal(source.includes(".toolflag.lbl"), false);
+});
+
+test("選択数の幅は使い回す控えで測る", () => {
+  // 測るたびに DOM を作ると増え続ける。.flagcount を付けて本物と同じ
+  // font-size・font-weight・padding にし、帯の外に置いて縮まない幅を出す
+  const fn = functionSource("flagCountWidth");
+  assert.match(fn, /if\(!flagProbe\)/);
+  assert.match(fn, /className="flagcount"/);
+  assert.match(fn, /visibility:hidden/);
+  assert.match(fn, /white-space:nowrap/);
 });
