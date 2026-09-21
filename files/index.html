@@ -2721,6 +2721,7 @@ function run(goMap,deferSave=false){
     if(n>0){ l.stashed=Math.min(n,l.pallets); l.pallets-=l.stashed; }
   });
   lastSp=place(lots,allowMix,activeShift().blocked); lastLots=lots; hasResult=true;
+  clearHistory();          // 配置を作り直したので、前の履歴は使えない
   // 倉庫へ置く分だけを place() に渡したので、退避分をここで積み戻し、
   // 合計表示のためにパレット数も元に戻す。
   lots.forEach(l=>{ if(l.stashed){ putToStash(lastSp,l.id,l.stashed); l.pallets+=l.stashed; } });
@@ -3161,6 +3162,11 @@ function setBlockedEditMode(enabled){
     ? "セルをタップまたはなぞって配置不可を切り替えます。ロットが残るセルは再配置待ちです。"
     : "配置不可にするセルを編集できます。";
   if(map) map.classList.toggle("blocked-edit",blockedEditMode);
+  // 配置不可を塗っている最中に「戻す」を押せると、裏で lastSp が入れ替わって
+  // 何が起きたか分からなくなる。編集中は帯ごと隠す
+  const flag=document.getElementById("toolFlag");
+  if(flag && blockedEditMode) flag.style.display="none";
+  if(!blockedEditMode) updateFlag();
   if(!blockedEditMode){
     blockedEditPointerKey=null;
     blockedEditPointerId=null;
@@ -3272,7 +3278,7 @@ function toggleCell(cellEl, intent){
     sel.cells.add(cellKey(cellEl));
     cellEl.classList.add("sel");
     showSelCount();
-    hideSweepUndo();
+    pushSelectStep();
     return;
   }
   if(sel.lotId==null) sel.lotId=id;
@@ -3282,7 +3288,7 @@ function toggleCell(cellEl, intent){
   else { sel.cells.add(k); cellEl.classList.add("sel"); }
   if(sel.cells.size===0) sel.lotId=null;
   showSelCount();
-  hideSweepUndo();          // タップで選び直したら、なぞりの取り消しは出さない
+  pushSelectStep();
 }
 
 document.addEventListener("click",e=>{
@@ -3614,6 +3620,9 @@ function endDrag(){
 function applyMove(spaceName, colIndex){
   if(!isActiveFresh()){ refreshFreshness(); return; }
   const counts=selCounts(sel.cells);
+  // growStashCol は lastSp を直接書き換えるので、その前に控える。
+  // 後で控えると、退避スペースの列が伸びた後の状態しか戻せない
+  const spBefore=snapshotSpaces(lastSp), selBefore=selSnapshot();
   // [試作] 退避スペースは倉庫に実在しないので、列の高さは制約ではない。
   // 落とす枚数が入るところまで伸ばす（倉庫のエリアには何もしない）。
   growStashCol(spaceName, colIndex, movingCount(counts, spaceName, colIndex));
@@ -3625,6 +3634,7 @@ function applyMove(spaceName, colIndex){
     if(!confirm(`${name} が ${v.before}か所から ${v.after}か所に分かれます。このまま移動しますか？`)) return;
   }
   lastSp=v.next;
+  pushMoveStep(spBefore, selBefore);
   saveManual();
   clearSel();
   redraw();
@@ -4089,7 +4099,8 @@ function endRubber(){
   const started=rubber.started;
   releaseRubber();
   rubber=null;
-  if(started && sweepUndo) showSweepUndo();
+  // 6px 動かなければクリック扱い。そのときは toggleCell が積むので、ここでは積まない
+  if(started) pushSelectStep();
 }
 
 // 引き始めてからやめる逃げ道。Escape で引く前の選択に戻す。
@@ -4353,7 +4364,8 @@ document.addEventListener("pointermove",e=>{
 function endSweep(){
   if(sweep){
     try{ sweep.target.releasePointerCapture(sweep.id); }catch(err){}
-    if(sweep.started && sweep.mode && sweepUndo) showSweepUndo();
+    // ひとなぞりが成立したときだけ1ステップ。なぞり中の selAdd では積まない
+    if(sweep.started && sweep.mode) pushSelectStep();
   }
   sweep=null;
   if(edge.raf){ cancelAnimationFrame(edge.raf); edge.raf=0; }

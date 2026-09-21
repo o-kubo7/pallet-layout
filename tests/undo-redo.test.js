@@ -241,3 +241,58 @@ test("履歴の適用は redraw のあとに選択を戻す", () => {
   assert.ok(redrawAt < selAt, "redraw() より前に選択を戻している");
   assert.ok(selAt < paintAt, "repaintSel() より後に選択を戻している");
 });
+
+test("移動は growStashCol より前の配置を控える", () => {
+  // growStashCol は lastSp を直接書き換える。後で控えると、
+  // 退避スペースの列が伸びた後の状態しか残らない。設計書 §5-1
+  const fn = functionSource("applyMove");
+  const before = fn.indexOf("snapshotSpaces(lastSp)");
+  // 実装コメントにも「growStashCol」という語が出てくるため、素の文字列だと
+  // コメント側にマッチして誤判定になる。実際の呼び出し（開き括弧つき）を探す。
+  const grow = fn.indexOf("growStashCol(spaceName");
+  assert.notEqual(before, -1, "移動前の配置を控えていない");
+  assert.notEqual(grow, -1);
+  assert.ok(before < grow, "控えるのが growStashCol より後になっている");
+});
+
+test("移動後のステップは選択を空で積む", () => {
+  // 移動前の選択を持たせると、やり直したときに荷物の無いマスのキーが戻り、
+  // 帯に「NP」だけが出る実体のない選択になる
+  const fn = functionSource("pushMoveStep");
+  assert.match(fn, /sel:\{lotId:null,\s*cells:\[\]\}/);
+  // 土台（動かす前）のステップには、動かす前の選択を持たせる
+  assert.match(fn, /sel:selBefore/);
+});
+
+test("移動が確定してから履歴に積む", () => {
+  const fn = functionSource("applyMove");
+  const assign = fn.indexOf("lastSp=v.next");
+  const push = fn.indexOf("pushMoveStep(");
+  assert.ok(assign !== -1 && push !== -1);
+  assert.ok(assign < push, "配置が確定する前に積んでいる");
+});
+
+test("タップの選択を履歴に積む", () => {
+  const fn = functionSource("toggleCell");
+  assert.match(fn, /pushSelectStep\(\)/);
+  // intent==="single" の枝でも積む（どちらも選択が変わるため）
+  assert.equal((fn.match(/pushSelectStep\(\)/g) || []).length, 2);
+});
+
+test("なぞりと矩形はストロークが成立したときだけ積む", () => {
+  const sweep = functionSource("endSweep");
+  assert.match(sweep, /sweep\.started/);
+  assert.match(sweep, /pushSelectStep\(\)/);
+  const rubber = functionSource("endRubber");
+  assert.match(rubber, /started/);
+  assert.match(rubber, /pushSelectStep\(\)/);
+});
+
+test("自動配置は履歴を捨てる", () => {
+  assert.match(functionSource("run"), /clearHistory\(\)/);
+});
+
+test("時間帯の切替では履歴を捨てない", () => {
+  // あさ・ひるで別々に持つので、切り替えただけで消してはいけない
+  assert.equal(functionSource("setActiveTiming").includes("clearHistory()"), false);
+});
