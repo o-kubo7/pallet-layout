@@ -148,15 +148,56 @@ test("ensureStashRoom は満杯なら空き列を足さない", () => {
   assert.equal(spaces[0].cols.length, 2, "満杯なのに空き列を足している");
 });
 
-// R1: putToStash() が読む stashCapacity() は Σ lot.pallets を見るので、
-// run() は「全ロットの pallets を戻す」→「退避へ積み戻す」の順でないといけない。
-// 順序が入れ替わると、まだ戻していない退避分だけ上限が目減りして、
-// 退避の中身が黙って消える（task-3-brief.md 追記 R1 参照）。
-test("run は退避を積み戻す前に l.pallets を戻す", () => {
+// R1: run() の中の「退避を積み戻す」コード片を、テキストの位置関係ではなく
+// 本物として実行して確かめる。clearHistory() の直後から「あふれた分は退避
+// スペースへ逃がす」コメントの手前までを切り出す。この境界は、積み戻しを
+// 1ループで書くか2ループに分けるかに関わらず動かない目印なので、安全な
+// 書き方の変更まで巻き添えで落とすことはない（実測で確認済み。下記コメント参照）。
+//
+// 切り出した本物のコードを、退避のみで倉庫の空きが無いロットを複数件、
+// その日の入力パレット数ちょうど（余白ゼロ）だけ与えて動かす。
+// putToStash(lastSp,l.id,l.stashed) が l.pallets+=l.stashed より先に走る
+// 退避（task-3-brief.md 追記 R1 の不具合）に戻すと、あとから処理される
+// ロットぶんだけ stashCapacity() が目減りし、余白ゼロでは即座に積み残しが
+// 出る。実際に「putToStash → l.pallets+=l.stashed」の順に手直しして
+// このテストに通したところ、100P 中 50P しか積めず検知した
+// （3ロットとも全量退避、想定合計100Pに対し取得50P）。
+// 一方、2ループを「ロットごとに restore→put」の1ループへ安全に書き換える
+// 変更は、同じ入力で実行しても取りこぼしが発生しないことを確認済みなので、
+// このテストは対象外のまま（想定合計100Pに対し取得100P）。
+function stashRestoreBlock() {
   const fn = functionSource("run");
-  const restore = fn.indexOf("l.pallets+=l.stashed");
-  const restack = fn.indexOf("putToStash(lastSp,l.id,l.stashed)");
-  assert.ok(restore !== -1, "l.pallets を戻す行が無い");
-  assert.ok(restack !== -1, "退避への積み戻しが無い");
-  assert.ok(restore < restack, "パレット数を戻すのが積み戻しより後になっている");
+  const marker = "clearHistory();";
+  const s = fn.indexOf(marker);
+  assert.notEqual(s, -1, "clearHistory() が見つからない");
+  const start = s + marker.length;
+  const endMarker = "// あふれた分は退避スペースへ逃がす";
+  const e = fn.indexOf(endMarker, start);
+  assert.notEqual(e, -1, "あふれ処理の手前の目印が見つからない");
+  return fn.slice(start, e);
+}
+
+test("run の退避積み戻しは、倉庫の空きが無いロットが複数あっても取りこぼさない", () => {
+  const snippet = stashRestoreBlock();
+  const spaces = [{ name: "退避", zone: "stash", cols: [{ h: 4, aisle: false, fills: [] }] }];
+  // 3ロットとも倉庫には置けず全量退避、かつ退避の残り容量はその日の
+  // 入力パレット数ちょうど（余白ゼロ）。目減りが1Pでもあれば積み残す条件。
+  const lots = [
+    { id: "L1", pallets: 0, stashed: 50 },
+    { id: "L2", pallets: 0, stashed: 30 },
+    { id: "L3", pallets: 0, stashed: 20 },
+  ];
+  const wantTotal = lots.reduce((a, l) => a + l.stashed, 0);
+  const src = `
+    const STASH_COL_H=${constant("STASH_COL_H")};
+    let lastSp=spaces, lastLots=lots;
+    ${STASH_PIECES.map(functionSource).join("\n")}
+    ${snippet}
+    return { spaces: () => lastSp };
+  `;
+  const { spaces: getSp } = new Function("spaces", "lots", src)(spaces, lots);
+  const sp = getSp();
+  const total = sp[0].cols.reduce((a, c) => a + c.fills.reduce((x, f) => x + f.count, 0), 0);
+  assert.equal(total, wantTotal, "退避の中身が取りこぼされている");
+  lots.forEach(l => assert.equal(l.pallets, l.stashed, `${l.id} の pallets が元に戻っていない`));
 });
