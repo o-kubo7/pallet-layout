@@ -32,6 +32,10 @@ function constant(name) {
   return m[1];
 }
 
+/* 退避の1列の高さ。本体の STASH_COL_H を読む。
+   ここに数字を直接書くと、段数を変えたときにテストだけが取り残される。 */
+const COL_H = Number(constant("STASH_COL_H"));
+
 /* 本体から関数だけを取り出して動かす。names に挙げた関数はすべて本物を使う。
    関数宣言は巻き上げられるので、names の順番は結果に影響しない。 */
 function load(names, { spaces = [], lots = [] } = {}) {
@@ -70,11 +74,11 @@ function stashWith(count) {
   const cols = [];
   let rem = count;
   while (rem > 0) {
-    const put = Math.min(rem, 4);
-    cols.push({ h: 4, aisle: false, fills: [{ id: "L1", count: put }] });
+    const put = Math.min(rem, COL_H);
+    cols.push({ h: COL_H, aisle: false, fills: [{ id: "L1", count: put }] });
     rem -= put;
   }
-  if (!cols.length) cols.push({ h: 4, aisle: false, fills: [] });
+  if (!cols.length) cols.push({ h: COL_H, aisle: false, fills: [] });
   return [{ name: "退避", zone: "stash", cols }];
 }
 
@@ -104,7 +108,7 @@ test("上限を列数から数えない", () => {
 });
 
 function emptyStash() {
-  return [{ name: "退避", zone: "stash", cols: [{ h: 4, aisle: false, fills: [] }] }];
+  return [{ name: "退避", zone: "stash", cols: [{ h: COL_H, aisle: false, fills: [] }] }];
 }
 
 const STASH_PIECES = ["clone", "used", "stashSpaces", "stashTotal", "stashCapacity",
@@ -116,7 +120,9 @@ test("putToStash は列数の上限で止まらない", () => {
   putToStash(spaces, "L1", 100);
   const total = spaces[0].cols.reduce((a, c) => a + c.fills.reduce((x, f) => x + f.count, 0), 0);
   assert.equal(total, 100, "100P 入っていない");
-  assert.equal(spaces[0].cols.length, 25, "h:4 の列が 25 本にならない");
+  const want = Math.ceil(100 / COL_H);
+  assert.equal(spaces[0].cols.length, want,
+    `1列 ${COL_H} 段なら 100P は ${want} 本になるはず`);
 });
 
 test("putToStash は上限を超えては積まない", () => {
@@ -179,7 +185,7 @@ function stashRestoreBlock() {
 
 test("run の退避積み戻しは、倉庫の空きが無いロットが複数あっても取りこぼさない", () => {
   const snippet = stashRestoreBlock();
-  const spaces = [{ name: "退避", zone: "stash", cols: [{ h: 4, aisle: false, fills: [] }] }];
+  const spaces = [{ name: "退避", zone: "stash", cols: [{ h: COL_H, aisle: false, fills: [] }] }];
   // 3ロットとも倉庫には置けず全量退避、かつ退避の残り容量はその日の
   // 入力パレット数ちょうど（余白ゼロ）。目減りが1Pでもあれば積み残す条件。
   const lots = [
@@ -208,7 +214,7 @@ const VALIDATE_PIECES = [...STASH_PIECES, "cloneSpaces", "validateStashMove"];
 function warehouseAndStash(count = 25) {
   return [
     { name: "棟A", zone: "near", cols: [{ h: 30, aisle: false, fills: [{ id: "L1", count }] }] },
-    { name: "退避", zone: "stash", cols: [{ h: 4, aisle: false, fills: [] }] },
+    { name: "退避", zone: "stash", cols: [{ h: COL_H, aisle: false, fills: [] }] },
   ];
 }
 
