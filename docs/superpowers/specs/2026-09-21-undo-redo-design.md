@@ -251,26 +251,41 @@ function applyMove(spaceName, colIndex){
 
 ### 7-1. 帯
 
-`#toolFlag` の中身をこうする。
+`#toolFlag` の中身は 2 つだけにする。
 
 ```html
 <span id="toolFlagCount" class="flagcount"></span>
-<span id="toolFlagText"></span>
 <span class="flagbtns">
-  <button id="undoBtn" onclick="doUndo()" aria-label="元に戻す" title="元に戻す">↩ 戻す</button>
-  <button id="redoBtn" onclick="doRedo()" aria-label="やり直す" title="やり直す">進む ↪</button>
+  <button id="undoBtn" onclick="doUndo()" aria-label="元に戻す" title="元に戻す">↩</button>
+  <button id="redoBtn" onclick="doRedo()" aria-label="やり直す" title="やり直す">↪</button>
 </span>
 ```
 
-`#flagClearBtn` と `#sweepUndoBtn` は削除する。`undoSweep()`、`showSweepUndo()`、
-`hideSweepUndo()`、`sweepUndo` も使われなくなるので消す。
+**説明文（`#toolFlagText`）は廃止する。** 帯に入るのは選択数と 2 つのボタンだけ。
 
-**呼び出し元も消すこと。** `hideSweepUndo()` は 6 か所から呼ばれている。
+**絵文字（✋）は使わない。** 選択数は「5P」とだけ書く。運搬中は「5P 運搬中」。
+アプリの他の画面と同じく、P をパレット数の単位として使う。
+
+削除するものは次のとおり。
+
+| 消すもの | 場所 | 備考 |
+|---|---|---|
+| `#flagClearBtn`（選択解除） | 867 | Undo に吸収 |
+| `#sweepUndoBtn`（↩ いまの選択を取り消す） | 869 | Undo に吸収 |
+| `#toolFlagText`（説明文） | 866 | 帯には出さない |
+| `undoSweep()` / `showSweepUndo()` / `hideSweepUndo()` / `sweepUndo` | 4142・4146・4152・4003 | 使わなくなる |
+| `navShow` / `setNav()` / 「案内 表示・非表示」ボタン | 3957・3958・833-834 | 説明文が無くなり制御対象を失う |
+
+`navShow` は説明文の出し入れだけに使われている（`files/index.html:4133` の `if(!navShow) msg="";`）。
+説明文を消すと、配置編集タブの ⚙ 表示設定にある「案内 表示／非表示」は押しても何も起きなくなる。
+一緒に消す。保存キー `palletApp.navShow` も読み書きしない。
+
+**`hideSweepUndo()` の呼び出し元も消すこと。** 6 か所ある。
 
 | 行 | 呼び出し元 | 消した後どうするか |
 |---|---|---|
 | 3207 | `clearSel()` | 行ごと消す |
-| 3275 | `toggleCell()` の `intent==="single"` | 行ごと消す |
+| 3275 | `toggleCell()` の `intent==="single"` | 履歴に積む処理に置き換える（§5-2） |
 | 3285 | `toggleCell()` の末尾 | 履歴に積む処理に置き換える（§5-2） |
 | 4104 | `cancelRubber()` | 行ごと消す |
 | 4248 | `toMove()` | 行ごと消す |
@@ -281,44 +296,50 @@ function applyMove(spaceName, colIndex){
 
 CSS の `#toolFlag #flagClearBtn,#toolFlag #sweepUndoBtn`（353）も書き換える。
 
-**ボタンの位置を固定する。** 選択数の有無・案内文の有無・運搬中かどうかで位置が動かないようにする。
+**ボタンの位置を固定する。** 選択数が出たり消えたりしても動かないようにする。
 
 ```css
-.flagcount{flex:none}
-#toolFlagText{flex:1 1 0;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.toolflag{flex-wrap:nowrap}
+.toolflag .flagcount{flex:1 1 0;min-width:0;overflow:hidden;
+                     white-space:nowrap;text-overflow:ellipsis;text-align:left}
 .flagbtns{flex:none;display:flex;gap:10px;margin-left:auto}
 .flagbtns button{min-width:44px}
 ```
 
-`#toolFlagText` の `flex-basis` を `auto` ではなく **`0`** にすること。
-`.toolflag` は `flex-wrap:wrap` なので、基準幅が `auto` だと説明文が縮む前に折り返す。
+要点は 2 つ。
+
+1. **`flex-wrap:nowrap`**。既定の `wrap` のままだと、幅が足りないときに選択数が縮まずに
+   折り返し、ボタンが 2 行目へ回る。選択を外した瞬間にボタンが 38px 跳ね上がる（実測）
+2. **縮む役割を選択数に持たせる**（`flex:1 1 0` と `min-width:0`）。
+   幅が足りなければ選択数が `…` で切れ、ボタンは右端に残る
 
 **この指定は `@media (min-width:700px)` の外に置くこと。**
-いまの `#toolFlagText{flex:1 1 auto;…}` は `files/index.html:357`、つまり
-`@media (min-width:700px)` ブロック（314-359行）の中にある。同じブロックの `flex-wrap:nowrap`（349）も同じ。
-375px ではどちらも効いていない。`.flagundo` の並び（282付近）に新しく書くこと。
+いまの `#toolFlagText{flex:1 1 auto;…}`（`files/index.html:357`）と `flex-wrap:nowrap`（349）は
+`@media (min-width:700px)` ブロック（314-359行）の中にあり、375px では効いていない。
+`.flagundo` の並び（282付近）に新しく書く。
 
 **帯の幅は画面幅では決まらない。** `syncFlagRect()`（`files/index.html:3868`）が、
 退避スペース（`#stashDock`）と重ならないように帯の幅を削る。
-退避スペースが「右上」「左上」のときは、その実測幅ぶんが帯から引かれる。
+退避スペースが「右上」「左上」のときは、その実測幅ぶんが引かれる。
 
-375px 幅での実測。
+375px 幅での実測（`nowrap` と上の CSS を当てた状態）。
 
-| 退避スペースの位置 | 帯の幅 | 選択なし（ボタンだけ） | 選択あり |
-|---|---|---|---|
-| 右上（既定） | 186px | 62px（1行） | 100px（2行） |
-| 下 | 327px | 62px（1行） | 62px（1行） |
+| ボタンの表記 | 帯の幅 | 高さ | ボタンの縦位置 | 選択数に使える幅 |
+|---|---|---|---|---|
+| 記号（↩ ↪） | 186px | 62px（1行） | 固定 | 54px |
+| 文字（↩ 戻す／進む ↪） | 186px | 62px（1行） | 固定 | 18px |
 
-**退避スペースが右上のとき、選択中は2行になる。これを許容する。**
-「✋ 5マス選択中」は 117px、ボタンは文字ありで 150px、記号だけで 98px。
-gap と padding を足すと、どちらも 186px に収まらない。
-選択数を「5マス」（75px）まで縮めても 207px で入らない。
+どちらも 1 行 62px でボタンは動かない。違うのは選択数に残る幅だけ。
 
-選択していないとき（＝戻す・進むのボタンだけ）は 1行 62px に収まる。
-これが「動かした直後に戻したい」場面の見え方なので、いちばん大事なところは1行で足りる。
+- 記号のとき 54px … 「5P」（38px）は収まる。「5マス選択中」（98px）は `…` で切れる
+- 文字のとき 18px … 選択数はほぼ見えない
 
-参考：700px 以上の幅では 1 行 62px、戻すボタンの左端 188px・進むボタンの右端 338px で、
-選択数や案内文の有無にかかわらず位置は動かない（`margin-left:auto` が効くため）。
+**記号を既定にする。** 375px で選択数とボタンを両立できるのは記号のときだけ。
+文字にしたい人は表示設定で切り替える（§7-4）。
+
+退避スペースを「下」に置くと帯は 327px 使えるので、文字でも選択数が全部見える。
+
+700px 以上では 1 行 62px、進むボタンの右端は選択数の有無にかかわらず動かない。
 
 ### 7-2. ボタンの状態
 
@@ -357,16 +378,18 @@ gap と padding を足すと、どちらも 186px に収まらない。
 
 ```
 配置編集の戻す・進む
-  □ 記号だけにする
-  （チェックを入れると「↩ 戻す」「進む ↪」が「↩」「↪」になります。
-    狭い画面で帯を短くしたいときに使ってください）
+  □ ボタンに文字を付ける
+  （チェックを入れると「↩」「↪」が「↩ 戻す」「進む ↪」になります。
+    画面が狭いと、選択中のマス数が隠れます）
 ```
 
-既定はオフ（文字あり）。初めて見る人にも意味が分かるようにするため。
+**既定はオフ（記号だけ）。** §7-1 のとおり、375px で選択数とボタンを両立できるのは記号のときだけ。
+文字にすると選択数に 18px しか残らず、ほぼ見えなくなる。その代わり、
+`aria-label` と `title` に「元に戻す」「やり直す」を入れてあるので、
+読み上げと長押しでは記号だけでも意味が分かる。
 
-既存の `mergeChk` と同じ流儀で `STORE_KEY.undoIcon` に保存する（`files/index.html:1249` に追加）。
-`toggleUndoIcon()` を作り、起動時に `loadData()` で復元する。
-記号だけにしても `aria-label` と `title` は「元に戻す」「やり直す」のまま残す。
+既存の `mergeChk` と同じ流儀で `STORE_KEY.undoLabel` に保存する（`files/index.html:1249` に追加）。
+`toggleUndoLabel()` を作り、起動時に `loadData()` で復元する。
 
 ---
 
@@ -402,7 +425,7 @@ gap と padding を足すと、どちらも 186px に収まらない。
 
 移動前の選択をそのまま持たせると、やり直したときに「移動元のマス」のキーが復元される。
 そのマスにはもう荷物が無いので `repaintSel()` は1枚も光らせないのに、
-帯には「✋ Nマス選択中」と出る。実体のない選択が残ってしまう。
+帯には「Nマス選択中」と出る。実体のない選択が残ってしまう。
 
 履歴が空のときに先に積む「土台」のステップ（移動**前**の状態）は、移動前の選択を持たせる。
 戻ったときに選択も戻るので、そのまま選び直さずに操作を続けられる。
@@ -474,9 +497,11 @@ historyCanRedo(hist)         // 進めるか
 ソースの正規表現検査で確かめる（既存テストと同じ流儀）。
 
 - `#flagClearBtn` と `#sweepUndoBtn` が消えている
-- `#toolFlagText` の `flex` が `1 1 0` になっている
+- `.toolflag` が `flex-wrap:nowrap` になっている
+- 選択数（`.flagcount`）の `flex` が `1 1 0` で、`min-width:0` が付いている
 - `.flagbtns` に `margin-left:auto` がある
-- 記号の切り替えが `STORE_KEY.undoIcon` に保存される
+- 文字の切り替えが `STORE_KEY.undoLabel` に保存される
+- `#toolFlagText` と `navShow` が消えている
 
 ### 9-3. ブラウザでの実操作
 
