@@ -82,8 +82,24 @@ test("配置編集には配置不可編集と再配置の操作がある", () =>
 test("スマホの選択ガイドはビューポート座標で配置する", () => {
   assert.doesNotMatch(source, /--flagtopm", Math\.round\(ctlRect\.bottom\+window\.scrollY\+8\)/);
   const sync = functionSource("syncFlagTop");
-  assert.match(sync, /const top=Math\.round\(tabsBottom\+8\)\+"px"/);
+  // .tabs は sticky なので「rect.top + scrollY が一定」が成り立たない。
+  // fixed の帯はビューポート座標のまま置き、スクロールのたびに測り直す。
+  // ここで scrollY を足すと、タブ列が上に詰まったぶんだけ隙間が開く。
+  assert.doesNotMatch(sync, /scrollY/);
+  assert.match(sync, /const top=Math\.round\(base\+8\)\+"px"/);
   assert.match(sync, /setProperty\("--flagtopm", top\)/);
+});
+
+test("帯はタブ列と配置編集ツールバーの下にあるほうを避ける", () => {
+  const sync = functionSource("syncFlagTop");
+  // ページ最上部では .edit-toolbar がタブ列より下に居る。タブ列だけを基準にすると
+  // 帯がツールバーに重なり、「配置不可エリアを設定」「⚙ 表示設定」が押せなくなる。
+  assert.match(sync, /let base = tabsBottom/);
+  assert.match(sync, /querySelector\("#tab-edit \.edit-toolbar"\)/);
+  // 画面外へ抜けたツールバーを基準にしないための下端比較と、
+  // 他タブで #tab-edit が display:none になったときの高さ0ガード。
+  assert.match(sync, /br\.height>0 && br\.bottom>base/);
+  assert.match(sync, /base = br\.bottom/);
 });
 
 test("配置不可編集は指先直下のセルをなぞり対象にする", () => {

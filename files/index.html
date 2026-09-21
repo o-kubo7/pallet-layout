@@ -3869,7 +3869,21 @@ window.addEventListener("resize",syncDockTop);
 function syncFlagTop(){
   const tabsEl=document.querySelector(".tabs");
   const tabsBottom = tabsEl ? tabsEl.getBoundingClientRect().bottom : 48;
-  const top=Math.round(tabsBottom+8)+"px";
+  // タブ列だけを基準にすると、ページ最上部で帯が .edit-toolbar（「あさ／ひる」と
+  // 「配置不可エリアを設定」「⚙ 表示設定」の行）に重なる（実測: 1024px 幅・
+  // スクロール0 で帯 137〜199、ツールバー 158〜202 の 41px が重なり、ボタン2個が
+  // 帯の下に隠れて押せない）。ツールバーは sticky ではなく普通の流れの中にあるので、
+  // スクロールすれば画面の上へ抜けていく。そこで「タブ列の下端」と「画面内に
+  // 残っているツールバーの下端」の、下にあるほうを基準にする。スクロールで
+  // ツールバーが画面外へ出れば bottom が tabsBottom を下回り、自動でタブ列基準に戻る。
+  let base = tabsBottom;
+  const bar = document.querySelector("#tab-edit .edit-toolbar");
+  if(bar){
+    const br = bar.getBoundingClientRect();
+    // 配置編集タブ以外では #tab-edit が display:none で高さ0になる。そのときは見ない。
+    if(br.height>0 && br.bottom>base) base = br.bottom;
+  }
+  const top=Math.round(base+8)+"px";
   document.documentElement.style.setProperty("--flagtop", top);
   document.documentElement.style.setProperty("--flagtopm", top);
 }
