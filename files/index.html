@@ -277,16 +277,48 @@
   /* 取り消しは帯の中に入れる。盤をたどっている最中でも指の近くに残る */
   .toolflag{position:fixed;z-index:65;display:none;padding:9px 12px;border-radius:8px;
             font-size:14px;font-weight:700;color:#fff;text-align:center;
-            left:var(--flagleft,16px);width:var(--flagwidth,calc(100% - 32px));
+            left:var(--flagleft,16px);
+            /* 中身ぶんの幅にする。--flagwidth（#editCard の内側から退避スペースを
+               除いた実測幅）は上限としてだけ使う。以前は width に入れていたため、
+               「3P」と小さなボタン2個しか無くても帯が #editCard の端まで伸び、
+               横に間延びしていた。上限に達したときは .flagcount が … で切れる。 */
+            width:max-content;max-width:var(--flagwidth,calc(100% - 32px));
             /* タブ列の直下。PC 幅は @media (min-width:700px) で横幅だけを調整する */
             top:var(--flagtopm,110px);
-            gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
+            gap:10px;align-items:center;justify-content:flex-start;flex-wrap:wrap}
   .flagundo{border:0;border-radius:6px;padding:7px 12px;background:#fff;color:#1f2937;
             font-weight:700;font-size:14px;cursor:pointer;min-height:44px}
-  /* 選択数は説明文と区別が付くように白抜きにする。案内を切っても残る要素 */
+  /* 戻す・進むは入れ物にまとめて帯の左端に置き、選択数はその右に流す。
+     押す場所を帯の左端に固定しておくと、選択数の文言が「3P」「3P 選択中」
+     「3P 運搬中」と伸び縮みしてもボタンの位置が動かず、押し間違えない。
+     nowrap にしないと、幅が足りないときに選択数が縮まずに折り返し、ボタンが
+     2行目へ回る。選択を外した瞬間にボタンが 38px 跳ね上がる（実測）。
+     縮む役割は選択数に持たせる。幅が足りなければ選択数が … で切れる。
+     min-width は指で押せる大きさ。記号だけだと 38px まで縮むため。
+     この4つは @media の外に置くこと。@media (min-width:700px) の中だけに書くと
+     375px で効かず、帯が崩れる（設計書 §7-1） */
+  .toolflag{flex-wrap:nowrap}
+  /* flex:0 1 auto。width:max-content の帯では基準を 0 にすると意図が濁るので、
+     ふだんは中身ぶん、上限に当たったときだけ縮んで … で切れる形にする。 */
+  .toolflag .flagcount{flex:0 1 auto;min-width:0;overflow:hidden;
+                       white-space:nowrap;text-overflow:ellipsis;text-align:left}
+  .flagbtns{flex:none;display:flex;gap:10px}
+  .flagbtns button{min-width:44px}
+  /* 矢印だけ大きくする。文字を付けたときに「戻す」「進む」まで大きくならないよう、
+     矢印は span.ar に入れてそちらにだけ効かせる。line-height:1 を付けないと
+     20px の行送りでボタンの高さが増える。 */
+  .flagundo .ar{font-size:20px;line-height:1}
+  .flagundo:disabled{opacity:.4;cursor:default}
+  /* 選択数は帯の背景と区別が付くように白抜きにする */
   .flagcount{background:rgba(255,255,255,.22);border-radius:6px;padding:3px 9px;
              font-size:14px;font-weight:800;white-space:nowrap}
   .flagcount:empty{display:none}
+  /* 選択数が入りきらないときは fitFlagCount()（JS）が消す。幅の境を CSS に
+     書くのはやめた。必要量は文言（「3P」「3P 選択中」「12P 運搬中」）と
+     ボタンの太さ（記号 98px・文字 161.8px）で変わり、幅だけでは決まらないため。
+     .flagcount の左右 padding 9px＋9px は flex では縮まない床なので
+     （min-width:0 は padding を削らない）、入らないまま置くと中身の幅が 0px の
+     空の白い角丸だけが残り、はみ出しが帯の左右の余白 12px を食い潰す。 */
   .toolflag{background:#334155}
   .toolflag.hasSel{background:#2563eb}
   /* 運んでいる間は、選んだマスを薄くして「いま持ち上げている」ことを示す。
@@ -325,37 +357,10 @@
          右側だけ固定値で空ける。134px = 右 padding16px + ボタン幅100px(実測) +
          隙間18px（task-8 で実測した値をそのまま踏襲。#cfgToggleBtn の文言は
          変わらないので実測値のずれは想定していない）。 */
-      width:calc(var(--flagwidth,600px) - 134px);
-      justify-content:flex-start;text-align:left;
-      /* なぞり操作後は選択数バッジ・説明文・「選択解除」・「↩ いまのなぞりを
-         取り消す」の4要素が並ぶ。折り返すと2行になり下のメッセージへ重なる
-         （task-8 fix で判明済み）ため、PC 幅では常に1行に収める。
-         長い説明文は #toolFlagText 側で省略する。
-         ↑この nowrap は帯が position:absolute だった頃、2行になると
-         下の #messages を覆ってしまう問題への対策として入れた。今は帯が
-         position:fixed で常に盤の上に浮いており、2行になっても何かを
-         押し出したり、盤以外の要素を覆ったりはしない。そのため、下の
-         .big ルールで「退避スペース展開中だけ」nowrap を上書きして良い。 */
-      flex-wrap:nowrap}
-    /* 退避スペース（#stashDock）を展開(.big)すると PC 幅でも最大520px を
-       占め、700px 幅では帯に残る幅が約123px（実測：sweepUndoBtn.right
-       から gap=16 の分だけ左）、3要素（実測約362px）が物理的に入らない
-       （task-10 fix report 参照）。nowrap のままだと3要素が #toolFlag
-       の箱からあふれて退避スペースへ視覚的に重なるため、展開中だけ折り返し
-       を許して2行以上にする（スマホ幅では元々折り返しを許容しており、高さが
-       伸びるだけで破綻しない）。#stashDock → #toolFlag → #legend の
-       DOM 順（兄弟）を利用した後続兄弟セレクタで、非展開時は対象外
-       ＝nowrap のまま。 */
-    #stashDock.big ~ #toolFlag{flex-wrap:wrap}
-    /* 選択数バッジと2つのボタンは navShow を切っても出る「常に見える」要素。
-       絶対に縮めない・省略しない（flex アイテムは既定でも min-width:auto な
-       ので中身より縮まないはずだが、明示して事故を防ぐ）。 */
-    #toolFlag .flagcount,#toolFlag #flagClearBtn,#toolFlag #sweepUndoBtn{flex:none}
-    /* 説明文だけが可変長。狭い幅では末尾を省略して1行に収める。
-       flex アイテムは min-width:0 を与えないと、内容量より縮まずに
-       兄弟を押し出して折り返しの原因になる点に注意。 */
-    #toolFlagText{flex:1 1 auto;min-width:0;overflow:hidden;
-      text-overflow:ellipsis;white-space:nowrap}
+      /* ここも width ではなく上限。帯は中身ぶんの幅で、⚙ に届きそうなときだけ
+         この値で頭打ちになり、選択数が … で切れる。 */
+      max-width:calc(var(--flagwidth,600px) - 134px);
+      justify-content:flex-start;text-align:left}
   }
   .stashdock.big.pos-tr,.stashdock.big.pos-tl{width:72vw;height:56vh;max-width:520px;max-height:560px;--cell:20px}
   .sb-head{display:flex;align-items:center;gap:4px;flex:none}
@@ -829,9 +834,6 @@
       <div class="empty" id="editEmpty"></div>
       <div class="editcfg" id="editCfg" hidden>
       <div class="sizectl" id="dockCtl">
-        <span class="lbl">案内</span>
-        <button class="sizebtn on" id="navOnBtn" onclick="setNav(true)">表示</button>
-        <button class="sizebtn" id="navOffBtn" onclick="setNav(false)">非表示</button>
         <span class="grp"><span class="lbl">退避スペースの位置</span>
           <button class="sizebtn" id="dockTlBtn" onclick="setDockPos('tl')">左上</button>
           <button class="sizebtn on" id="dockTrBtn" onclick="setDockPos('tr')">右上</button>
@@ -859,15 +861,15 @@
             <div class="sb-empty" id="sbEmpty">ここへ<br>ドラッグ</div></div>
           <button class="sb-back" id="sbBackBtn" onclick="returnSelToWarehouse()">◀ 倉庫へ戻す</button>
         </div>
-        <!-- 帯の中身は3つ。案内（navShow）で消えるのは説明文だけで、
-             選択数と2つのボタンは案内を切っても出す。 -->
+        <!-- 帯の中身は選択数と、戻す・進むの2ボタン。 -->
         <div class="toolflag" id="toolFlag">
+          <span class="flagbtns">
+            <button class="flagundo" id="undoBtn" aria-label="元に戻す" title="元に戻す"
+                    onclick="doUndo()"><span class="ar">↩</span></button>
+            <button class="flagundo" id="redoBtn" aria-label="やり直す" title="やり直す"
+                    onclick="doRedo()"><span class="ar">↪</span></button>
+          </span>
           <span id="toolFlagCount" class="flagcount"></span>
-          <span id="toolFlagText"></span>
-          <button class="flagundo" id="flagClearBtn" style="display:none"
-                  onclick="clearSel()">選択解除</button>
-          <button class="flagundo" id="sweepUndoBtn" style="display:none"
-                  onclick="undoSweep()">↩ いまの選択を取り消す</button>
         </div>
         <div id="legend" class="legend"></div>
 
@@ -1059,6 +1061,12 @@
         </div>
 
         <div class="cfgsec">
+          <h3>配置編集の戻す・進む</h3>
+          <label class="chk"><input type="checkbox" id="undoLabelChk" onchange="toggleUndoLabel()"> ボタンに文字を付ける</label>
+          <div class="hint">盤の上の帯にある「↩」「↪」を「↩ 戻す」「進む ↪」にします。画面が狭いと、選んでいるマス数が隠れます。押したときの動きは変わりません。</div>
+        </div>
+
+        <div class="cfgsec">
           <h3>ロットのまとめ</h3>
           <label class="chk"><input type="checkbox" id="mergeChk" checked onchange="toggleMerge()"> 同じ品名のロットを1つの欄にまとめる</label>
           <div class="hint">品名・入数・種別・置き場所がすべて同じロットだけをまとめます。メインに置いた荷物は、引き出し線が1本ずつ要るのでまとめません。</div>
@@ -1242,11 +1250,15 @@ const TIMING_KEYS=["am","pm"];
 const TIMING_LABEL={am:"あさ",pm:"ひる"};
 const SCHEDULE_VERSION=1;
 let activeTiming="am", schedule=null, stableSeq=0;
+// 履歴（あさ・ひる別）。帯の初期化がスクリプト評価中に読むため、宣言だけを前に出す。
+// historyMake は関数宣言（ホイストされる）なのでここで呼べる。ほかの履歴関数・
+// activeHistory() 等の定義は files/index.html:6097 付近「配置編集の履歴（戻す・進む）」を参照。
+let histories = { am:historyMake(), pm:historyMake() };
 let scheduleLoadWarning=[];
 let spacesWereReset=false;
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", mix:"palletApp.mix", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent", sampleBtns:"palletApp.sampleBtns"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", mix:"palletApp.mix", undoLabel:"palletApp.undoLabel", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent", sampleBtns:"palletApp.sampleBtns"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
 const SPACES_SAVE_VERSION = 4;   // 現場の実測で置き場が増えたので上げる
@@ -1933,6 +1945,41 @@ function applySampleBtns(on){
    戻っていたので、設定タブへ移して端末に保存する。読むのは run() の1か所だけ。 */
 function toggleMix(){
   saveData(STORE_KEY.mix, document.getElementById("mixChk").checked);
+}
+/* 戻す・進むのボタンに文字を付けるか。既定はオフ（記号だけ）。
+   375px では帯が 186px しかなく、文字を付けると選んでいるマス数に 18px しか
+   残らない（設計書 §7-1）。aria-label と title は変えないので、
+   記号だけでも読み上げと長押しで意味が分かる。 */
+function toggleUndoLabel(){
+  const on=document.getElementById("undoLabelChk").checked;
+  saveData(STORE_KEY.undoLabel, on);
+  applyUndoLabel(on);
+}
+/* ボタンの中身を作り直す。矢印は span.ar に入れる。.flagundo .ar だけ
+   font-size:20px にしてあるので、文字を付けても「戻す」「進む」は 14px のまま
+   矢印だけが大きくなる。textContent へ "↩ 戻す" と入れると矢印と文字が同じ
+   大きさになってしまうため、ここで組み立てる。 */
+function fillUndoBtn(btn, arrow, label, arrowFirst){
+  btn.textContent="";
+  const a=document.createElement("span");
+  a.className="ar";
+  a.textContent=arrow;
+  if(arrowFirst){
+    btn.appendChild(a);
+    if(label) btn.appendChild(document.createTextNode(" "+label));
+  }else{
+    if(label) btn.appendChild(document.createTextNode(label+" "));
+    btn.appendChild(a);
+  }
+}
+function applyUndoLabel(on){
+  const u=document.getElementById("undoBtn"), r=document.getElementById("redoBtn");
+  // 戻すは「↩ 戻す」、進むは「進む ↪」。矢印を進む向きの外側に置くと、
+  // 2つ並べたときに矢印が左右の端に来て、どちらへ動くかが形で分かる
+  if(u) fillUndoBtn(u, "↩", on ? "戻す" : "", true);
+  if(r) fillUndoBtn(r, "↪", on ? "進む" : "", false);
+  // ボタンが太くなって選択数が入らなくなることがある。測り直して決める
+  if(typeof updateFlag==="function") updateFlag();
 }
 /* 同じ品名のロットを1つの欄にまとめるか。既定は on。
    「そのほかの表示」の他の項目（矢印の先・角の丸み・端数の「半」）と同じ流儀で、
@@ -2721,6 +2768,7 @@ function run(goMap,deferSave=false){
     if(n>0){ l.stashed=Math.min(n,l.pallets); l.pallets-=l.stashed; }
   });
   lastSp=place(lots,allowMix,activeShift().blocked); lastLots=lots; hasResult=true;
+  clearHistory();          // 配置を作り直したので、前の履歴は使えない
   // 倉庫へ置く分だけを place() に渡したので、退避分をここで積み戻し、
   // 合計表示のためにパレット数も元に戻す。
   lots.forEach(l=>{ if(l.stashed){ putToStash(lastSp,l.id,l.stashed); l.pallets+=l.stashed; } });
@@ -3161,6 +3209,11 @@ function setBlockedEditMode(enabled){
     ? "セルをタップまたはなぞって配置不可を切り替えます。ロットが残るセルは再配置待ちです。"
     : "配置不可にするセルを編集できます。";
   if(map) map.classList.toggle("blocked-edit",blockedEditMode);
+  // 配置不可を塗っている最中に「戻す」を押せると、裏で lastSp が入れ替わって
+  // 何が起きたか分からなくなる。編集中は帯ごと隠す
+  const flag=document.getElementById("toolFlag");
+  if(flag && blockedEditMode) flag.style.display="none";
+  if(!blockedEditMode) updateFlag();
   if(!blockedEditMode){
     blockedEditPointerKey=null;
     blockedEditPointerId=null;
@@ -3204,7 +3257,6 @@ function clearSel(){
   sel.lotId=null; sel.cells.clear();
   document.querySelectorAll(".cell.sel").forEach(c=>c.classList.remove("sel"));
   if(typeof showSelCount==="function") showSelCount();
-  if(typeof hideSweepUndo==="function") hideSweepUndo();
   if(typeof drawStashDock==="function") drawStashDock(lastSp, lastLots);
 }
 function cellKey(cellEl){
@@ -3272,7 +3324,7 @@ function toggleCell(cellEl, intent){
     sel.cells.add(cellKey(cellEl));
     cellEl.classList.add("sel");
     showSelCount();
-    hideSweepUndo();
+    pushSelectStep();
     return;
   }
   if(sel.lotId==null) sel.lotId=id;
@@ -3282,7 +3334,7 @@ function toggleCell(cellEl, intent){
   else { sel.cells.add(k); cellEl.classList.add("sel"); }
   if(sel.cells.size===0) sel.lotId=null;
   showSelCount();
-  hideSweepUndo();          // タップで選び直したら、なぞりの取り消しは出さない
+  pushSelectStep();
 }
 
 document.addEventListener("click",e=>{
@@ -3614,6 +3666,9 @@ function endDrag(){
 function applyMove(spaceName, colIndex){
   if(!isActiveFresh()){ refreshFreshness(); return; }
   const counts=selCounts(sel.cells);
+  // growStashCol は lastSp を直接書き換えるので、その前に控える。
+  // 後で控えると、退避スペースの列が伸びた後の状態しか戻せない
+  const spBefore=snapshotSpaces(lastSp), selBefore=selSnapshot();
   // [試作] 退避スペースは倉庫に実在しないので、列の高さは制約ではない。
   // 落とす枚数が入るところまで伸ばす（倉庫のエリアには何もしない）。
   growStashCol(spaceName, colIndex, movingCount(counts, spaceName, colIndex));
@@ -3625,6 +3680,7 @@ function applyMove(spaceName, colIndex){
     if(!confirm(`${name} が ${v.before}か所から ${v.after}か所に分かれます。このまま移動しますか？`)) return;
   }
   lastSp=v.next;
+  pushMoveStep(spBefore, selBefore);
   saveManual();
   clearSel();
   redraw();
@@ -3837,6 +3893,14 @@ function syncDockTop(){
   syncFlagRect();
 }
 window.addEventListener("resize",syncDockTop);
+/* 幅が変わったら帯も測り直す。--flagwidth（帯の上限）は #editCard と退避スペースの
+   実測から作るので、窓の大きさが変われば合わなくなる。あわせて updateFlag() も
+   呼ぶ。選択数の文言が 700px を境に「3P」と「3P 選択中」で入れ替わるため、
+   描き直さないと境をまたいだときだけ古い文言が残る。 */
+window.addEventListener("resize", function(){
+  if(typeof syncFlagRect==="function") syncFlagRect();
+  if(typeof updateFlag==="function") updateFlag();
+});
 /* 選択の帯（#toolFlag）は position:fixed。ビューポート基準の座標が要るので、
    #editCard（左端・幅）と #editCtl＝⚙ の行（横幅・スマホ縦位置の基準）を
    実測して CSS 変数へ入れる。100vw は使わない（スクロールバー幅を含みずれる
@@ -3854,7 +3918,21 @@ window.addEventListener("resize",syncDockTop);
 function syncFlagTop(){
   const tabsEl=document.querySelector(".tabs");
   const tabsBottom = tabsEl ? tabsEl.getBoundingClientRect().bottom : 48;
-  const top=Math.round(tabsBottom+8)+"px";
+  // タブ列だけを基準にすると、ページ最上部で帯が .edit-toolbar（「あさ／ひる」と
+  // 「配置不可エリアを設定」「⚙ 表示設定」の行）に重なる（実測: 1024px 幅・
+  // スクロール0 で帯 137〜199、ツールバー 158〜202 の 41px が重なり、ボタン2個が
+  // 帯の下に隠れて押せない）。ツールバーは sticky ではなく普通の流れの中にあるので、
+  // スクロールすれば画面の上へ抜けていく。そこで「タブ列の下端」と「画面内に
+  // 残っているツールバーの下端」の、下にあるほうを基準にする。スクロールで
+  // ツールバーが画面外へ出れば bottom が tabsBottom を下回り、自動でタブ列基準に戻る。
+  let base = tabsBottom;
+  const bar = document.querySelector("#tab-edit .edit-toolbar");
+  if(bar){
+    const br = bar.getBoundingClientRect();
+    // 配置編集タブ以外では #tab-edit が display:none で高さ0になる。そのときは見ない。
+    if(br.height>0 && br.bottom>base) base = br.bottom;
+  }
+  const top=Math.round(base+8)+"px";
   document.documentElement.style.setProperty("--flagtop", top);
   document.documentElement.style.setProperty("--flagtopm", top);
 }
@@ -3952,17 +4030,6 @@ function setDockPos(v){
   // 見てしまい古いままになる（実測で発見）。
   syncDockTop();
 }
-/* 案内（盤の上の帯）の表示・非表示。慣れた人には邪魔になるため。
-   ただし「いまのなぞりを取り消す」だけは、非表示でも出す。取り消せないと困る。 */
-let navShow=true;
-function setNav(on){
-  navShow=!!on;
-  const a=document.getElementById("navOnBtn"), b=document.getElementById("navOffBtn");
-  if(a) a.classList.toggle("on", navShow);
-  if(b) b.classList.toggle("on", !navShow);
-  saveData("palletApp.navShow", navShow);
-  updateFlag();
-}
 // 退避の中身を1行で見せる。誰が何枚逃げているかが分からないと戻し忘れる
 // 退避の中身を1行で見せる。誰が何枚逃げているかが分からないと戻し忘れる
 function drawStashBar(sp, lots){
@@ -4000,7 +4067,6 @@ function drawStashBar(sp, lots){
    「いま何を選んでいるのか」の切り替えを必要とするため。 */
 let tool="sweep";                // "sweep" が既定。将来ここに別の選び方が増える
 let sweep=null;                  // {id,x0,y0,started,target,mode,erased,lotId0}
-let sweepUndo=null;              // ひとなぞり前の選択（取り消し用）
 /* ---------- 矩形選択（ラバーバンド） ----------
    マウスでだけ動く。当たり判定は画面座標（getBoundingClientRect）の重なり。
    論理座標（列 index × 行 index）は使えない。盤は .col が column-reverse で
@@ -4027,8 +4093,8 @@ function rubberCells(stashSide){
 
 function startRubber(e){
   const stashSide=!!e.target.closest("#zone-stash, #zone-stash-mini, #stashDock, .floor.stashfloor");
-  // clearSel は中で hideSweepUndo() を呼んで sweepUndo を捨てる。
-  // 取り消し用の控えは、その前に取らないと空を復元することになる。
+  // 引く前の選択を控える。cancelRubber（Escape）がここへ戻す。clearSel が
+  // 選択を消してしまう前に取らないと、空を復元することになる。
   const undo={lotId:sel.lotId, cells:[...sel.cells]};
   // Shift を押していても、盤と退避のあいだでは足さない。混ざった選択は
   // 運搬でも「倉庫へ戻す」でも成立しない（設計書 §3-3）。
@@ -4049,7 +4115,6 @@ function moveRubber(e){
     if(Math.abs(e.clientX-rubber.x0)<6 && Math.abs(e.clientY-rubber.y0)<6) return;
     rubber.started=true;
     dragMoved=true;                        // 直後の click で選択を戻さない
-    sweepUndo={lotId:rubber.undo.lotId, cells:rubber.undo.cells};
     // .cell にしか user-select:none が無いので、余白から引くと見出しが反転する
     document.body.style.userSelect="none";
     rubber.box=document.createElement("div");
@@ -4089,7 +4154,8 @@ function endRubber(){
   const started=rubber.started;
   releaseRubber();
   rubber=null;
-  if(started && sweepUndo) showSweepUndo();
+  // 6px 動かなければクリック扱い。そのときは toggleCell が積むので、ここでは積まない
+  if(started) pushSelectStep();
 }
 
 // 引き始めてからやめる逃げ道。Escape で引く前の選択に戻す。
@@ -4101,7 +4167,6 @@ function cancelRubber(){
   sel.lotId=undo.lotId;
   sel.cells=new Set(undo.cells);
   repaintSel();
-  hideSweepUndo();
 }
 
 function setTool(t){
@@ -4109,52 +4174,86 @@ function setTool(t){
   document.getElementById("mapBody").classList.toggle("sweep", t==="sweep");
   updateFlag();
 }
-// 盤の上端に貼りつく帯。いまの状態と、直前のなぞりの取り消しを出す。
+// 盤の上端に貼りつく帯。いまの選択数と、戻す・進むの状態を出す。
 // 盤は縦に長いので、下までたどっても状態が視界から消えないようにする。
 function updateFlag(){
-  const f=document.getElementById("toolFlag"), t=document.getElementById("toolFlagText");
-  if(!f||!t) return;
+  const f=document.getElementById("toolFlag");
+  if(!f) return;
   const n=sel.cells.size;
   const moving=document.getElementById("mapBody").classList.contains("moving");
   const c=document.getElementById("toolFlagCount");
-  const cb=document.getElementById("flagClearBtn");
-  const ub=document.getElementById("sweepUndoBtn");
-  const undoOn = ub && ub.style.display!=="none";
+  const ub=document.getElementById("undoBtn");
+  const rb=document.getElementById("redoBtn");
+  const usable=isActiveFresh();
+  const canU=usable && historyCanUndo(activeHistory());
+  const canR=usable && historyCanRedo(activeHistory());
   // 待機中は帯ごと消す。出しっぱなしにすると、盤の上に常設の帯が居座って
-  // 「画面の情報を削る」という目的に逆行する
-  if(n===0 && !undoOn){
-    t.textContent=""; if(c) c.textContent=""; if(cb) cb.style.display="none";
+  // 「画面の情報を削る」という目的に逆行する。
+  // ただし戻せる・進めるものがあるときは出す。移動の直後は選択が解除されるので、
+  // 選択だけを条件にすると「動かした、戻したい」その瞬間に帯が消える
+  if(n===0 && !canU && !canR){
+    if(c) c.textContent="";
     f.style.display="none"; f.classList.remove("hasSel");
     return;
   }
-  // 説明文。慣れた人には邪魔なので、案内を切ると消える
-  let msg = moving ? "置きたい列の上で指を離してください"
-          : (n>0  ? "そのまま外へドラッグで運ぶ・選択の中をなぞると外れる" : "");
-  if(!navShow) msg="";
-  t.textContent=msg;
-  // 選択数。案内を切っても出す。説明文に埋め込むと案内と一緒に消えてしまう
-  if(c) c.textContent = n ? (moving ? "✋ "+n+"マスを運搬中" : "✋ "+n+"マス選択中") : "";
-  // 選択解除。案内を切っても出す。運んでいる最中は押させない
-  if(cb) cb.style.display = (n>0 && !moving) ? "" : "none";
+  // 選択数。絵文字は使わない。帯が狭いと … で切れるが、切れて困るのは
+  // 数字より後ろの語なので、数字から先に書く。
+  // PC 幅（退避スペースと ⚙ を避けても余裕がある）では「選択中」まで出す。
+  // 狭い幅で同じ文言にすると、上限に当たって「3P 選…」と切れるだけで役に立たない。
+  // 判定は CSS の PC 分岐と同じ 700px。ずれると文言だけ先に変わる
+  const wide = window.matchMedia("(min-width:700px)").matches;
+  if(c) c.textContent = n ? (moving ? n+"P 運搬中" : (wide ? n+"P 選択中" : n+"P")) : "";
+  // 押せないときも消さずに残す。消えると位置がずれて押し間違える
+  if(ub) ub.disabled = !canU;
+  if(rb) rb.disabled = !canR;
   f.style.display="flex";
   f.classList.toggle("hasSel", n>0);
+  fitFlagCount();
 }
-function showSweepUndo(){
-  const b=document.getElementById("sweepUndoBtn"); if(b) b.style.display="";
-  updateFlag();
+/* 選択数の自然な幅を測るための控え。作り直すと測るたびに DOM が増えるので使い回す。
+   .flagcount を付けてあるので、font-size・font-weight・padding は本物と同じになる。
+   帯の外に置くため .toolflag .flagcount の flex 指定は効かず、縮まない素の幅が出る。 */
+let flagProbe=null;
+function flagCountWidth(text){
+  if(!flagProbe){
+    flagProbe=document.createElement("span");
+    flagProbe.className="flagcount";
+    flagProbe.style.cssText="position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap";
+    document.body.appendChild(flagProbe);
+  }
+  flagProbe.textContent=text;
+  return flagProbe.getBoundingClientRect().width;
 }
-function hideSweepUndo(){
-  sweepUndo=null;
-  const b=document.getElementById("sweepUndoBtn"); if(b) b.style.display="none";
-  if(typeof updateFlag==="function") updateFlag();
-}
-// なぞりすぎたときの逃げ道。1タップでひとなぞり前に戻す
-function undoSweep(){
-  if(!sweepUndo) return;
-  sel.lotId=sweepUndo.lotId;
-  sel.cells=new Set(sweepUndo.cells);
-  repaintSel();
-  hideSweepUndo();
+/* 選択数が帯に入りきるかを実測して決める。入らなければ消す。
+   幅の境を CSS に書くのはやめた。必要量は文言とボタンの太さの両方で変わり、
+   画面の幅だけでは決まらないため（実測・選択3P、必要量＝帯の左右padding 24
+   ＋ボタン＋gap 10＋文言）:
+     記号98px  「3P」169.9  「3P 運搬中」216.6  「12P 運搬中」226.6
+     文字161.8 「3P」233.7  「3P 選択中」280.4  「12P 運搬中」290.4
+   これに対し帯の上限は 375px→186.3 / 412px→211.0 / 500px→270.0 / 1024px→554.0。
+   記号のままでも 375・412px では「運搬中」が入らない。
+   上限は帯の max-width をそのまま読む。PC 幅では @media (min-width:700px) が
+   ⚙ ボタンのぶん 134px 引いた値で上書きするので、--flagwidth を直接見ると
+   PC 幅だけ過大になる。
+   入らないまま置くと、.flagcount の左右 padding 9px＋9px が flex では縮まない床
+   なので（min-width:0 は padding を削らない）、中身の幅が 0px の空の白い角丸だけが
+   残り、はみ出しが帯の左右の余白 12px を食い潰す。 */
+function fitFlagCount(){
+  const f=document.getElementById("toolFlag");
+  const c=document.getElementById("toolFlagCount");
+  if(!f || !c) return;
+  const b=f.querySelector(".flagbtns");
+  if(!b){ c.hidden=false; return; }
+  // 文言が無いときは .flagcount:empty が消す。ここで hidden を立てると、
+  // 次に文言が入ったときに消えたままになる
+  if(!c.textContent){ c.hidden=false; return; }
+  const cs=getComputedStyle(f);
+  const cap=parseFloat(cs.maxWidth);
+  if(!isFinite(cap)){ c.hidden=false; return; }   // none のときは上限なし＝必ず入る
+  const pad=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+  const gap=parseFloat(cs.columnGap)||0;
+  const need=pad+b.getBoundingClientRect().width+gap+flagCountWidth(c.textContent);
+  c.hidden = need>cap;
 }
 // sel の中身どおりに .sel を貼り直す
 function repaintSel(){
@@ -4245,7 +4344,6 @@ function toMove(x,y){
   // 捕捉は解かない。ここで解くと lostpointercapture が飛び、
   // 直後に組み立てた drag を既存のハンドラが片付けてしまう。
   sweep=null;
-  hideSweepUndo();
   const lot=lastLots?lastLots.find(l=>l.id===sel.lotId):null;
   const g=document.createElement("div");
   g.className="dragghost";
@@ -4310,7 +4408,6 @@ document.addEventListener("pointermove",e=>{
     if(Math.abs(e.clientX-sweep.x0)<6 && Math.abs(e.clientY-sweep.y0)<6) return;
     sweep.started=true;
     dragMoved=true;                               // 直後の click で選択を戻さない
-    sweepUndo={lotId:sel.lotId, cells:[...sel.cells]};
     try{ sweep.target.setPointerCapture(sweep.id); }catch(err){}
     if(sweep.mode==="pick") selAdd(sweep.target);
     if(sweep.carryOne){ clearSel(); selAdd(sweep.target); }
@@ -4353,7 +4450,8 @@ document.addEventListener("pointermove",e=>{
 function endSweep(){
   if(sweep){
     try{ sweep.target.releasePointerCapture(sweep.id); }catch(err){}
-    if(sweep.started && sweep.mode && sweepUndo) showSweepUndo();
+    // ひとなぞりが成立したときだけ1ステップ。なぞり中の selAdd では積まない
+    if(sweep.started && sweep.mode) pushSelectStep();
   }
   sweep=null;
   if(edge.raf){ cancelAnimationFrame(edge.raf); edge.raf=0; }
@@ -4374,11 +4472,9 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape" && rubber) cancelRubber();
 });
 
-// [試作] 保存してある「案内」と「退避の位置」を反映する。
+// [試作] 保存してある「退避の位置」を反映する。
 // なぞるは既定でオン。クラスは HTML に焼かず setTool() を通す（設計書 §4-1-1）
 (function initDockPrefs(){
-  const n=loadData("palletApp.navShow");
-  setNav(n===null||n===undefined ? true : !!n);
   setDockPos(loadData("palletApp.stashPos") || "tr");
   setTool("sweep");
 })();
@@ -6134,6 +6230,125 @@ function drawLeaders(anchors, slotIds){
 
 /* ---------- utils ---------- */
 function clone(o){return JSON.parse(JSON.stringify(o));}
+
+/* ---------- 配置編集の履歴（戻す・進む） ----------
+   steps[cursor] が「いまの状態」。cursor が -1 なら履歴なし。
+   ステップは2種類ある。
+     kind:"move"   … 荷物を動かした。sp は新しい配列
+     kind:"select" … マスを選んだ・外した。sp は前のステップと同じ参照
+   選択だけが変わったときに sp をコピーしないので、選択を何十回繰り返しても
+   メモリは増えない。設計書: docs/superpowers/specs/2026-09-21-undo-redo-design.md §4
+   DOM もグローバル変数も見ない。呼ぶ側（pushMoveStep など）が面倒を見る。 */
+const HISTORY_LIMIT = 50;
+function historyMake(){ return {steps:[], cursor:-1}; }
+function historyPush(hist, step){
+  // やり直せる分（cursor より後ろ）を捨ててから足す。
+  // 戻ってから別の操作をしたら、元の枝には戻れない。
+  hist.steps.length = hist.cursor + 1;
+  hist.steps.push(step);
+  // 上限を超えたぶんを先頭から落とし、cursor も同じ数だけ詰める
+  const over = hist.steps.length - HISTORY_LIMIT;
+  if(over > 0){ hist.steps.splice(0, over); }
+  hist.cursor = hist.steps.length - 1;
+  return hist;
+}
+function historyCanUndo(hist){ return !!hist && hist.cursor > 0; }
+function historyCanRedo(hist){ return !!hist && hist.cursor >= 0 && hist.cursor < hist.steps.length - 1; }
+function historyUndo(hist){
+  if(!historyCanUndo(hist)) return null;
+  hist.cursor--;
+  return hist.steps[hist.cursor];
+}
+function historyRedo(hist){
+  if(!historyCanRedo(hist)) return null;
+  hist.cursor++;
+  return hist.steps[hist.cursor];
+}
+
+/* いまの時間帯の履歴。保存はしない（読み込み直すと消える）。
+   あさ・ひるを別々に持つので、切り替えて戻ってきても、その時間帯でした操作を戻せる。
+   let histories 自体の宣言は files/index.html:1226 付近（activeTiming の隣）に前出しして
+   ある。帯の初期化がスクリプト評価中にここより先に読むため。 */
+function activeHistory(){ return histories[activeTiming]; }
+function clearHistory(){ histories[activeTiming] = historyMake(); }
+function selSnapshot(){ return {lotId: sel.lotId, cells:[...sel.cells]}; }
+/* いまのカーソルが指すステップの配置。選択だけのステップはこれを使い回す。 */
+function currentStepSp(){
+  const h = activeHistory();
+  return h.cursor >= 0 ? h.steps[h.cursor].sp : null;
+}
+/* 荷物を動かしたときに積む。spBefore は動かす前の配置（呼ぶ側が控える）。
+   履歴が空のときは、先に「動かす前」を1件積む。そうしないと 1 件目で
+   cursor が 0 になり、historyCanUndo が false のままで戻せない。 */
+function pushMoveStep(spBefore, selBefore){
+  const h = activeHistory();
+  // 履歴が空なら「動かす前」を土台として先に積む。選択も動かす前のものを持たせるので、
+  // 戻ったときにそのまま選び直さずに操作を続けられる
+  if(h.cursor < 0 && spBefore){
+    historyPush(h, {kind:"move", sel:selBefore, sp:spBefore});
+  }
+  // 移動後は clearSel() で選択が消える。ここで移動前の選択を持たせると、
+  // やり直したときに「移動元のマス」のキーが戻り、荷物が無いのに
+  // 帯に「NP」と出てしまう。実体のない選択を作らないため空にする
+  historyPush(h, {kind:"move", sel:{lotId:null, cells:[]}, sp:snapshotSpaces(lastSp)});
+  updateFlag();            // 戻す・進むの押せる押せないを積んだ後の履歴に合わせる
+}
+/* 選択が変わったときに積む。配置は変わらないので、いまのステップの sp を
+   そのまま指す（コピーしない）。履歴が空のときは、いまの配置を基準として持つ。 */
+function pushSelectStep(){
+  const h = activeHistory();
+  const sp = currentStepSp() || (lastSp ? snapshotSpaces(lastSp) : null);
+  if(!sp) return;                       // まだ配置が無いときは積まない
+  // 履歴が空なら「選ぶ前」を土台として先に積む。そうしないと cursor が 0 のままで
+  // historyCanUndo が false になり、最初の1回だけ戻せない（移動と挙動が変わる）
+  if(h.cursor < 0){
+    historyPush(h, {kind:"select", sel:{lotId:null, cells:[]}, sp:sp});
+  }
+  historyPush(h, {kind:"select", sel:selSnapshot(), sp:sp});
+  // 積んだ後の履歴に合わせて帯を描き直す。呼ぶ側に任せると必ず漏れる（実測）:
+  // toggleCell() は showSelCount()（中で updateFlag）を先に呼んでから積むため、
+  // 帯はいつも1操作ぶん古い履歴を映していた。最初の1マスを選んだときは
+  // 積む前の cursor が -1 なので historyCanUndo が false になり、履歴は
+  // 正しく cursor:1 まで積まれているのに「戻す」が押せないまま残った。
+  // endRubber() と endSweep() は pushSelectStep() が最後の文で、
+  // なぞり終わりに描き直す機会がそもそも無かった。
+  updateFlag();
+}
+
+/* 履歴のステップを画面に反映する。kind で分けない。
+   選択だけのステップは sp が前と同じ参照なので、結果として配置は変わらない。
+   分岐を作らないほうが間違えにくい。設計書 §6 */
+function applyHistoryStep(step){
+  if(!step) return;
+  // steps の中の配列をそのまま載せると、以後の move が履歴を書き換えてしまう
+  lastSp = clone(step.sp);
+  // 配置不可は履歴に持たない。いつも「いまの設定」から合成する
+  hydrateBlockedRows(lastSp, activeShift().blocked);
+  saveManual();
+  redraw();
+  // drawZone が clearSel() を呼んで sel を空にするため、選択の復元は redraw の後でやる
+  sel.lotId = step.sel.lotId;
+  sel.cells = new Set(step.sel.cells);
+  repaintSel();
+  updateFlag();
+}
+/* 入力が変わっていたら履歴は使えない。捨ててから抜ける。
+   見るのは isActiveFresh()（files/index.html:3440）。
+   ステップに積んだ fp と lastFp を比べても意味がない。lastFp が変わるのは
+   run()（履歴を捨てる）と restoreActiveShift() だけで、伝票を書き換えても
+   lastFp は据え置かれ、inputFingerprint() の側だけが変わるため。
+   その状態で戻すと、saveManual() も redraw() も isActiveFresh() で弾かれて
+   何も保存されず、配置ごと消える。 */
+function historyUsable(){ return isActiveFresh(); }
+function doUndo(){
+  if(!historyUsable()){ clearHistory(); updateFlag(); return; }
+  applyHistoryStep(historyUndo(activeHistory()));
+}
+function doRedo(){
+  if(!historyUsable()){ clearHistory(); updateFlag(); return; }
+  applyHistoryStep(historyRedo(activeHistory()));
+}
+
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 
 /* ---------- init ---------- */
@@ -6291,6 +6506,13 @@ updateSaveStatus();
 // 混載の許可：保存があれば復元。既定は on なので false のときだけ落とす
 (function initMix(){
   if(loadData(STORE_KEY.mix)===false) document.getElementById("mixChk").checked=false;
+})();
+
+// 戻す・進むの文字：保存があれば復元。既定はオフなので true のときだけ立てる
+(function initUndoLabel(){
+  const on=loadData(STORE_KEY.undoLabel)===true;
+  if(on) document.getElementById("undoLabelChk").checked=true;
+  applyUndoLabel(on);
 })();
 
 // ロットのまとめ：保存があれば復元。既定は on なので false のときだけ落とす

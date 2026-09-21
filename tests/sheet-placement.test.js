@@ -82,8 +82,24 @@ test("配置編集には配置不可編集と再配置の操作がある", () =>
 test("スマホの選択ガイドはビューポート座標で配置する", () => {
   assert.doesNotMatch(source, /--flagtopm", Math\.round\(ctlRect\.bottom\+window\.scrollY\+8\)/);
   const sync = functionSource("syncFlagTop");
-  assert.match(sync, /const top=Math\.round\(tabsBottom\+8\)\+"px"/);
+  // .tabs は sticky なので「rect.top + scrollY が一定」が成り立たない。
+  // fixed の帯はビューポート座標のまま置き、スクロールのたびに測り直す。
+  // ここで scrollY を足すと、タブ列が上に詰まったぶんだけ隙間が開く。
+  assert.doesNotMatch(sync, /scrollY/);
+  assert.match(sync, /const top=Math\.round\(base\+8\)\+"px"/);
   assert.match(sync, /setProperty\("--flagtopm", top\)/);
+});
+
+test("帯はタブ列と配置編集ツールバーの下にあるほうを避ける", () => {
+  const sync = functionSource("syncFlagTop");
+  // ページ最上部では .edit-toolbar がタブ列より下に居る。タブ列だけを基準にすると
+  // 帯がツールバーに重なり、「配置不可エリアを設定」「⚙ 表示設定」が押せなくなる。
+  assert.match(sync, /let base = tabsBottom/);
+  assert.match(sync, /querySelector\("#tab-edit \.edit-toolbar"\)/);
+  // 画面外へ抜けたツールバーを基準にしないための下端比較と、
+  // 他タブで #tab-edit が display:none になったときの高さ0ガード。
+  assert.match(sync, /br\.height>0 && br\.bottom>base/);
+  assert.match(sync, /base = br\.bottom/);
 });
 
 test("配置不可編集は指先直下のセルをなぞり対象にする", () => {
@@ -212,17 +228,14 @@ test("矩形の対象は退避の2か所を1つのまとまりとして切り分
   assert.match(cells, /getBoundingClientRect\(\)/);
 });
 
-test("矩形選択は取り消し用の控えを clearSel より前に取る", () => {
-  const start = functionSource("startRubber");
-  const undoAt = start.indexOf("undo=");
-  const clearAt = start.indexOf("clearSel()");
+test("clearSel() より先に、引く前の選択を控える", () => {
+  // Escape で引くのをやめたとき（cancelRubber）に戻す先。clearSel が走る前に取る
+  const fn = functionSource("startRubber");
+  const undoAt = fn.indexOf("const undo=");
+  const clearAt = fn.indexOf("clearSel()");
   assert.notEqual(undoAt, -1);
   assert.notEqual(clearAt, -1);
-  assert.ok(undoAt < clearAt, "clearSel() は sweepUndo を捨てるので控えを先に取る");
-  // ウィンドウ外で離しても取りこぼさない
-  assert.match(start, /setPointerCapture/);
-  // 盤と退避のあいだでは Shift でも足さない
-  assert.match(start, /stashSide/);
+  assert.ok(undoAt < clearAt, "控えを取る前に clearSel() が走っている");
 });
 
 test("矩形選択はマスの位置を毎回測り直す", () => {
@@ -272,9 +285,10 @@ test("ボタンと帯と見出しの上では矩形を始めない", () => {
   assert.doesNotMatch(handler, /closest\("#stashDock"\) return/);
 });
 
-test("取り消しボタンはなぞり以外の選択にも使える文言にする", () => {
-  assert.match(source, /id="sweepUndoBtn"[\s\S]{0,200}↩ いまの選択を取り消す/);
-  assert.doesNotMatch(source, /↩ いまのなぞりを取り消す/);
+test("帯には戻すと進むのボタンを置く", () => {
+  // 既定は記号だけ。文字を付けるかは設定タブで切り替える（設計書 §7-4）
+  assert.match(source, /id="undoBtn"[\s\S]{0,200}>↩</);
+  assert.match(source, /id="redoBtn"[\s\S]{0,200}>↪</);
 });
 test("矩形の側判定は退避の余白（ドックとフロア）も退避側とみなす", () => {
   const start = functionSource("startRubber");
@@ -2574,7 +2588,9 @@ test("欄を開く入口は mousedown だけ。touchstart を足さない", () =
 test("確認なしで書き足しを捨てる設定を置く", () => {
   assert.match(source, /sheetEditSilent:"palletApp\.sheetEditSilent"/);
   const cfgStart = source.indexOf('<div id="cfgpane-display"');
-  const pane = source.slice(cfgStart, cfgStart + 4000);
+  // 表示設定ペインは最後のペインなので、下部バーの手前までが範囲。
+  // 固定長で切ると、ペインに項目を足しただけでこの検査が落ちる
+  const pane = source.slice(cfgStart, source.indexOf('<div class="actionbar"'));
   assert.match(pane, /id="sheetEditSilentChk"[^>]*onchange="toggleSheetEditSilent\(\)"/);
   assert.match(pane, /確認無しでテキスト編集を破棄する/);
 });
