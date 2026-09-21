@@ -6291,6 +6291,7 @@ function pushMoveStep(spBefore, selBefore){
   // やり直したときに「移動元のマス」のキーが戻り、荷物が無いのに
   // 帯に「NP」と出てしまう。実体のない選択を作らないため空にする
   historyPush(h, {kind:"move", sel:{lotId:null, cells:[]}, sp:snapshotSpaces(lastSp)});
+  updateFlag();            // 戻す・進むの押せる押せないを積んだ後の履歴に合わせる
 }
 /* 選択が変わったときに積む。配置は変わらないので、いまのステップの sp を
    そのまま指す（コピーしない）。履歴が空のときは、いまの配置を基準として持つ。 */
@@ -6304,6 +6305,14 @@ function pushSelectStep(){
     historyPush(h, {kind:"select", sel:{lotId:null, cells:[]}, sp:sp});
   }
   historyPush(h, {kind:"select", sel:selSnapshot(), sp:sp});
+  // 積んだ後の履歴に合わせて帯を描き直す。呼ぶ側に任せると必ず漏れる（実測）:
+  // toggleCell() は showSelCount()（中で updateFlag）を先に呼んでから積むため、
+  // 帯はいつも1操作ぶん古い履歴を映していた。最初の1マスを選んだときは
+  // 積む前の cursor が -1 なので historyCanUndo が false になり、履歴は
+  // 正しく cursor:1 まで積まれているのに「戻す」が押せないまま残った。
+  // endRubber() と endSweep() は pushSelectStep() が最後の文で、
+  // なぞり終わりに描き直す機会がそもそも無かった。
+  updateFlag();
 }
 
 /* 履歴のステップを画面に反映する。kind で分けない。

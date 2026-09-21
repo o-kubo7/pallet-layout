@@ -477,3 +477,26 @@ test("選択数の幅は使い回す控えで測る", () => {
   assert.match(fn, /visibility:hidden/);
   assert.match(fn, /white-space:nowrap/);
 });
+
+test("履歴を積んだ関数が帯を描き直す", () => {
+  // 呼ぶ側に任せると必ず漏れる（実測）。toggleCell() は showSelCount()（中で
+  // updateFlag）を先に呼んでから積むため、帯はいつも1操作ぶん古い履歴を映す。
+  // 最初の1マスを選んだときは積む前の cursor が -1 で historyCanUndo が false に
+  // なり、履歴は cursor:1 まで正しく積まれているのに「戻す」が押せないまま残った。
+  // endRubber() と endSweep() は pushSelectStep() が最後の文で、なぞり終わりに
+  // 描き直す機会がそもそも無かった。
+  const sel = functionSource("pushSelectStep");
+  const mv = functionSource("pushMoveStep");
+  assert.match(sel, /updateFlag\(\);?\s*\}\s*$/, "pushSelectStep の最後で updateFlag していない");
+  assert.match(mv, /updateFlag\(\)/, "pushMoveStep で updateFlag していない");
+  // 積む前に返る経路では呼ばない（履歴が変わっていないため）
+  assert.match(sel, /if\(!sp\) return;/);
+});
+
+test("選択を積む3つの入口はすべて pushSelectStep を通る", () => {
+  // 描き直しを pushSelectStep に持たせたので、ここを通らない入口があると
+  // また帯だけが古いままになる
+  assert.match(functionSource("toggleCell"), /pushSelectStep\(\)/);
+  assert.match(functionSource("endRubber"), /pushSelectStep\(\)/);
+  assert.match(functionSource("endSweep"), /pushSelectStep\(\)/);
+});
