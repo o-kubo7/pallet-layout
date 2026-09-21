@@ -64,3 +64,41 @@ test("blockedRows が無い列でも空の Set になる", () => {
 test("validateMove は cloneSpaces を使う", () => {
   assert.match(functionSource("validateMove"), /cloneSpaces\(/);
 });
+
+// 退避スペース1つ。count を入れた列を持つ
+function stashWith(count) {
+  const cols = [];
+  let rem = count;
+  while (rem > 0) {
+    const put = Math.min(rem, 4);
+    cols.push({ h: 4, aisle: false, fills: [{ id: "L1", count: put }] });
+    rem -= put;
+  }
+  if (!cols.length) cols.push({ h: 4, aisle: false, fills: [] });
+  return [{ name: "退避", zone: "stash", cols }];
+}
+
+test("退避の上限はその日の入力総パレット数", () => {
+  const spaces = stashWith(6);
+  const { stashFreeRoom } = load(
+    ["used", "stashSpaces", "stashTotal", "stashCapacity", "stashFreeRoom"],
+    { spaces, lots: [{ pallets: 20 }, { pallets: 10 }] }
+  );
+  // 入力は 30P、退避には 6P 入っているので残り 24P
+  assert.equal(stashFreeRoom(spaces), 24);
+});
+
+test("入力より多く入っていても空きは負にならない", () => {
+  const spaces = stashWith(12);
+  const { stashFreeRoom } = load(
+    ["used", "stashSpaces", "stashTotal", "stashCapacity", "stashFreeRoom"],
+    { spaces, lots: [{ pallets: 4 }] }
+  );
+  assert.equal(stashFreeRoom(spaces), 0);
+});
+
+test("上限を列数から数えない", () => {
+  const fn = functionSource("stashFreeRoom");
+  assert.match(fn, /stashCapacity\(/);
+  assert.doesNotMatch(fn, /STASH_MAX_COLS/);
+});

@@ -3771,13 +3771,17 @@ function stashTotal(sp){
   stashSpaces(sp||lastSp).forEach(s=>s.cols.forEach(c=>{ n+=used(c); }));
   return n;
 }
-/* 退避にあと何枚積めるか。
-   DEFAULT_SPACES の退避は初期3列が h:7 なので putToStash() だけなら 65P 入るが、
-   描画の前に走る ensureStashRoom() → repackStash() が全部の列を h:4 で積み直し、
-   そのとき列数の上限を見ない。65P を入れると 17 列になって STASH_MAX_COLS(14) を超え、
-   隅の小さな盤の描画が崩れる。したがって実効の上限は 14×4=56P で数える。 */
+/* 退避に積める上限は、その日の入力にあるパレット数。
+   盤に乗っている荷物と退避にある荷物の合計は必ずこれ以下なので、
+   「倉庫にあるものを全部退避へ逃がす」がどの日でも成立する。
+   列数では数えない（列は repackStash() が中身から決めるので、
+   何列になるかは上限の根拠にならない。120列まで描画が崩れないことは
+   2026-09-21-stash-whole-space-move-design.md §8-1 で実測した）。 */
+function stashCapacity(lots){
+  return (lots||lastLots||[]).reduce((a,l)=>a+(l.pallets||0),0);
+}
 function stashFreeRoom(sp){
-  return Math.max(0, STASH_MAX_COLS*STASH_COL_H - stashTotal(sp));
+  return Math.max(0, stashCapacity()-stashTotal(sp));
 }
 // 退避スペースへ直に積む。自動配置のあとから呼ぶ
 function putToStash(sp,lotId,count){
