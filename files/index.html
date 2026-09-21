@@ -3638,7 +3638,11 @@ function highlightDrop(x,y){
   lastDropKey=key;
   clearDropMark();
   if(!w) return;
-  const v=validateMove(lastSp, sel.lotId, selCounts(sel.cells), w.dataset.space, parseInt(w.dataset.col));
+  // 退避は列ではなくスペース全体が落とし先なので、判定も退避用のものを使う。
+  // 列の空きで出すと、実際の可否と食い違う
+  const v = stashSpaces(lastSp).some(s=>s.name===w.dataset.space)
+    ? validateStashMove(lastSp, sel.lotId, selCounts(sel.cells))
+    : validateMove(lastSp, sel.lotId, selCounts(sel.cells), w.dataset.space, parseInt(w.dataset.col));
   if(v.same) return;                 // 動くマスが無い列には何も出さない
   w.classList.add(v.ok?"drop-ok":"drop-ng");
 }

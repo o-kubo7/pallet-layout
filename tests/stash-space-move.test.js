@@ -436,3 +436,10 @@ test("移動が成立したら検証後の配置をそのまま採る", () => {
   assert.equal(app.log.saved, 1);
   assert.equal(app.log.redrawn, 1);
 });
+
+test("ドラッグ中の色付けは退避なら退避用の検証を使う", () => {
+  const fn = functionSource("highlightDrop");
+  assert.match(fn, /validateStashMove\(/, "退避用の検証を呼んでいない");
+  assert.match(fn, /stashSpaces\(/, "宛先が退避かを見ていない");
+  assert.match(fn, /validateMove\(/, "倉庫側の検証を失っている");
+});
