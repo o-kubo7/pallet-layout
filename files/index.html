@@ -168,7 +168,8 @@
   .cell.segline-h{border-left:2px dashed #374151}
   /* 列にあと何枚入るかは、盤の上でいちばん見たい数字。10px・#9ca3af では
      白地でコントラストが約2.5:1 しかなく読めないので、14px・#4b5563 にする。
-     line-height を詰めるのは、通路マスのある列で2行になっても高さを抑えるため */
+     line-height を詰めるのは、字を大きくしたぶん盤が縦に伸びるのを抑えるため
+     （body の 1.6 のままだと1行で 22px になる） */
   .colcap{font-size:14px;color:#4b5563;text-align:center;margin-top:2px;line-height:1.15}
   /* 配置編集タブの ⚙。盤より上に常に出るのはこのボタンだけ */
   /* 「あさ／ひる」と操作ボタンを1行に収める入れ物。狭い画面では折り返す */
@@ -2839,11 +2840,10 @@ function drawZone(elId, spaces, colorOf){
               +` style="${bg?'background:'+bg:''}">${label}</div>`;
       });
       const inner = horizontal ? `<div class="hrow">${cells}</div>` : `<div class="col${topAlign?' top':''}">${cells}</div>`;
-      /* 列そのものが通路（col.aisle）なら、破線の枠で通路と分かるので何も足さない。
-         列の中に緊急用の通路マスがあるときだけ「+通路」と書く。メインの列は幅が
-         44px しかなく、1行に足すとあふれるので改行して下に置く */
-      const capNote = !col.aisle && aisleRowCount(col,col.blockedRows) ? "<br>+通路" : "";
-      const cap = `<div class="colcap">${used(col)}/${usableCount(col,col.blockedRows)}${capNote}</div>`;
+      /* 残量だけを出す。通路は見た目で分かる（列そのものが通路なら破線の枠、
+         列の中の緊急用の通路マスなら灰色のマス）。メインの列は幅が 44px しかなく、
+         文字を足すと隣とぶつかる */
+      const cap = `<div class="colcap">${used(col)}/${usableCount(col,col.blockedRows)}</div>`;
       const gapCls = blockStart? " blockgap":"";
       const style = place ? ` style="${place}"` : "";
       return `<div class="colwrap${col.aisle?' aisle':''}${gapCls}"`

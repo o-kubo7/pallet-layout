@@ -61,26 +61,13 @@ test("列の残量の文字色は薄すぎない", () => {
   assert.equal(css[0].includes("#9ca3af"), false);
 });
 
-// 列キャップを組み立てている2行。片方だけ見ると印の条件を見落とす
-function colcapSource() {
-  const m = source.match(/const capNote = [\s\S]*?const cap = `<div class="colcap">[\s\S]*?<\/div>`;/);
-  assert.notEqual(m, null, "列キャップを組み立てるコードが見つからない");
-  return m[0];
-}
-
-test("通路そのものの列には「通」を付けない", () => {
-  // 破線の枠（.colwrap.aisle）で通路と分かるので、狭い列に文字を足さない
-  const cap = colcapSource();
-  assert.equal(cap.includes("' 通'"), false);
-  assert.equal(cap.includes('" 通"'), false);
-  assert.match(cap, /!col\.aisle/);
-});
-
-test("通路マスを含む列は「+通路」を次の行に出す", () => {
-  // メインの列は幅44pxしかない。1行に足すとあふれるので改行して縦に積む
-  const cap = colcapSource();
-  assert.match(cap, /aisleRowCount\(col,col\.blockedRows\)/);
-  assert.match(cap, /"<br>\+通路"/);
+test("列キャップは残量だけを出す", () => {
+  // 通路は見た目で分かる。列そのものが通路なら破線の枠、列の中の緊急用の
+  // 通路マスなら灰色のマス。メインの列は幅44pxしかないので文字を足さない
+  const cap = source.match(/const cap = `<div class="colcap">[\s\S]*?<\/div>`;/);
+  assert.notEqual(cap, null, "列キャップを組み立てるコードが見つからない");
+  assert.match(cap[0], /\$\{used\(col\)\}\/\$\{usableCount\(col,col\.blockedRows\)\}<\/div>/);
+  assert.equal(cap[0].includes("通"), false);
 });
 
 /* ===== 4. 設定タブのバッジは出さない ===== */
