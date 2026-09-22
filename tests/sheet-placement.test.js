@@ -2092,12 +2092,42 @@ test("書き足しの保存署名はnormal・middle・wideを区別する", () =
     "schedule", "hasResult", "sheetPlacement", "sheetEditSigFrom", "lastFp", "lastLots",
     "snapshotSpaces", "lastSp", "spacesToText", "mergeLots", "fracMode", "SHEET_LAYOUTS",
     functionSource("currentSheetSig") + "; return currentSheetSig;"
-  )({}, true, () => ({ lay: layouts.normal }), value => value.layName, "", [], value => value,
+  )({}, true, () => ({ lay: layouts.normal, top: [], bottom: [], overflow: [] }), value => value.layName, "", [], value => value,
     [], () => "", false, false, layouts);
 
-  assert.equal(currentSig({ lay: layouts.normal }), "normal");
-  assert.equal(currentSig({ lay: layouts.middle }), "middle");
-  assert.equal(currentSig({ lay: layouts.wide }), "wide");
+  assert.equal(currentSig({ lay: layouts.normal, top: [], bottom: [], overflow: [] }), "normal");
+  assert.equal(currentSig({ lay: layouts.middle, top: [], bottom: [], overflow: [] }), "middle");
+  assert.equal(currentSig({ lay: layouts.wide, top: [], bottom: [], overflow: [] }), "wide");
+});
+
+test("旧版と新版のwideで欄の割当が変われば位置別の書き足しを隠す", () => {
+  const hash = new Function(functionSource("sheetEditHash") + "; return sheetEditHash;")();
+  const sigFrom = new Function("sheetEditHash", functionSource("sheetEditSigFrom") + "; return sheetEditSigFrom;")(hash);
+  const layouts = new Function(source.slice(source.indexOf("const SHEET_LAYOUTS = {"), source.indexOf("};", source.indexOf("const SHEET_LAYOUTS = {")) + 2) + "; return SHEET_LAYOUTS;")();
+  const make = (top, bottom) => ({ lay: layouts.wide,
+    top: top.map(id => ({ lot: { id } })),
+    bottom: bottom.map(id => id ? ({ lot: { id } }) : null), overflow: [] });
+  const old = make(["T1", "T2", "T3", "P3", "E1", "E2"], ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "P1", "P2"]);
+  const next = make(["T1", "T2", "T3", "P1", "P3", "E2"], ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "P2", "E1"]);
+  const currentSig = new Function("schedule", "hasResult", "sheetPlacement", "sheetEditSigFrom", "lastFp", "lastLots",
+    "snapshotSpaces", "lastSp", "spacesToText", "mergeLots", "fracMode", "SHEET_LAYOUTS",
+    functionSource("currentSheetSig") + "; return currentSheetSig;"
+  )({}, true, () => next, sigFrom, "same-fp", [], x => x, [], () => "same-placement-input", false, false, layouts);
+  const oldSig = currentSig(old), newSig = currentSig(next);
+  assert.notEqual(oldSig, newSig);
+  assert.equal(currentSig(make(["T1", "T2", "T3", "P1", "P3", "E2"],
+    ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "P2", "E1"])), newSig);
+  const legacySig = sigFrom({ fp: "same-fp", lots: [], sp: [], spacesText: "same-placement-input", layName: "wide" });
+  assert.notEqual(legacySig, newSig);
+  assert.notEqual(currentSig(make(["T1", "T2", "T3", "P1", "P3", "E2"],
+    ["M1", "M2", "M3", "M4", "M5", "M6", "M7", null, "P2"])), newSig);
+  const marks = { "bottom|7|name": "P1への書き足し" };
+  const active = new Function("schedule", "activeShift", "currentSheetSig", functionSource("activeSheetMarks") + "; return activeSheetMarks;")(
+    {}, () => ({ sheetEdits: { sig: oldSig, marks } }), currentSig);
+  assert.deepEqual(active(next), {});
+  const legacyActive = new Function("schedule", "activeShift", "currentSheetSig", functionSource("activeSheetMarks") + "; return activeSheetMarks;")(
+    {}, () => ({ sheetEdits: { sig: legacySig, marks } }), currentSig);
+  assert.deepEqual(legacyActive(next), {});
 });
 
 test("書き足しの署名は材料が1つ変われば変わる", () => {

@@ -3449,7 +3449,7 @@ function sheetEditSigFrom(parts){
   const p=parts||{};
   return sheetEditHash(JSON.stringify([
     p.fp||"", p.lots||null, p.sp||null, p.spacesText||"",
-    !!p.mergeLots, !!p.fracMode, p.layName||"",
+    !!p.mergeLots, !!p.fracMode, p.layName||"", "slots-v1", p.slots||null,
   ]));
 }
 // 欄のキー。ロットIDの集合ではなく位置で引く。
@@ -5381,6 +5381,9 @@ function activeSheetMarks(pl){
 function currentSheetSig(pl){
   if(!schedule || !hasResult) return "";
   const p=pl||sheetPlacement();
+  // data-ek は段と欄番号で引く。空欄も含む表示位置ごとにロットIDを固定し、
+  // 同じ入力で欄の並べ替えだけが起きた場合にも旧書き足しを隠す。
+  const slot=e=>e ? (e.group||[e]).map(g=>(g.members||[g]).map(m=>m.lot.id)) : null;
   return sheetEditSigFrom({
     fp: lastFp,
     lots: lastLots,
@@ -5389,6 +5392,8 @@ function currentSheetSig(pl){
     mergeLots: mergeLots,
     fracMode: fracMode,
     layName: p.lay===SHEET_LAYOUTS.middle ? "middle" : p.lay===SHEET_LAYOUTS.wide ? "wide" : "normal",
+    slots: [Array.from({length:p.lay.top},(_,i)=>slot(p.top[i])),
+            Array.from({length:p.lay.bottom},(_,i)=>slot(p.bottom[i])), p.overflow.map(slot)],
   });
 }
 // 保存には残っているが、署名が合わないので紙に出ていない書き足しの件数
