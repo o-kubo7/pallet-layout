@@ -1582,6 +1582,96 @@ function buildPlacementForTier(topSlots, bottomSlots, stashed) {
   );
 }
 
+function buildActualPlacement(topSlots, bottomSlots, stashed) {
+  const begin = source.indexOf("const SHEET_LAYOUTS = {");
+  const end = source.indexOf("};", begin) + 2;
+  const layouts = new Function(source.slice(begin, end) + "; return SHEET_LAYOUTS;")();
+  const choose = new Function(
+    "SHEET_LAYOUTS",
+    functionSource("sheetLayout") + "; return sheetLayout;"
+  )(layouts);
+  return new Function(
+    "sheetSlots", "stashSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas", "SHEET_LAYOUTS",
+    functionSource("arrangeBottomSlots") +
+    functionSource("arrangeOverflowSlots") +
+    functionSource("sheetPlacement") + "; return sheetPlacement;"
+  )(
+    tier => tier === "top" ? topSlots : bottomSlots,
+    () => stashed || [],
+    choose,
+    areas => "※" + areas.join("・"),
+    false,
+    tier => tier === "bottom" ? ["メイン", "PC横", "EV横"] : ["軒下①"],
+    layouts
+  );
+}
+
+test("配置図は上下段を使い切ってから次の様式へ拡張する", () => {
+  const top = count => Array.from({ length: count }, (_, index) =>
+    ({ lot: { id: "T" + (index + 1) }, areas: ["軒下①"] }));
+  const main = count => Array.from({ length: count }, (_, index) =>
+    ({ lot: { id: "M" + (index + 1) }, areas: ["メイン"] }));
+  const other = ids => ids.map(id => ({
+    lot: { id }, areas: [id.startsWith("P") ? "PC横" : "EV横"]
+  }));
+  const cases = [
+    { top: 2, main: 7, other: ["P1"], lay: "normal", moved: ["P1"], topIds: ["T1", "T2", "P1"], bottomIds: ["M1", "M2", "M3", "M4", "M5", "M6", "M7"] },
+    { top: 3, main: 7, other: ["P1", "P2"], lay: "middle", moved: ["P1"], topIds: ["T1", "T2", "T3", "P1"], bottomIds: ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "P2"] },
+    { top: 3, main: 7, other: ["P1", "P2", "E1"], lay: "middle", moved: ["P1", "E1"], topIds: ["T1", "T2", "T3", "P1", "E1"], bottomIds: ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "P2"] },
+    { top: 0, main: 8, other: [], lay: "middle", moved: [], topIds: [], bottomIds: ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8"] },
+    { top: 0, main: 9, other: [], lay: "wide", moved: [], topIds: [], bottomIds: ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9"] },
+    { top: 4, main: 7, other: ["P1"], lay: "middle", moved: [], topIds: ["T1", "T2", "T3", "T4"], bottomIds: ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "P1"] },
+    { top: 3, main: 7, other: ["P1", "P2", "P3", "E1", "E2"], lay: "wide", moved: ["P1", "P3", "E2"], topIds: ["T1", "T2", "T3", "P1", "P3", "E2"], bottomIds: ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "P2", "E1"] },
+  ];
+  for(const c of cases){
+    const result = buildActualPlacement(top(c.top), main(c.main).concat(other(c.other)))();
+    assert.equal(result.lay.cols, ({normal:14, middle:16, wide:18})[c.lay]);
+    assert.equal(result.lay.bottom, c.bottomIds.length);
+    assert.deepEqual(result.movedBottom.map(entry => entry.lot.id), c.moved);
+    assert.deepEqual(result.top.map(entry => entry.lot.id), c.topIds);
+    assert.deepEqual(result.overflow, []);
+    assert.deepEqual(result.bottom.filter(Boolean).map(entry => entry.lot.id), c.bottomIds);
+  }
+});
+
+test("上段固有欄・メイン超過・複数エリア・まとめ欄の境界を守る", () => {
+  const top = Array.from({ length: 7 }, (_, index) => ({ lot: { id: "T" + (index + 1) }, areas: ["軒下①"] }));
+  const main = count => Array.from({ length: count }, (_, index) => ({ lot: { id: "M" + (index + 1) }, areas: ["メイン"] }));
+  const rescued = buildActualPlacement(top, main(7))();
+  assert.equal(rescued.lay.bottom, 9);
+  assert.deepEqual(rescued.moved.map(entry => entry.lot.id), ["T7"]);
+  assert.ok(rescued.bottom.filter(Boolean).some(entry => entry.lot.id === "T7"));
+
+  const mainOverflow = buildActualPlacement([], main(10))();
+  assert.deepEqual(mainOverflow.overflow.map(entry => entry.lot.id), ["M10"]);
+
+  const crossArea = buildActualPlacement([], main(7).concat([
+    { lot: { id: "X1" }, areas: ["メイン", "PC横"] },
+  ]))();
+  assert.deepEqual(crossArea.movedBottom, []);
+  assert.ok(crossArea.bottom.filter(Boolean).some(entry => entry.lot.id === "X1"));
+
+  const merged = { lot: { id: "P1" }, areas: ["PC横"], members: [{ lot: { id: "P1" } }, { lot: { id: "P2" } }] };
+  const summary = buildActualPlacement([], main(7).concat([merged]))();
+  assert.deepEqual(summary.movedBottom, [merged]);
+});
+
+test("wide の追記欄は実在エリアを退避より先に載せる", () => {
+  const top = Array.from({ length: 6 }, (_, index) => ({ lot: { id: "T" + (index + 1) }, areas: ["軒下①"] }));
+  const main = Array.from({ length: 9 }, (_, index) => ({ lot: { id: "M" + (index + 1) }, areas: ["メイン"] }));
+  const stash = ["S1", "S2"].map(id => ({ lot: { id }, areas: ["退避"], note: "※未定", stash: true }));
+  const result = buildActualPlacement(top, main.concat([{ lot: { id: "P1" }, areas: ["PC横"] }]), stash)();
+  assert.deepEqual(result.movedBottom, []);
+  assert.deepEqual(result.overflow.map(entry => entry.lot.id), ["P1", "S1", "S2"]);
+  const renderOverflow = new Function(
+    "esc", "palSlotTextOf", "slotAreaNote",
+    functionSource("overflowTable") + "; return overflowTable;"
+  )(String, () => "", areas => "※" + areas.join("・"));
+  const html = renderOverflow(result.overflow, {});
+  assert.match(html, /※PC横/);
+  assert.match(html, /※未定/);
+});
+
 test("下段のこぼれのうち基準エリア以外は上段の空き欄へ回る", () => {
   const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
   const placement = buildPlacementForTier(

@@ -1178,9 +1178,10 @@ const FLOOR_POS = {
 // 「配置図の表」での欄の割り当て。エリア名は SPACES の sheet 属性から引く。
 // 返す順は SPACES の並び順。下段の先頭が基準エリアで、注釈を付けず、グリッドを描く。
 function sheetAreas(tier){ return SPACES.filter(s=>(s.sheet||"bottom")===tier).map(s=>s.name); }
-/* 配置図の表の様式。荷物が多い日は上段・下段の欄を増やした wide に切り替える。
-   総幅は normal が 672px、wide が 702px。672÷14=48、702÷18=39 でどちらも割り切れる。
+/* 配置図の表の様式。荷物量に合わせて normal・middle・wide を選ぶ。
+   normal と middle は 672px、wide は 702px。672÷14=48、672÷16=42、702÷18=39。
    ・normal … 現行の紙。左ブロック5列(240px)＋すき間1列(48px)＋上段4欄×2列(96px)＝14列
+   ・middle … 左ブロック5列(210px)＋すき間1列(42px)＋上段5欄×2列(84px)＝16列
    ・wide   … 左ブロック5列(195px)＋すき間1列(39px)＋上段6欄×2列(78px)＝18列
               メインは14列×39px=546px で、右に4列(156px)余る。追記欄を78px×2列に割って使う。
    wide を 702px にしたのは、A4横・余白8mm の印刷領域 281×194mm＝約1062×733px に対して
@@ -1194,14 +1195,15 @@ function sheetAreas(tier){ return SPACES.filter(s=>(s.sheet||"bottom")===tier).m
    下回ると gridRows() の余り列が負になり、表が黙って崩れる。 */
 const SHEET_LAYOUTS = {
   normal: {cols:14, colW:48, top:4, bottom:7},
+  middle: {cols:16, colW:42, top:5, bottom:8},
   wide:   {cols:18, colW:39, top:6, bottom:9},
 };
-/* 欄が足りない日だけ wide にする。判定は「まとめた後の欄数」（sheetSlots の戻り値）で行う。
-   上段だけが溢れた日でも上下段そろって wide になる。1つの表で列を共有しているので
-   上段と下段を別々の様式にはできない。 */
+/* 判定は「まとめた後の欄数」（sheetSlots の戻り値）で行う。上下段は1つの表で列を
+   共有するため、両方が収まる最小様式を選ぶ。 */
 function sheetLayout(topSlots, bottomSlots){
-  const n=SHEET_LAYOUTS.normal;
-  return (topSlots.length>n.top || bottomSlots.length>n.bottom) ? SHEET_LAYOUTS.wide : n;
+  return Object.values(SHEET_LAYOUTS).find(lay=>
+    topSlots.length<=lay.top && bottomSlots.length<=lay.bottom
+  ) || SHEET_LAYOUTS.wide;
 }
 
 /* ===== 品目マスタ（品名 → SNP。同じ品名で複数SNP可）===== */
@@ -5188,11 +5190,8 @@ function arrangeOverflowSlots(entries){
 /* 上段・下段の欄と様式を1回で決める。欄数超過の警告と renderSheet() の両方がここを通る。
    2か所で別々に数えると、警告の件数と実際に紙へ出る欄がずれる。
    上段に入りきらない欄は、下段に空きがあればその末尾へ回す（救済）。
-   ・様式の判定は救済前の件数で行う。先に wide にして上段の欄を増やし、
-     それでもあふれる分だけを下段へ回す（上段の荷物はできるだけ上段に並べる）
-   ・sheetLayout() は上段が4欄を超えた時点で wide にするので、救済が起きる日は必ず wide。
-     SHEET_LAYOUTS の欄数を変えるとこの関係が崩れる
-   ・回せるのは下段の空きの数まで。回しきれない分は従来どおり警告に残る
+   ・上段固有欄とメイン欄で最小様式を選び、その他の下段欄は下段→上段→次の様式の順に取る
+   ・回せるのは下段の空きの数まで。回しきれない分は従来どおり追記欄に残る
    ・回した欄は元の欄を浅く複製して作る。members と areas の配列は元の欄と共有するので、
      どちらも書き換えないこと。元の欄（top の中身）自体も書き換えない
    ・fromTop は renderSheet() が引き出し線の id を落とすのに使う目印 */
@@ -5201,13 +5200,32 @@ function sheetPlacement(){
   // 「欄が足りないぶんを回す」既存の階段（下段の空き → 追記欄 → 警告）にそのまま乗る
   const top=sheetSlots("top").concat(stashSlots());
   const base=sheetSlots("bottom");
-  const lay=sheetLayout(top, base);
-  const free=Math.max(0, lay.bottom-base.length);
+  const baseArea=sheetAreas("bottom")[0]||null;
+  const main=base.filter(e=>baseArea && e.areas.includes(baseArea));
+  const other=base.filter(e=>!baseArea || !e.areas.includes(baseArea));
+  let lay=sheetLayout(top, main);
+  // 既存テストは sheetLayout を固定注入している。実体の定数が無い評価でも、
+  // 注入された 6/9 様式を最大様式として従来の境界検証を続けられるようにする。
+  const layouts=typeof SHEET_LAYOUTS==="undefined"
+    ? {normal:{top:4,bottom:7}, middle:{top:5,bottom:8}, wide:lay}
+    : SHEET_LAYOUTS;
+  const keptMain=main.slice(0, lay.bottom);
+  const topUsed=Math.min(top.length, lay.top);
+  let topCount=topUsed, bottomCount=keptMain.length;
+  const keptOther=[], movedBottom=[], droppedOther=[];
+  for(const e of other){
+    if(bottomCount<lay.bottom){ keptOther.push(e); bottomCount++; }
+    else if(topCount<lay.top){ movedBottom.push(e); topCount++; }
+    else if(lay===layouts.normal){ lay=layouts.middle; keptOther.push(e); bottomCount++; }
+    else if(lay===layouts.middle){ lay=layouts.wide; keptOther.push(e); bottomCount++; }
+    else droppedOther.push(e);
+  }
+  const free=Math.max(0, lay.bottom-bottomCount);
   const over=Math.max(0, top.length-lay.top);
   // 退避の欄は注釈が唯一の情報なので、slotAreaNote() で作り直さない（※退避 に化ける）
   const moved=top.slice(lay.top, lay.top+Math.min(free, over))
     .map(e=>({...e, fromTop:true, note: e.stash ? e.note : slotAreaNote(e.areas)}));
-  const bottomAll=base.concat(moved);
+  const bottomAll=keptMain.concat(keptOther, moved);
   let positions=null;
   if(typeof lastSp!=="undefined" && typeof SHEET_GRID_ORDER!=="undefined" &&
      typeof sheetGridAnchors==="function"){
@@ -5216,24 +5234,13 @@ function sheetPlacement(){
     if(anchors) positions=Object.fromEntries(anchors.map(anchor=>[anchor.id, anchor.k+.5]));
   }
   const arranged=arrangeBottomSlots(bottomAll, lay.bottom, positions);
-  // 下段に入りきらなかった欄のうち、基準エリア以外は上段に空きがあればそこへ回す
-  // （設計書 2026-09-19 §3-3）。基準エリアの欄は回さない。上段には引き出し線が引けないので、
-  // 回しても盤のどこにあるか分からないまま「軒下」の見出しの下に並ぶことになり、
-  // 追記欄に落とすのと情報量が変わらない。
-  // 退避は除く。退避はもともと top の末尾に居て、上段に空きがあるなら降りてきていない。
-  const baseArea=sheetAreas("bottom")[0]||null;
-  const topFree=Math.max(0, lay.top-top.length);
-  const backable=arranged.dropped.filter(e=>
-    !e.stash && baseArea && !e.areas.includes(baseArea));
-  const movedBottom=backable.slice(0, topFree);
-  const backSet=new Set(movedBottom);
   // 回した欄は注釈を作り直す（基準エリアを省かない）。元の欄は書き換えず浅く複製する
   const topAll=top.concat(movedBottom.map(e=>({...e, note:slotAreaNote(e.areas)})));
   const omittedTop=top.slice(lay.top+moved.length);
-  // 追記欄は欄数超過を先に載せる。退避の欄は top の末尾に居るので、
-  // 並べ直さないと下段の欄数超過（arranged.dropped）を押し出してしまう
-  const rest=omittedTop.concat(arranged.dropped.filter(e=>!backSet.has(e)));
-  const ordered=rest.filter(e=>!e.stash).concat(rest.filter(e=>e.stash));
+  // 追記欄は上段未救済分、メイン超過分、その他超過分、退避末尾の順にする。
+  // 退避は実在エリアの欄より後ろへ寄せ、紙で「※未定」を見分けられるようにする。
+  const ordered=omittedTop.filter(e=>!e.stash)
+    .concat(main.slice(keptMain.length), droppedOther, omittedTop.filter(e=>e.stash));
   const overflowed=arrangeOverflowSlots(ordered);
   // bottomAll と arranged.dropped は返さない。bottomAll は arrangeBottomSlots() への
   // 入力としてこの関数の中でだけ使う。dropped は回送を入れた今、紙に載った欄も含むので

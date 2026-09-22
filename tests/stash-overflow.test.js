@@ -65,8 +65,8 @@ test("下段へ回した退避の欄は注釈を作り直さない", () => {
 
 test("追記欄には欄数超過を先に入れ、退避の欄を後ろへ回す", () => {
   const fn = functionSource("sheetPlacement");
-  assert.match(fn, /filter\(e=>!e\.stash\)\.concat\(/);
-  assert.match(fn, /filter\(e=>e\.stash\)/);
+  assert.match(fn, /omittedTop\.filter\(e=>!e\.stash\)/);
+  assert.match(fn, /droppedOther, omittedTop\.filter\(e=>e\.stash\)/);
 });
 
 test("追記欄は4件までそのまま載せ、5件以上で4枠目にまとめる", () => {
