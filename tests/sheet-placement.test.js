@@ -1218,10 +1218,10 @@ test("8行の日は○を小さくして行高を詰める", () => {
   assert.match(source, /\.sheet\.grid8 td\.g \.mk\{width:19px;height:19px\}/);
 });
 
-test("8行の日はgrid8、wide様式の日はwideの印を紙に付ける", () => {
-  // wide は総幅が normal より広い。CSS 側で幅を切り替えるための印
+test("8行の日はgrid8、wide様式だけにwideの印を紙に付ける", () => {
+  // middle も normal より列数が多いが、幅は同じ672pxである。wide のCSSを付けると702pxになる。
   assert.match(source, /const gridCls = \(\(grid\.rows>7\) \? " grid8" : ""\)/);
-  assert.match(source, /\+ \(\(lay\.cols>SHEET_LAYOUTS\.normal\.cols\) \? " wide" : ""\);/);
+  assert.match(source, /\+ \(\(lay===SHEET_LAYOUTS\.wide\) \? " wide" : ""\);/);
 });
 
 test("緊急用マスが空なら列番号行は数字のまま", () => {
@@ -2030,9 +2030,9 @@ test("上段の注釈行は残し、またがる欄にだけ注釈を出す", ()
   assert.match(cells[1], /※出庫口横/);          // またがる欄だけ出る
 });
 
-test("上段の注釈行の列数のコメントが様式と合っている", () => {
-  // wide は 5+1+6×2=18 列。「5+1+5×2=16 列」は誤り
-  assert.match(source, /normal は 5\+1\+4×2=14 列、wide は 5\+1\+6×2=18 列/);
+test("上段の注釈行の列数のコメントが3様式と合っている", () => {
+  // middle は 5+1+5×2=16 列。3様式を列挙していないと将来の列数変更時に誤読する。
+  assert.match(source, /normal は 5\+1\+4×2=14 列、middle は 5\+1\+5×2=16 列、wide は 5\+1\+6×2=18 列/);
 });
 
 test("見出しが入りきらないときは、品名ではなくエリア名の短縮を案内する", () => {
@@ -2063,6 +2063,41 @@ test("上段の注釈行の高さは16pxのまま", () => {
   // 注釈の中身は見出しへ移して普段は空になったが、行は高さごと残す。
   // あとで足す配置図のテキスト編集が、上段の自由記入欄としてこの行を使う（設計書 §3-5）
   assert.match(source, /\.sheet tr\.note-row td\.none\{height:16px\}/);
+});
+
+test("中間様式は672pxのまま上段5欄・下段8欄にする", () => {
+  const begin = source.indexOf("const SHEET_LAYOUTS = {");
+  const end = source.indexOf("};", begin) + 2;
+  const layouts = new Function(source.slice(begin, end) + "; return SHEET_LAYOUTS;")();
+  const middle = layouts.middle;
+
+  assert.equal(middle.cols * middle.colW, 672);
+  assert.equal(5 + 1 + middle.top * 2, middle.cols);
+  assert.equal(middle.bottom * 2, middle.cols);
+});
+
+test("拡張案内はmiddleとwideの実際の上段・下段欄数を表示する", () => {
+  // normal だけは案内不要。middle をwide専用の条件に残すと、8欄の日に変更理由が表示されない。
+  const fit = functionSource("fitSheetText");
+  assert.match(fit, /if\(lay!==SHEET_LAYOUTS\.normal\)/);
+  assert.match(fit, /上段 \$\{lay\.top\} 欄・下段 \$\{lay\.bottom\} 欄/);
+});
+
+test("書き足しの保存署名はnormal・middle・wideを区別する", () => {
+  // middle をnormal扱いにすると、列幅と書き足し座標が変わっても古い編集が再利用される。
+  const begin = source.indexOf("const SHEET_LAYOUTS = {");
+  const end = source.indexOf("};", begin) + 2;
+  const layouts = new Function(source.slice(begin, end) + "; return SHEET_LAYOUTS;")();
+  const currentSig = new Function(
+    "schedule", "hasResult", "sheetPlacement", "sheetEditSigFrom", "lastFp", "lastLots",
+    "snapshotSpaces", "lastSp", "spacesToText", "mergeLots", "fracMode", "SHEET_LAYOUTS",
+    functionSource("currentSheetSig") + "; return currentSheetSig;"
+  )({}, true, () => ({ lay: layouts.normal }), value => value.layName, "", [], value => value,
+    [], () => "", false, false, layouts);
+
+  assert.equal(currentSig({ lay: layouts.normal }), "normal");
+  assert.equal(currentSig({ lay: layouts.middle }), "middle");
+  assert.equal(currentSig({ lay: layouts.wide }), "wide");
 });
 
 test("書き足しの署名は材料が1つ変われば変わる", () => {

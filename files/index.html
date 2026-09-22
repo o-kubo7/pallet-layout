@@ -5303,7 +5303,7 @@ function fitSheetText(pl,hidden){
   let html="";
   // 荷物が多い日は欄が増え、紙のマス目の幅が変わる。現場が不具合と疑わないように
   // 画面にだけ知らせる（#sheetMsg は印刷CSSで display:none なので紙には出ない）
-  if(lay===SHEET_LAYOUTS.wide){
+  if(lay!==SHEET_LAYOUTS.normal){
     html+=`<div class="msg ok">※ 荷物が多いため、今日は欄を増やしています`
         + `（上段 ${lay.top} 欄・下段 ${lay.bottom} 欄）。用紙の大きさは変わりません。</div>`;
   }
@@ -5388,7 +5388,7 @@ function currentSheetSig(pl){
     spacesText: spacesToText(true),
     mergeLots: mergeLots,
     fracMode: fracMode,
-    layName: (p.lay===SHEET_LAYOUTS.wide)?"wide":"normal",
+    layName: p.lay===SHEET_LAYOUTS.middle ? "middle" : p.lay===SHEET_LAYOUTS.wide ? "wide" : "normal",
   });
 }
 // 保存には残っているが、署名が合わないので紙に出ていない書き足しの件数
@@ -5714,7 +5714,8 @@ function renderSheet(){
   // 紙のどこにあるか分からなくなっていた
   // 上段・下段の欄と様式は sheetPlacement() が1回で決める。欄数超過の警告も同じ関数を通るので、
   // 警告の件数と紙に出る欄がずれない。
-  // 欄が足りない日は wide（18列×39px・上段6欄・下段9欄）。総幅は 672px→702px に広がる。
+  // 欄が足りない日は middle（16列×42px・上段5欄・下段8欄）を経て、
+  // wide（18列×39px・上段6欄・下段9欄）へ進む。middle の総幅は672px、wide は702px。
   // それでも上段に入りきらない欄は、下段に空きがあればその末尾へ回っている（bottom の末尾）
   const pl=sheetPlacement();
   const top=pl.top, bottom=pl.bottom, lay=pl.lay;
@@ -5770,7 +5771,7 @@ function renderSheet(){
   rows+=`<tr class="r3">${E}${slotCells(top,lay.top,"pallet",null,gsep,"top",marks)}</tr>`;
 
   // 行5：上段の注釈。行3 の rowspan は行4 までしか届かないので、
-  //      左5列はこの行で自分で埋める（5 + 1 + lay.top×2 = lay.cols。normal は 5+1+4×2=14 列、wide は 5+1+6×2=18 列）
+  //      左5列はこの行で自分で埋める（5 + 1 + lay.top×2 = lay.cols。normal は 5+1+4×2=14 列、middle は 5+1+5×2=16 列、wide は 5+1+6×2=18 列）
   //      置き場所は見出しへ移したので、ここに出すのは見出しのエリアだけでは
   //      特定できない欄（複数エリアにまたがる欄）だけ。行そのものは残す。
   //      普段の日は全部空欄になるが、あとで足す配置図のテキスト編集で
@@ -5782,7 +5783,7 @@ function renderSheet(){
   // 上下段の区切り（用紙では太罫1本）
   rows+=`<tr class="gap"><td class="none sep" colspan="${lay.cols}"></td></tr>`;
 
-  // 下段（lay.bottom 区画。normal 7 / wide 8）：品名／ロット／パレット数／注記
+  // 下段（lay.bottom 区画。normal 7 / middle 8 / wide 9）：品名／ロット／パレット数／注記
   rows+=`<tr>${slotCells(bottom,lay.bottom,"name","bb2",null,"bottom",marks)}</tr>`;
   rows+=`<tr>${slotCells(bottom,lay.bottom,"lot",null,null,"bottom",marks)}</tr>`;
   // この行の各セルの下辺が引き出し線の起点になる
@@ -5800,9 +5801,9 @@ function renderSheet(){
   if(grid.warn && grid.warn.kind==="extra")  rows+=gridNoticeRow(grid.warn, lay.cols);
 
   // 8 行になる日は○を縮めて行高を詰める。紙の高さを増やさないための切り替え。
-  // wide は総幅が normal より広いので、CSS 側で幅を切り替えるための印も付ける
+  // wide だけは総幅が702pxなので、CSS 側で幅を切り替えるための印を付ける
   const gridCls = ((grid.rows>7) ? " grid8" : "")
-                + ((lay.cols>SHEET_LAYOUTS.normal.cols) ? " wide" : "");
+                + ((lay===SHEET_LAYOUTS.wide) ? " wide" : "");
   // 横スクロールのコンテナは .sheet 自身（overflow-x:auto）で、この関数が
   // それごと作り直す。実機は幅412px・表672pxで必ず横スクロールしているので、
   // 控えておかないと確定のたびに紙が左端へ飛ぶ
