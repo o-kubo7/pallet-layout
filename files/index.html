@@ -328,6 +328,16 @@
   .flagcount{background:rgba(255,255,255,.22);border-radius:6px;padding:3px 9px;
              font-size:14px;font-weight:800;white-space:nowrap}
   .flagcount:empty{display:none}
+  /* 「半」のボタン（設計書 4-1・4-4）。1行に入らないときだけ fitFlagHalf() が .tworow を付け、
+     2行目に回す。戻す・進むと選択数は1行目のまま動かない（fitFlagCount() が1行目だけで
+     選択数の表示を決めるので、選択数が2行目へ折り返すことはない） */
+  .flaghalf{display:flex;flex:none}
+  .flaghalf[hidden]{display:none}
+  .toolflag.tworow{flex-wrap:wrap}
+  .toolflag.tworow .flaghalf{flex-basis:100%}
+  .halfbtn{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .halfic{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+          box-sizing:border-box;border:1.5px solid currentColor;border-radius:50%;font-size:12px;line-height:1}
   /* 選択数が入りきらないときは fitFlagCount()（JS）が消す。幅の境を CSS に
      書くのはやめた。必要量は文言（「3P」「3P 選択中」「12P 運搬中」）と
      ボタンの太さ（記号 98px・文字 161.8px）で変わり、幅だけでは決まらないため。
@@ -887,6 +897,10 @@
                     onclick="doRedo()"><span class="ar arrot">↩</span></button>
           </span>
           <span id="toolFlagCount" class="flagcount"></span>
+          <!-- 「半」の位置(設計書 4-1)。入りきらないときは fitFlagHalf() が2行目へ回す -->
+          <span class="flaghalf" id="flagHalf" hidden>
+            <button class="flagundo halfbtn" id="halfBtn" onclick="onHalfBtn()"><span class="halfic" aria-hidden="true">半</span><span id="halfBtnText">半を設定</span></button>
+          </span>
         </div>
         <div id="legend" class="legend"></div>
 
@@ -1077,6 +1091,8 @@
           <div class="hint">混載は、列が満杯のときに別の品目と1列を分け合うことです。許可しないと、入りきらない荷物は「あふれ」になります。配置編集の盤では、混ざった列の境目が破線で出ます。</div>
           <label class="chk"><input type="checkbox" id="splitConfirmChk" checked onchange="toggleSplitConfirm()"> ロットが複数箇所に分かれるとき確認する</label>
           <div class="hint">OFFにすると、配置編集でロットを分ける移動を確認なしで実行します。</div>
+          <label class="chk"><input type="checkbox" id="halfManualChk" onchange="toggleHalfManual()"> 配置編集で「半」の位置を手動で設定する</label>
+          <div class="hint">ONにすると、配置編集で1マスを選んだときに「半を設定」が出ます。OFFの間は、設定済みの位置を残したまま自動の位置（下側）で表示します。</div>
         </div>
 
         <div class="cfgsec">
@@ -1976,6 +1992,18 @@ function toggleSplitConfirm(){
 function initSplitConfirm(){
   splitConfirmEnabled=loadData(STORE_KEY.splitConfirm)!==false;
   document.getElementById("splitConfirmChk").checked=splitConfirmEnabled;
+}
+/* 「半」の位置を手動で決めるか（設計書 6 章）。既定は off。
+   切り替えても配置データは変わらないので履歴には積まない。盤と紙を描き直すだけ */
+function toggleHalfManual(){
+  halfManualEnabled=document.getElementById("halfManualChk").checked;
+  saveData(STORE_KEY.halfManual, halfManualEnabled);
+  if(hasResult && lastLots && isActiveFresh()) redraw();
+  else updateFlag();
+}
+function initHalfManual(){
+  halfManualEnabled=loadData(STORE_KEY.halfManual)===true;
+  document.getElementById("halfManualChk").checked=halfManualEnabled;
 }
 /* 戻す・進むのボタンに文字を付けるか。既定はオフ（記号だけ）。
    375px では帯が 186px しかなく、文字を付けると選んでいるマス数に 18px しか
@@ -3934,6 +3962,40 @@ function applyMove(spaceName, colIndex){
   clearSel();
   redraw();
 }
+/* 「半」のボタンの状態（設計書 4-1）。出さないときは null。
+   mode: set = 半でないマス（押すと手動指定）、auto = 手動指定の半（押すと自動に戻す）、
+         disabled = 自動で置かれた半（押せない） */
+function halfBtnState(){
+  if(!halfManualEnabled || !isActiveFresh() || !lastSp || !lastLots || sel.cells.size!==1) return null;
+  const p=[...sel.cells][0].split("|");
+  if(p[0]!=="メイン") return null;
+  const sp=lastSp.find(s=>s.name==="メイン");
+  if(!sp) return null;
+  const ci=parseInt(p[1]), row=parseInt(p[2]);
+  const laid=spaceCells(sp);
+  const cell=laid[ci] && laid[ci][row];
+  if(!cell || cell.id==null) return null;
+  const lot=lastLots.find(l=>l.id===cell.id);
+  if(!lot || !(lot.half>0)) return null;
+  const hit=halfCellsFor(sp, laid)[ci+"_"+row];
+  return {mode: !hit ? "set" : hit.manual ? "auto" : "disabled", lotId:cell.id, ci, row, laid};
+}
+// 移動と同じ後始末（履歴・保存・選択解除・描き直し）をする。applyMove() と同じ並び
+function onHalfBtn(){
+  const st=halfBtnState();
+  if(!st || st.mode==="disabled") return;
+  const spBefore=snapshotSpaces(lastSp), selBefore=selSnapshot();
+  const next=cloneSpaces(lastSp);
+  const sp=next.find(s=>s.name==="メイン");
+  const lot=lastLots.find(l=>l.id===st.lotId);
+  if(st.mode==="set") halfMarkSet(sp, st.laid, st.lotId, st.ci, st.row, lot.half);
+  else halfMarkClear(sp, st.lotId);
+  lastSp=next;
+  pushMoveStep(spBefore, selBefore);
+  saveManual();
+  clearSel();
+  redraw();
+}
 
 document.addEventListener("pointerdown",e=>{
   if(blockedEditMode) return;
@@ -4467,6 +4529,7 @@ function updateFlag(){
   // 選択だけを条件にすると「動かした、戻したい」その瞬間に帯が消える
   if(n===0 && !canU && !canR){
     if(c) c.textContent="";
+    f.classList.remove("tworow");
     f.style.display="none"; f.classList.remove("hasSel");
     return;
   }
@@ -4477,12 +4540,25 @@ function updateFlag(){
   // 判定は CSS の PC 分岐と同じ 700px。ずれると文言だけ先に変わる
   const wide = window.matchMedia("(min-width:700px)").matches;
   if(c) c.textContent = n ? (moving ? n+"P 運搬中" : (wide ? n+"P 選択中" : n+"P")) : "";
+  // 「半」のボタン（設計書 4-1）。押せないときも消さずに disabled にする
+  const fh=document.getElementById("flagHalf");
+  const hb=document.getElementById("halfBtn");
+  const ht=document.getElementById("halfBtnText");
+  const hs=(typeof halfBtnState==="function") ? halfBtnState() : null;
+  if(fh) fh.hidden=!hs;
+  if(hs && hb && ht){
+    ht.textContent = hs.mode==="auto" ? "半を自動に戻す" : "半を設定";
+    hb.disabled = hs.mode==="disabled";
+    hb.setAttribute("aria-label", ht.textContent);
+    hb.title = ht.textContent;
+  }
   // 押せないときも消さずに残す。消えると位置がずれて押し間違える
   if(ub) ub.disabled = !canU;
   if(rb) rb.disabled = !canR;
   f.style.display="flex";
   f.classList.toggle("hasSel", n>0);
   fitFlagCount();
+  fitFlagHalf();
 }
 /* 選択数の自然な幅を測るための控え。作り直すと測るたびに DOM が増えるので使い回す。
    .flagcount を付けてあるので、font-size・font-weight・padding は本物と同じになる。
@@ -4528,6 +4604,26 @@ function fitFlagCount(){
   const gap=parseFloat(cs.columnGap)||0;
   const need=pad+b.getBoundingClientRect().width+gap+flagCountWidth(c.textContent);
   c.hidden = need>cap;
+}
+/* 「半」のボタンが1行に入らなければ帯を2行にする（設計書 4-4・8-3）。
+   必要量は文言（「半を設定」「半を自動に戻す」）・選択数・戻す進むの太さで変わり、
+   画面の幅だけでは決まらない。fitFlagCount() と同じく実測して上限と比べる */
+function fitFlagHalf(){
+  const f=document.getElementById("toolFlag");
+  const h=document.getElementById("flagHalf");
+  if(!f || !h) return;
+  if(h.hidden){ f.classList.remove("tworow"); return; }
+  const cs=getComputedStyle(f);
+  const cap=parseFloat(cs.maxWidth);
+  if(!isFinite(cap)){ f.classList.remove("tworow"); return; }   // 上限なし＝必ず入る
+  const pad=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+  const gap=parseFloat(cs.columnGap)||0;
+  const b=f.querySelector(".flagbtns");
+  const c=document.getElementById("toolFlagCount");
+  const btn=document.getElementById("halfBtn");
+  const countW=(c && !c.hidden && c.textContent) ? gap+flagCountWidth(c.textContent) : 0;
+  const need=pad+(b?b.getBoundingClientRect().width:0)+countW+gap+(btn?btn.getBoundingClientRect().width:0);
+  f.classList.toggle("tworow", need>cap);
 }
 // sel の中身どおりに .sel を貼り直す
 function repaintSel(){
@@ -6807,6 +6903,7 @@ updateSaveStatus();
 })();
 
 initSplitConfirm();
+initHalfManual();
 
 // 戻す・進むの文字：保存があれば復元。既定はオフなので true のときだけ立てる
 (function initUndoLabel(){

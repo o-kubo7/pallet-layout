@@ -276,3 +276,93 @@ test("盤はメインの半のマスに角バッジを付ける", () => {
   assert.equal((html.match(/halfbadge/g) || []).length, 1);
   assert.match(source, /\.cell \.halfbadge\{position:absolute;top:0;right:0/);
 });
+
+function loadHalfBtn({ spaces, lots, cells, enabled = true, fresh = true }) {
+  const log = { pushed: 0, saved: 0, redrawn: 0, cleared: 0 };
+  const src = `
+    let lastSp=spaces, lastLots=lots, halfManualEnabled=enabled;
+    const sel={lotId:null, cells:new Set(cells)};
+    ${["clone", "fillOrder", "cellGroups", "cellsOf", "cellLayoutOptions", "spaceCells",
+       "manualHalfList", "halfCells", "halfMarkSet", "halfMarkClear", "halfCellsFor",
+       "halfBtnState", "onHalfBtn"].map(functionSource).join("\n")}
+    function isActiveFresh(){ return fresh; }
+    function halfAreaOf(){ return "メイン"; }
+    function snapshotSpaces(sp){ return clone(sp); }
+    function cloneSpaces(sp){ return clone(sp); }
+    function selSnapshot(){ return null; }
+    function pushMoveStep(){ log.pushed++; }
+    function saveManual(){ log.saved++; }
+    function clearSel(){ log.cleared++; }
+    function redraw(){ log.redrawn++; }
+    return { halfBtnState, onHalfBtn, spaces:()=>lastSp };
+  `;
+  const made = new Function("spaces", "lots", "cells", "enabled", "fresh", "log", src)(spaces, lots, cells, enabled, fresh, log);
+  return { ...made, log };
+}
+const oneCol = () => [{ name: "メイン", cols: [{ h: 7, fills: [{ id: 0, count: 5 }] }] }];
+
+test("半ボタン: 設定OFF・複数選択・メイン外・half=0・古い配置では出さない", () => {
+  assert.equal(loadHalfBtn({ spaces: oneCol(), lots: [{ id: 0, half: 1 }], cells: ["メイン|0|2"], enabled: false }).halfBtnState(), null);
+  assert.equal(loadHalfBtn({ spaces: oneCol(), lots: [{ id: 0, half: 1 }], cells: ["メイン|0|1", "メイン|0|2"] }).halfBtnState(), null);
+  assert.equal(loadHalfBtn({ spaces: [{ name: "軒下①", cols: [{ h: 7, fills: [{ id: 0, count: 5 }] }] }], lots: [{ id: 0, half: 1 }], cells: ["軒下①|0|2"] }).halfBtnState(), null);
+  assert.equal(loadHalfBtn({ spaces: oneCol(), lots: [{ id: 0, half: 0 }], cells: ["メイン|0|2"] }).halfBtnState(), null);
+  assert.equal(loadHalfBtn({ spaces: oneCol(), lots: [{ id: 0, half: 1 }], cells: ["メイン|0|2"], fresh: false }).halfBtnState(), null);
+});
+
+test("半ボタン: 半でないマスは set、自動の半は disabled、手動の半は auto", () => {
+  const lots = [{ id: 0, half: 1 }];
+  assert.equal(loadHalfBtn({ spaces: oneCol(), lots, cells: ["メイン|0|2"] }).halfBtnState().mode, "set");
+  assert.equal(loadHalfBtn({ spaces: oneCol(), lots, cells: ["メイン|0|4"] }).halfBtnState().mode, "disabled");
+  const marked = oneCol(); marked[0].cols[0].halfMarks = { "0": [{ k: 2, seq: 1 }] };
+  assert.equal(loadHalfBtn({ spaces: marked, lots, cells: ["メイン|0|2"] }).halfBtnState().mode, "auto");
+});
+
+test("半ボタン: 半を設定 は履歴に積み、保存し、描き直す", () => {
+  const app = loadHalfBtn({ spaces: oneCol(), lots: [{ id: 0, half: 1 }], cells: ["メイン|0|2"] });
+  app.onHalfBtn();
+  assert.deepEqual(app.spaces()[0].cols[0].halfMarks, { "0": [{ k: 2, seq: 1 }] });
+  assert.deepEqual(app.log, { pushed: 1, saved: 1, redrawn: 1, cleared: 1 });
+});
+
+test("半ボタン: 半を自動に戻す はそのロットの指定を消す", () => {
+  const marked = oneCol(); marked[0].cols[0].halfMarks = { "0": [{ k: 2, seq: 1 }] };
+  const app = loadHalfBtn({ spaces: marked, lots: [{ id: 0, half: 1 }], cells: ["メイン|0|2"] });
+  app.onHalfBtn();
+  assert.equal(app.spaces()[0].cols[0].halfMarks, undefined);
+  assert.equal(app.log.pushed, 1);
+});
+
+test("半ボタン: 自動の半（disabled）では何もしない", () => {
+  const app = loadHalfBtn({ spaces: oneCol(), lots: [{ id: 0, half: 1 }], cells: ["メイン|0|4"] });
+  app.onHalfBtn();
+  assert.equal(app.spaces()[0].cols[0].halfMarks, undefined);
+  assert.equal(app.log.pushed, 0);
+});
+
+test("操作バー: 半ボタンの文言と丸囲みアイコン", () => {
+  assert.match(source, /<span class="flaghalf" id="flagHalf" hidden>/);
+  assert.match(source, /<span class="halfic" aria-hidden="true">半<\/span>/);
+  const fn = functionSource("updateFlag");
+  assert.match(fn, /"半を自動に戻す"/);
+  assert.match(fn, /"半を設定"/);
+  assert.match(fn, /halfBtnState\(\)/);
+  assert.match(fn, /fitFlagHalf\(\)/);
+  // 押せないときも消さずに disabled にする
+  assert.match(fn, /hb\.disabled\s*=/);
+});
+
+test("操作バー: 2行にするかは実測で決め、@media では決めない", () => {
+  const fn = functionSource("fitFlagHalf");
+  assert.match(fn, /parseFloat\(cs\.maxWidth\)/);
+  assert.match(fn, /classList\.toggle\("tworow"/);
+  assert.match(source, /\.toolflag\.tworow\{flex-wrap:wrap\}/);
+  assert.match(source, /\.toolflag\.tworow \.flaghalf\{flex-basis:100%\}/);
+  assert.match(source, /\.flaghalf\[hidden\]\{display:none\}/);
+});
+
+test("設定: 半を手動で設定する のチェックボックスと読み書き", () => {
+  assert.match(source, /<input type="checkbox" id="halfManualChk" onchange="toggleHalfManual\(\)">/);
+  assert.match(functionSource("toggleHalfManual"), /saveData\(STORE_KEY\.halfManual, halfManualEnabled\)/);
+  assert.match(functionSource("initHalfManual"), /loadData\(STORE_KEY\.halfManual\)===true/);
+  assert.match(source, /initSplitConfirm\(\);\s*\ninitHalfManual\(\);/);
+});
