@@ -2888,11 +2888,9 @@ function cellsOf(col,blockedRows,options){
   if(split){
     const firstOrder=fillOrder(col,fromEnd);
     const secondOrder=fillOrder(col,!fromEnd);
-    const firstRows=firstOrder.filter(r=>!arr[r].blocked);
-    const secondRows=secondOrder.filter(r=>!arr[r].blocked);
-    const firstCount=Math.min(groups[0].count,firstRows.length);
-    const firstBoundary=firstRows[0];
-    assign(groups[0].id,groups[0].count,firstOrder,firstBoundary,fromEnd?"after":"before");
+    const firstAssigned=assign(groups[0].id,groups[0].count,firstOrder);
+    // 最初に埋めた端ではなく、最後に割り当てた中央側の端へ境界を置く。
+    if(firstAssigned.length) arr[firstAssigned[firstAssigned.length-1]].seg=fromEnd?"after":"before";
     // 第2ロットの境界は両端詰めの中央側に置く。
     const secondAssigned=assign(groups[1].id,groups[1].count,secondOrder);
     const secondBoundary=secondAssigned.length
@@ -6193,11 +6191,21 @@ function gridRows(pad, overflow, marks){
   ));
   // 荷物ごとのマス一覧（通常列と通路列を分ける）
   const norm={}, aisle={};
-  colCells.forEach((arr,ci)=>arr.forEach((c,ri)=>{
-    if(!c)return;
-    const key=ci+"_"+ri;
-    (sp.cols[ci].aisle ? (aisle[c.id]=aisle[c.id]||[]) : (norm[c.id]=norm[c.id]||[])).push(key);
-  }));
+  colCells.forEach((arr,ci)=>{
+    const col=sp.cols[ci];
+    const options=cellLayoutOptions(sp,col);
+    const groups=cellGroups(col.fills);
+    groups.forEach((group,gi)=>{
+      const fromEnd=options.fromEnd !== (options.splitEnds && groups.length===2 && gi===1);
+      // 半パレットは行番号順ではなく、このロットを実際に詰めた順の末尾に付ける。
+      fillOrder(col,fromEnd).forEach(ri=>{
+        const c=arr[ri];
+        if(!c || c.id!==group.id) return;
+        const key=ci+"_"+ri;
+        (col.aisle ? (aisle[c.id]=aisle[c.id]||[]) : (norm[c.id]=norm[c.id]||[])).push(key);
+      });
+    });
+  });
   // 「半」の位置：通路にはみ出しているならその通路のマス、なければ通常列の最後。
   // 末尾のマスが他のエリアにあるロットは、半パレットもそちらに置かれているので付けない
   // （下段・上段のパレット数の「半」表記と場所を一致させる）。

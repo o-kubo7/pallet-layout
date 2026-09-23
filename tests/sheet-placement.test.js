@@ -400,7 +400,7 @@ function defaultSpace(name) {
 }
 
 // gridRows は lastSp / lastLots など外の値を見るので、注入して組み立てる
-function makeGridRows(cols, order, lots=[]) {
+function makeGridRows(cols, order, lots=[], tailAreaOf=()=>null) {
   return new Function(
     "lastSp", "sheetAreas", "gridWarn", "SHEET_GRID_ORDER", "overflowTable", "lastLots", "tailAreaOf",
     functionSource("aisleRowCount") +
@@ -414,7 +414,7 @@ function makeGridRows(cols, order, lots=[]) {
     order,
     () => "",
     lots,
-    () => null
+    tailAreaOf
   );
 }
 
@@ -597,6 +597,42 @@ test("配置表のメイン2ロットも中央を空けて両端に置く", () =
   assert.doesNotMatch(rows[4],/<span class="mk">/);
   assert.match(rows[5],/<span class="mk">/);
   assert.match(rows[6],/<span class="mk">/);
+});
+
+test("メイン2ロットの破線はロット内ではなく中央側の境界に出す", () => {
+  const root={innerHTML:"",children:[],appendChild(node){this.children.push(node);}};
+  const doc={
+    getElementById:()=>root,
+    createElement:()=>({className:"",classList:{add(){}},style:{},innerHTML:""})
+  };
+  const drawZone=new Function("document","FLOOR_POS","activeShift","blockedCellKey","used","usableCount",
+    layoutSources()+functionSource("drawZone")+"; return drawZone;"
+  )(doc,{},()=>({blocked:[]}),()=>"",col=>col.fills.reduce((n,f)=>n+f.count,0),col=>col.h);
+  const space={name:"メイン",cols:[{h:7,fills:[{id:0,count:2},{id:1,count:2}]}]};
+  const [cells]=makeLayoutFunctions().spaceCells(space);
+  assert.deepEqual(cells.map(c=>c.seg),[null,"before",null,null,null,"after",null]);
+  drawZone("map",[space],{0:"#aaa",1:"#bbb"});
+  const html=root.children[0].innerHTML;
+  const classes=row=>{
+    const match=html.match(new RegExp(`<div class="([^"]*)" data-row="${row}"`));
+    assert.ok(match,`row ${row} must render`);
+    return match[1].split(" ");
+  };
+  assert.match(source,/\.col\{[^}]*flex-direction:column-reverse/);
+  assert.match(source,/\.cell\.segline\{border-top:/);
+  assert.match(source,/\.cell\.segline-after\{border-bottom:/);
+  assert.ok(!classes(0).includes("segline"),"row 0 の上辺は同じロットの row 1 に接する");
+  assert.ok(classes(1).includes("segline"),"row 1 の上辺が第1ロットの中央側境界");
+  assert.ok(classes(5).includes("segline-after"),"row 5 の下辺が第2ロットの中央側境界");
+});
+
+test("配置表の第2ロット半パレット印は降順配置の末尾に付ける", () => {
+  const gridRows=makeGridRows([
+    {h:7,fills:[{id:0,count:2},{id:1,count:3}]}
+  ],[{c:0}],[{id:0,half:0},{id:1,half:1}],()=>"メイン");
+  const rows=gridRows(0,[]).html.match(/<tr class="grow">[\s\S]*?<\/tr>/g);
+  assert.match(rows[4],/<span class="mk">半<\/span>/);
+  assert.match(rows[6],/<span class="mk"><\/span>/);
 });
 
 test("メインの2ロットは両端に詰めて中央を空ける", () => {
