@@ -688,6 +688,26 @@ test("配置表の第2ロット半パレット印は降順配置の末尾に付�
   assert.match(rows[6],/<span class="mk"><\/span>/);
 });
 
+test("配置表の准緊急込み2+6は第1ロット末尾row1に半を付ける", () => {
+  const gridRows=makeGridRows([
+    {h:9,up:1,aisleRows:[8],fills:[{id:0,count:2},{id:1,count:6}]}
+  ],[{c:0}],[{id:0,half:1},{id:1,half:0}],()=>"メイン");
+  const rows=gridRows(0,[]).html.match(/<tr class="grow">[\s\S]*?<\/tr>/g);
+  assert.equal(rows.length,8);
+  assert.match(rows[0],/<span class="mk"><\/span>/);
+  assert.match(rows[1],/<span class="mk">半<\/span>/);
+});
+
+test("配置表の両端詰め1+8は第2ロットの物理的な末尾row1に半を付ける", () => {
+  const gridRows=makeGridRows([
+    {h:9,up:1,aisleRows:[8],fills:[{id:0,count:1},{id:1,count:8}]}
+  ],[{c:0}],[{id:0,half:0},{id:1,half:1}],()=>"メイン");
+  const html=gridRows(0,[]).html;
+  const rows=html.match(/<tr class="grow">[\s\S]*?<\/tr>/g);
+  assert.match(rows[1],/<span class="mk">半<\/span>/);
+  assert.doesNotMatch(html,/<td class="colno aisle g[^"]*"><span class="mk">半<\/span>/);
+});
+
 test("メインの2ロットは両端に詰めて中央を空ける", () => {
   const cells = makeCellsOf()(
     {h:7, fills:[{id:5,count:2},{id:8,count:2,mix:true}]},
