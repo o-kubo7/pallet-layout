@@ -619,6 +619,18 @@ test("通常7通路1の両端詰めは中央を潰してから通路まで連続
   assert.deepEqual(after.map(c=>c.id), [5,5,5,5,5,8,8,8]);
 });
 
+test("通常7通路1の5P＋3Pでは第2ロットの中央境界に線を付ける", () => {
+  const cells = makeCellsOf()(
+    {h:8, fills:[{id:5,count:5},{id:8,count:3}], aisleRows:[7]},
+    undefined,
+    {splitEnds:true}
+  );
+  assert.deepEqual(
+    cells.filter(c=>c.id===8 && c.seg).map(c=>[c.row,c.seg]),
+    [[5,"after"]]
+  );
+});
+
 test("配置不可セルは連続配置の容量に数えない", () => {
   const findRun = new Function(
     functionSource("used") +

@@ -2872,13 +2872,16 @@ function cellsOf(col,blockedRows,options){
   const split=splitEnds && groups.length===2;
   const assigned=new Set();
   const assign=(id,count,order,segRow=null,segValue=null)=>{
-    if(count<=0) return;
+    const rows=[];
+    if(count<=0) return rows;
     for(const r of order){
       if(arr[r].blocked || assigned.has(r)) continue;
       arr[r]={id,seg:r===segRow?segValue:null,row:r,blocked:false,aisleRow:aisleRows.includes(r)};
       assigned.add(r);
+      rows.push(r);
       if(--count===0) break;
     }
+    return rows;
   };
   if(split){
     const firstOrder=fillOrder(col,fromEnd);
@@ -2886,12 +2889,14 @@ function cellsOf(col,blockedRows,options){
     const firstRows=firstOrder.filter(r=>!arr[r].blocked);
     const secondRows=secondOrder.filter(r=>!arr[r].blocked);
     const firstCount=Math.min(groups[0].count,firstRows.length);
-    const secondCount=Math.min(groups[1].count,secondRows.length);
     const firstBoundary=firstRows[0];
-    const secondBoundary=secondRows[secondCount-1];
     assign(groups[0].id,groups[0].count,firstOrder,firstBoundary,fromEnd?"after":"before");
     // 第2ロットの境界は両端詰めの中央側に置く。
-    assign(groups[1].id,groups[1].count,secondOrder,secondBoundary,fromEnd?"before":"after");
+    const secondAssigned=assign(groups[1].id,groups[1].count,secondOrder);
+    const secondBoundary=secondAssigned.length
+      ? (fromEnd?Math.max(...secondAssigned):Math.min(...secondAssigned))
+      : undefined;
+    if(secondBoundary!==undefined) arr[secondBoundary].seg=fromEnd?"before":"after";
   }else{
     const order=fillOrder(col,fromEnd);
     let oi=0;
