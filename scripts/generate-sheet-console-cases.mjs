@@ -79,7 +79,9 @@ export function renderManualGuide(scenarios) {
     "現在の時間帯の入力と配置関連状態（配置不可設定を含む）をリセットします。" +
     "反対側の時間帯と品目マスタは変更しません。入力後に画面の「▶ 自動配置を作成」を押し、" +
     "表示された合計P・案内文・様式・上段・下段・追記欄を確認し、結果記入欄に記録してください。\n\n" +
-    section("verified", "確認済み") + "\n" + section("pending", "確認待ち");
+    section("verified", "確認済み") + "\n" +
+    section("pending", "確認待ち") + "\n" +
+    section("reference", "参考・配置比較対象外");
 }
 
 export function writeOutputs({ check = false } = {}) {

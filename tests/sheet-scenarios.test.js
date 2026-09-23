@@ -132,7 +132,7 @@ function validateScenario(scenario) {
 function validateConsoleScenario(scenario) {
   assert.match(scenario.id, /^[a-z0-9-]+$/);
   assert.ok(typeof scenario.title === "string" && scenario.title.length > 0);
-  assert.ok(["verified", "pending"].includes(scenario.verificationStatus));
+  assert.ok(["verified", "pending", "reference"].includes(scenario.verificationStatus));
   assert.ok(Array.isArray(scenario.manualChecks) && scenario.manualChecks.length > 0);
   assert.ok(scenario.manualChecks.every(check => typeof check === "string" && check.length > 0));
   assert.ok(Array.isArray(scenario.input) && scenario.input.length > 0);
@@ -147,21 +147,23 @@ function validateConsoleScenario(scenario) {
   assert.equal(total, scenario.expectedTotalPallets, `${scenario.id}: 合計P数`);
 }
 
-test("Consoleシナリオは指定した12件でverified 5件・pending 7件", () => {
+test("Consoleシナリオは指定した12件でverified 11件・reference 1件", () => {
   const verifiedIds = [
-    "demo-100p", "basic-normal", "basic-middle", "basic-wide", "basic-wide-overflow",
-  ];
-  const expectedIds = [
-    ...verifiedIds,
+    "basic-normal", "basic-middle", "basic-wide", "basic-wide-overflow",
     "split-delivery", "same-name-different-lot", "half-pallet",
     "normal-to-middle", "middle-to-wide", "top-rescue", "stash-overflow",
+  ];
+  const expectedIds = [
+    "demo-100p", ...verifiedIds,
   ];
   assert.equal(consoleScenarios.length, 12);
   assert.deepEqual(consoleScenarios.map(s => s.id).sort(), expectedIds.sort());
   assert.equal(new Set(consoleScenarios.map(s => s.id)).size, 12);
   assert.deepEqual(consoleScenarios.filter(s => s.verificationStatus === "verified")
     .map(s => s.id).sort(), verifiedIds.sort());
-  assert.equal(consoleScenarios.filter(s => s.verificationStatus === "pending").length, 7);
+  assert.equal(consoleScenarios.filter(s => s.verificationStatus === "pending").length, 0);
+  assert.deepEqual(consoleScenarios.filter(s => s.verificationStatus === "reference")
+    .map(s => s.id), ["demo-100p"]);
   for (const scenario of consoleScenarios) validateConsoleScenario(scenario);
 });
 
@@ -202,6 +204,10 @@ test("100Pデモの10行は元Excelの転記値と一致する", () => {
     ["充填品", "仕掛品4", "444-4444", 2000, 27000],
   ]);
   assert.equal(scenario.expectedTotalPallets, 100);
+  assert.deepEqual(scenario.manualChecks, [
+    "元Excelの10行が入力され、合計100Pになることを確認する",
+    "以前の見本は手修正後の配置のため、自動配置結果の配置比較には使わない",
+  ]);
 });
 
 test("Consoleコードと手動確認表はシナリオJSONに同期する", () => {
@@ -228,8 +234,9 @@ test("Consoleコードと手動確認表はシナリオJSONに同期する", () 
     for (const checkItem of scenario.manualChecks) assert.ok(code.includes(checkItem));
   }
   const guide = fs.readFileSync("docs/testing/sheet-manual-cases.md", "utf8");
-  assert.match(guide, /verified.*5件/);
-  assert.match(guide, /pending.*7件/);
+  assert.match(guide, /verified.*11件/);
+  assert.match(guide, /pending.*0件/);
+  assert.match(guide, /reference.*1件/);
   assert.match(guide, /結果記入欄/);
   for (const scenario of consoleScenarios) {
     assert.ok(guide.includes(scenario.id));

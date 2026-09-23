@@ -1,10 +1,10 @@
-// 100Pデモ (demo-100p) — verified
+// 100Pデモ (demo-100p) — reference
 // 現在の時間帯の入力と配置関連状態（配置不可設定を含む）をリセットします。
 // 反対側の時間帯と品目マスタは変更しません。
 // 専用オリジンまたは不要な入力の時間帯で実行してください。
 (() => {
   const rows = [{"type":"製品","name":"製品1","lot":"111","snp":500,"qty":4000},{"type":"製品","name":"製品2","lot":"222","snp":500,"qty":2750},{"type":"充填品","name":"仕掛品1","lot":"111-1111","snp":1500,"qty":24000},{"type":"充填品","name":"仕掛品1","lot":"111-1112","snp":1500,"qty":18000},{"type":"充填品","name":"仕掛品1","lot":"111-1113","snp":1500,"qty":11250},{"type":"充填品","name":"仕掛品2","lot":"222-2222","snp":1500,"qty":15000},{"type":"充填品","name":"仕掛品2","lot":"222-2223","snp":1500,"qty":15000},{"type":"充填品","name":"仕掛品3","lot":"333-3333","snp":2000,"qty":17500},{"type":"充填品","name":"仕掛品3","lot":"333-3334","snp":2000,"qty":14000},{"type":"充填品","name":"仕掛品4","lot":"444-4444","snp":2000,"qty":27000}];
-  const manualChecks = ["下段に7欄が表示される","上段に製品1/111・製品2/222・仕掛品4/444-4444が表示される","下段から上段への回送案内が1件表示される","追記欄に項目がない"];
+  const manualChecks = ["元Excelの10行が入力され、合計100Pになることを確認する","以前の見本は手修正後の配置のため、自動配置結果の配置比較には使わない"];
   if (typeof switchTab !== "function" || typeof clearLots !== "function" ||
       typeof addSlip !== "function" || typeof addItemRow !== "function" ||
       !document.querySelector("#slipList")) {
