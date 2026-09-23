@@ -1,5 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const allocationPath = "tests/fixtures/sheet-allocation-scenarios.json";
@@ -200,6 +202,50 @@ test("100Pデモの10行は元Excelの転記値と一致する", () => {
     ["充填品", "仕掛品4", "444-4444", 2000, 27000],
   ]);
   assert.equal(scenario.expectedTotalPallets, 100);
+});
+
+test("Consoleコードと手動確認表はシナリオJSONに同期する", () => {
+  const check = spawnSync(process.execPath,
+    ["scripts/generate-sheet-console-cases.mjs", "--check"],
+    { encoding: "utf8" });
+  assert.equal(check.status, 0, `${check.stdout}${check.stderr}`);
+  assert.match(check.stdout, /12 console cases and manual guide are up to date/);
+  const caseDir = "tests/console-cases";
+  assert.deepEqual(fs.readdirSync(caseDir).filter(name => name.endsWith(".console.js")).sort(),
+    consoleScenarios.map(s => `${s.id}.console.js`).sort());
+  for (const scenario of consoleScenarios) {
+    const code = fs.readFileSync(path.join(caseDir, `${scenario.id}.console.js`), "utf8");
+    assert.match(code, /現在の時間帯の入力を置き換えます/);
+    assert.match(code, /switchTab\("input"\)/);
+    assert.match(code, /clearLots\(\)/);
+    assert.match(code, /addSlip\("fax"\)/);
+    assert.match(code, /addItemRow\(addButton\)/);
+    assert.match(code, /dispatchEvent\(new Event\(type, \{ bubbles: true \}\)\)/);
+    assert.match(code, /try\s*\{\s*clearLots\(\);?\s*\}\s*finally\s*\{/);
+    assert.match(code, /window\.confirm\s*=\s*originalConfirm/);
+    assert.doesNotMatch(code, /runFromButton|\brun\(|printSheet|window\.print/);
+    assert.match(code, new RegExp(`${scenario.expectedTotalPallets}P`));
+    for (const checkItem of scenario.manualChecks) assert.ok(code.includes(checkItem));
+  }
+  const guide = fs.readFileSync("docs/testing/sheet-manual-cases.md", "utf8");
+  assert.match(guide, /verified.*5件/);
+  assert.match(guide, /pending.*7件/);
+  assert.match(guide, /結果記入欄/);
+  for (const scenario of consoleScenarios) {
+    assert.ok(guide.includes(scenario.id));
+    assert.ok(guide.includes(`${scenario.id}.console.js`));
+    for (const checkItem of scenario.manualChecks) assert.ok(guide.includes(checkItem));
+  }
+});
+
+test("Consoleコードが使う入力画面APIとDOM構造を本体が提供する", () => {
+  for (const name of ["switchTab", "clearLots", "addSlip", "addItemRow"]) {
+    assert.match(source, new RegExp(`function ${name}\\(`), `${name} が見つからない`);
+  }
+  assert.match(source, /id="slipList"/);
+  assert.match(source, /class="btn btn-ghost btn-slip-action-add"/);
+  assert.match(source, /<tbody><\/tbody>/);
+  assert.match(source, /tr\.querySelectorAll\("select,input"\)/);
 });
 
 test("自動割当シナリオは12件でIDが一意", () => {
