@@ -382,10 +382,10 @@ test("退避の列を伸ばす仕掛けは残っていない", () => {
    ここに残すのはその役目 ── 「分割の確認を取り消したら何もしない」
    「成立したら検証後の配置をそのまま採る」という2分岐の実行確認 ── だけを
    倉庫の宛先（退避への振り分けを踏まない宛先）で引き継ぐ。 */
-function loadApplyMove({ spaces, counts, validate, confirmAnswer }) {
+function loadApplyMove({ spaces, counts, validate, confirmAnswer, splitConfirmEnabled = true }) {
   const log = { pushed: 0, saved: 0, redrawn: 0, confirmed: 0 };
   const src = `
-    let lastSp=spaces, lastLots=[];
+    let lastSp=spaces, lastLots=[], splitConfirmEnabled=confirmEnabled;
     const sel={lotId:"L1", cells:new Set(["棟A|0"])};
     ${functionSource("clone")}
     ${functionSource("stashSpaces")}
@@ -403,8 +403,8 @@ function loadApplyMove({ spaces, counts, validate, confirmAnswer }) {
     function redraw(){ log.redrawn++; }
     return { applyMove, spaces:()=>lastSp };
   `;
-  const made = new Function("spaces", "counts", "validate", "confirmAnswer", "log", src)(
-    spaces, counts, validate, confirmAnswer, log
+  const made = new Function("spaces", "counts", "validate", "confirmAnswer", "confirmEnabled", "log", src)(
+    spaces, counts, validate, confirmAnswer, splitConfirmEnabled, log
   );
   return { ...made, log };
 }
@@ -426,6 +426,22 @@ test("分割の確認を取り消したら、何も変えない", () => {
   assert.equal(app.log.confirmed, 1, "確認を出していない");
   assert.equal(app.log.pushed, 0, "確認を取り消したのに履歴に積んでいる");
   assert.equal(app.log.saved, 0, "確認を取り消したのに保存している");
+});
+
+test("分割確認をOFFにしたら、確認を出さずに移動する", () => {
+  const next = [{ name: "棟A", zone: "warehouse", cols: [{ h: 4, aisle: false, fills: [{ id: "L1", count: 8 }] }] }];
+  const app = loadApplyMove({
+    spaces: warehouseOnly(),
+    counts: { "棟A|0": 5 },
+    validate: { ok: true, needConfirm: true, before: 1, after: 2, next },
+    confirmAnswer: false,
+    splitConfirmEnabled: false,
+  });
+  app.applyMove("棟A", 0);
+  assert.equal(app.log.confirmed, 0, "OFFなのに確認を出している");
+  assert.equal(app.spaces(), next, "確認なしで移動を完了していない");
+  assert.equal(app.log.pushed, 1, "移動を履歴に積んでいない");
+  assert.equal(app.log.saved, 1, "移動結果を保存していない");
 });
 
 test("移動が成立したら検証後の配置をそのまま採る", () => {

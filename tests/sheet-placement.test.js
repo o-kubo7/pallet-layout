@@ -1962,6 +1962,57 @@ test("欄のセルは、指定された index の左辺だけ太くする", () =
   assert.doesNotMatch(note, /gsep/);
 });
 
+test("下段は品名が切り替わる欄だけを品目グループの開始にする", () => {
+  const separators = new Function(
+    functionSource("bottomItemSeparators") + "; return bottomItemSeparators;"
+  )();
+  const entry = name => ({ lot: { name } });
+
+  assert.deepEqual(
+    [...separators([
+      entry("製品2"),
+      entry("仕掛品1"), entry("仕掛品1"), entry("仕掛品1"),
+      entry("仕掛品2"), entry("仕掛品2"),
+      entry("仕掛品4"),
+    ], 7)],
+    [1, 4, 6]
+  );
+  assert.deepEqual([...separators([entry("A"), entry("A"), null, entry("B")], 4)], [3]);
+});
+
+test("下段の品目グループ境界は品名・ロット・P数・注釈の全行に通す", () => {
+  const render = new Function(
+    "esc", "palSlotTextOf",
+    functionSource("slotCells") + "; return slotCells;"
+  )(v => String(v), () => "3P");
+  const entries = [
+    { lot: { name: "A", lot: "A-1" }, note: "" },
+    { lot: { name: "B", lot: "B-1" }, note: "※PC横" },
+  ];
+  const starts = new Set([1]);
+
+  for (const kind of ["name", "lot", "pallet", "note"]) {
+    const html = render(entries, 2, kind, null, null, "bottom", {}, starts);
+    const tds = html.match(/<td class="[^"]*"/g) || [];
+    assert.equal(tds.length, 2);
+    assert.doesNotMatch(tds[0], /itemsep/);
+    assert.match(tds[1], /itemsep/, `${kind}行の境界が細線のまま`);
+  }
+});
+
+test("下段の品目グループ境界を表の4行と太線CSSへ結線する", () => {
+  const fn = functionSource("renderSheet");
+  assert.match(fn, /const itemsep=bottomItemSeparators\(bottom,lay\.bottom\)/);
+  for (const kind of ["name", "lot", "pallet", "note"]) {
+    const extra = kind === "name" ? '"bb2"' : "null";
+    assert.match(
+      fn,
+      new RegExp(`slotCells\\(bottom,lay\\.bottom,"${kind}",${extra},null,"bottom",marks,itemsep\\)`)
+    );
+  }
+  assert.match(source, /\.sheet td\.itemsep\{border-left:2px solid #000\}/);
+});
+
 test("配置図の見出し行はグループごとのセルで、列数の合計が様式に一致する", () => {
   // colspan の合計が lay.cols からずれると table-layout:fixed が colgroup を無視し、
   // 盤のマスと欄の位置、引き出し線の座標が同時に狂う
@@ -1998,9 +2049,6 @@ test("グループの区切り線は上段の品名・ロット・P数の行に�
   assert.match(fn, /slotCells\(top,lay\.top,"name","bb2",gsep,"top",marks\)/);
   assert.match(fn, /slotCells\(top,lay\.top,"lot",null,gsep,"top",marks\)/);
   assert.match(fn, /slotCells\(top,lay\.top,"pallet",null,gsep,"top",marks\)/);
-  // 下段にはグループの区切りを渡さない（sepAt が null）
-  assert.match(fn, /slotCells\(bottom,lay\.bottom,"name","bb2",null,"bottom",marks\)/);
-  assert.match(fn, /slotCells\(bottom,lay\.bottom,"lot",null,null,"bottom",marks\)/);
 });
 
 test("上段の注釈行は残し、またがる欄にだけ注釈を出す", () => {

@@ -540,6 +540,8 @@
   .sheet td.ttl{font-size:15px;font-weight:800;letter-spacing:.2em}
   /* グループの境目。見出しから P数 の行まで同じ位置で縦に貫く */
   .sheet td.ttl.gsep,.sheet td.slot.gsep{border-left-width:2px}
+  /* 下段の品目グループ境界。注釈行も含めて縦に貫く */
+  .sheet td.itemsep{border-left:2px solid #000}
   .sheet td.dow{height:28px}
   /* 上段の3行：用紙と同じく「品名欄がいちばん高い」 */
   .sheet tr.r1 td{height:32px}
@@ -1064,6 +1066,8 @@
           <h3>配置のしかた</h3>
           <label class="chk"><input type="checkbox" id="mixChk" checked onchange="toggleMix()"> 満杯時に混載を許可</label>
           <div class="hint">混載は、列が満杯のときに別の品目と1列を分け合うことです。許可しないと、入りきらない荷物は「あふれ」になります。配置編集の盤では、混ざった列の境目が破線で出ます。</div>
+          <label class="chk"><input type="checkbox" id="splitConfirmChk" checked onchange="toggleSplitConfirm()"> ロットが複数箇所に分かれるとき確認する</label>
+          <div class="hint">OFFにすると、配置編集でロットを分ける移動を確認なしで実行します。</div>
         </div>
 
         <div class="cfgsec">
@@ -1254,6 +1258,7 @@ let lastLots=null, lastColor=null, lastSp=null;
 let hasResult=false;
 let fracMode=false;   // true なら「満載数P 半」表記
 let sheetEditSilent=false;
+let splitConfirmEnabled=true;
 const TIMING_KEYS=["am","pm"];
 const TIMING_LABEL={am:"あさ",pm:"ひる"};
 const SCHEDULE_VERSION=1;
@@ -1266,7 +1271,7 @@ let scheduleLoadWarning=[];
 let spacesWereReset=false;
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", mix:"palletApp.mix", undoLabel:"palletApp.undoLabel", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent", sampleBtns:"palletApp.sampleBtns"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", mix:"palletApp.mix", splitConfirm:"palletApp.splitConfirm", undoLabel:"palletApp.undoLabel", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent", sampleBtns:"palletApp.sampleBtns"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
 const SPACES_SAVE_VERSION = 4;   // 現場の実測で置き場が増えたので上げる
@@ -1953,6 +1958,14 @@ function applySampleBtns(on){
    戻っていたので、設定タブへ移して端末に保存する。読むのは run() の1か所だけ。 */
 function toggleMix(){
   saveData(STORE_KEY.mix, document.getElementById("mixChk").checked);
+}
+function toggleSplitConfirm(){
+  splitConfirmEnabled=document.getElementById("splitConfirmChk").checked;
+  saveData(STORE_KEY.splitConfirm, splitConfirmEnabled);
+}
+function initSplitConfirm(){
+  splitConfirmEnabled=loadData(STORE_KEY.splitConfirm)!==false;
+  document.getElementById("splitConfirmChk").checked=splitConfirmEnabled;
 }
 /* 戻す・進むのボタンに文字を付けるか。既定はオフ（記号だけ）。
    375px では帯が 186px しかなく、文字を付けると選んでいるマス数に 18px しか
@@ -3719,7 +3732,7 @@ function applyMove(spaceName, colIndex){
   const spBefore=snapshotSpaces(lastSp), selBefore=selSnapshot();
   const v=validateMove(lastSp, sel.lotId, counts, spaceName, colIndex);
   if(!v.ok) return;
-  if(v.needConfirm){
+  if(v.needConfirm && splitConfirmEnabled){
     const lot=lastLots.find(l=>l.id===sel.lotId);
     const name=lot?`${lot.name} / ${lot.lot||"—"}`:"このロット";
     if(!confirm(`${name} が ${v.before}か所から ${v.after}か所に分かれます。このまま移動しますか？`)) return;
@@ -5789,11 +5802,12 @@ function renderSheet(){
   rows+=`<tr class="gap"><td class="none sep" colspan="${lay.cols}"></td></tr>`;
 
   // 下段（lay.bottom 区画。normal 7 / middle 8 / wide 9）：品名／ロット／パレット数／注記
-  rows+=`<tr>${slotCells(bottom,lay.bottom,"name","bb2",null,"bottom",marks)}</tr>`;
-  rows+=`<tr>${slotCells(bottom,lay.bottom,"lot",null,null,"bottom",marks)}</tr>`;
+  const itemsep=bottomItemSeparators(bottom,lay.bottom);
+  rows+=`<tr>${slotCells(bottom,lay.bottom,"name","bb2",null,"bottom",marks,itemsep)}</tr>`;
+  rows+=`<tr>${slotCells(bottom,lay.bottom,"lot",null,null,"bottom",marks,itemsep)}</tr>`;
   // この行の各セルの下辺が引き出し線の起点になる
-  rows+=`<tr class="btmp">${slotCells(bottom,lay.bottom,"pallet",null,null,"bottom",marks)}</tr>`;
-  rows+=`<tr class="note-row">${slotCells(bottom,lay.bottom,"note",null,null,"bottom",marks)}</tr>`;
+  rows+=`<tr class="btmp">${slotCells(bottom,lay.bottom,"pallet",null,null,"bottom",marks,itemsep)}</tr>`;
+  rows+=`<tr class="note-row">${slotCells(bottom,lay.bottom,"note",null,null,"bottom",marks,itemsep)}</tr>`;
   rows+=`<tr class="gap"><td class="none" colspan="${lay.cols}"></td></tr>`;
 
   // グリッド（メイン）
@@ -5841,9 +5855,21 @@ function palSlotTextOf(members){
   if(t.length<=1) return t[0]||"";
   return t.every(x=>x===t[0]) ? "各"+t[0] : t.join("/");
 }
+// 下段で品名が切り替わる欄の index。同品名の異ロット間は細線のままにする。
+function bottomItemSeparators(entries,count){
+  const starts=new Set();
+  let previous=null, seen=false;
+  for(let i=0;i<count;i++){
+    const name=entries[i]&&entries[i].lot ? entries[i].lot.name : null;
+    if(!name){ previous=null; continue; }
+    if(seen && name!==previous) starts.add(i);
+    seen=true; previous=name;
+  }
+  return starts;
+}
 // 区画セル（2列ぶんの幅）。kind: name / lot / pallet / pallet2 / note
 // extra: 全セルに足すクラス（品名行の太罫など）。品名行は左右の端も太罫にする
-function slotCells(entries,count,kind,extra,sepAt,tier,marks){
+function slotCells(entries,count,kind,extra,sepAt,tier,marks,itemSepAt){
   // data-fit は fitSheetText() が「どの種類の欄が入りきらなかったか」を数えるのに使う
   const FIT={name:"name", lot:"lot", pallet:"pal", note:"note"};
   const fk=FIT[kind]||"";
@@ -5896,6 +5922,7 @@ function slotCells(entries,count,kind,extra,sepAt,tier,marks){
     // グループの境目の欄だけ左辺を太くする。見出し行と同じ index を渡してもらうので、
     // 見出し・品名・ロット・P数 の4行で線が縦に揃う。注釈行には引かない
     if(sepAt && sepAt.has(i) && kind!=="note") cls+=" gsep";
+    if(itemSepAt && itemSepAt.has(i)) cls+=" itemsep";
     if(extra && kind!=="note"){
       cls+=" "+extra;
       if(i===0)       cls+=" bl2";
@@ -6587,6 +6614,8 @@ updateSaveStatus();
 (function initMix(){
   if(loadData(STORE_KEY.mix)===false) document.getElementById("mixChk").checked=false;
 })();
+
+initSplitConfirm();
 
 // 戻す・進むの文字：保存があれば復元。既定はオフなので true のときだけ立てる
 (function initUndoLabel(){
