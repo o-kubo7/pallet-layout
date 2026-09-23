@@ -4,6 +4,8 @@ const test = require("node:test");
 
 const allocationPath = "tests/fixtures/sheet-allocation-scenarios.json";
 const allocationScenarios = JSON.parse(fs.readFileSync(allocationPath, "utf8"));
+const consolePath = "tests/fixtures/sheet-console-scenarios.json";
+const consoleScenarios = JSON.parse(fs.readFileSync(consolePath, "utf8"));
 const source = fs.readFileSync("files/index.html", "utf8");
 
 function functionSource(name) {
@@ -124,6 +126,64 @@ function validateScenario(scenario) {
   ].filter(id => id != null);
   assert.ok(expectedIds.every(id => slotIds.includes(id)), "expectedにしか存在しないID");
 }
+
+function validateConsoleScenario(scenario) {
+  assert.match(scenario.id, /^[a-z0-9-]+$/);
+  assert.ok(typeof scenario.title === "string" && scenario.title.length > 0);
+  assert.ok(["verified", "pending"].includes(scenario.verificationStatus));
+  assert.ok(Array.isArray(scenario.manualChecks) && scenario.manualChecks.length > 0);
+  assert.ok(scenario.manualChecks.every(check => typeof check === "string" && check.length > 0));
+  assert.ok(Array.isArray(scenario.input) && scenario.input.length > 0);
+  for (const row of scenario.input) {
+    assert.ok(["製品", "充填品"].includes(row.type));
+    assert.ok(typeof row.name === "string" && row.name.length > 0);
+    assert.equal(typeof row.lot, "string");
+    assert.ok(Number.isSafeInteger(row.snp) && row.snp > 0, "SNPは正の安全な整数");
+    assert.ok(Number.isSafeInteger(row.qty) && row.qty > 0, "個数は正の安全な整数");
+  }
+  const total = scenario.input.reduce((sum, row) => sum + Math.ceil(row.qty / row.snp), 0);
+  assert.equal(total, scenario.expectedTotalPallets, `${scenario.id}: 合計P数`);
+}
+
+test("Consoleシナリオは指定した12件でverified 5件・pending 7件", () => {
+  const verifiedIds = [
+    "demo-100p", "basic-normal", "basic-middle", "basic-wide", "basic-wide-overflow",
+  ];
+  const expectedIds = [
+    ...verifiedIds,
+    "split-delivery", "same-name-different-lot", "half-pallet",
+    "normal-to-middle", "middle-to-wide", "top-rescue", "stash-overflow",
+  ];
+  assert.equal(consoleScenarios.length, 12);
+  assert.deepEqual(consoleScenarios.map(s => s.id).sort(), expectedIds.sort());
+  assert.equal(new Set(consoleScenarios.map(s => s.id)).size, 12);
+  assert.deepEqual(consoleScenarios.filter(s => s.verificationStatus === "verified")
+    .map(s => s.id).sort(), verifiedIds.sort());
+  assert.equal(consoleScenarios.filter(s => s.verificationStatus === "pending").length, 7);
+  for (const scenario of consoleScenarios) validateConsoleScenario(scenario);
+});
+
+test("ConsoleシナリオはSNP・個数の0、負数、小数、文字列を拒否する", () => {
+  const scenario = structuredClone(consoleScenarios[0]);
+  for (const key of ["snp", "qty"]) {
+    for (const value of [0, -1, 1.5, "10"]) {
+      const invalid = structuredClone(scenario);
+      invalid.input[0][key] = value;
+      assert.throws(() => validateConsoleScenario(invalid), /正の安全な整数/, `${key}: ${value}`);
+    }
+  }
+});
+
+test("分納は同名同ロットでも各行を切り上げて合計する", () => {
+  const scenario = consoleScenarios.find(s => s.id === "split-delivery");
+  assert.ok(scenario);
+  assert.deepEqual(scenario.input.map(row => [row.name, row.lot, row.snp, row.qty]), [
+    ["部品1", "S-001", 10, 1],
+    ["部品1", "S-001", 10, 11],
+  ]);
+  assert.equal(scenario.expectedTotalPallets, 3);
+  validateConsoleScenario(scenario);
+});
 
 test("自動割当シナリオは12件でIDが一意", () => {
   assert.equal(allocationScenarios.length, 12);
