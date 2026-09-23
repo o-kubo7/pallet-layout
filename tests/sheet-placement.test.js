@@ -501,12 +501,122 @@ test("存在しない列または行の配置不可指定を除去する", () =>
 
 test("列途中の配置不可セルを飛ばしてロットを描画する", () => {
   const cellsOf = new Function(
-    functionSource("fillOrder") + functionSource("cellsOf") + "; return cellsOf;"
+    functionSource("fillOrder") + functionSource("cellGroups") + functionSource("cellsOf") + "; return cellsOf;"
   )();
   const cells = cellsOf({ h: 4, fills: [{ id: 7, count: 3 }] }, new Set([1]));
   assert.deepEqual(cells.map(cell => [cell.row, cell.id, cell.blocked]), [
     [0, 7, false], [1, null, true], [2, 7, false], [3, 7, false],
   ]);
+});
+
+function makeCellsOf() {
+  return new Function(
+    functionSource("fillOrder") +
+    functionSource("cellGroups") +
+    functionSource("cellsOf") +
+    "; return cellsOf;"
+  )();
+}
+
+test("メインの2ロットは両端に詰めて中央を空ける", () => {
+  const cells = makeCellsOf()(
+    {h:7, fills:[{id:5,count:2},{id:8,count:2,mix:true}]},
+    undefined,
+    {splitEnds:true}
+  );
+  assert.deepEqual(cells.map(c=>c.id), [5,5,null,null,null,8,8]);
+});
+
+test("メインの2ロットで列が満杯なら中央に空きはない", () => {
+  const cells = makeCellsOf()(
+    {h:4, fills:[{id:5,count:2},{id:8,count:2,mix:true}]},
+    undefined,
+    {splitEnds:true}
+  );
+  assert.deepEqual(cells.map(c=>c.id), [5,5,8,8]);
+});
+
+test("2ロットが複数fillに分かれていてもロット単位で両端にまとめる", () => {
+  const cells = makeCellsOf()(
+    {h:7, fills:[{id:5,count:1},{id:8,count:2},{id:5,count:1}]},
+    undefined,
+    {splitEnds:true}
+  );
+  assert.deepEqual(cells.map(c=>c.id), [5,5,null,null,null,8,8]);
+});
+
+test("3ロット以上は従来どおり片側から順に詰める", () => {
+  const cells = makeCellsOf()(
+    {h:7, fills:[{id:5,count:2},{id:8,count:2},{id:9,count:1}]},
+    undefined,
+    {splitEnds:true}
+  );
+  assert.deepEqual(cells.map(c=>c.id), [5,5,8,8,9,null,null]);
+});
+
+test("右詰めは列の右端から埋める", () => {
+  const cells = makeCellsOf()(
+    {h:11, fills:[{id:8,count:7}]},
+    undefined,
+    {fromEnd:true}
+  );
+  assert.deepEqual(cells.map(c=>c.id), [null,null,null,null,8,8,8,8,8,8,8]);
+});
+
+test("両端詰めでも通常マスより先に緊急用マスを使わない", () => {
+  const cells = makeCellsOf()(
+    {h:8, fills:[{id:5,count:2},{id:8,count:2}], aisleRows:[7]},
+    undefined,
+    {splitEnds:true}
+  );
+  assert.deepEqual(cells.map(c=>c.id), [5,5,null,null,null,8,8,null]);
+});
+
+test("両端詰めでも通常マスより先に准緊急用マスを使わない", () => {
+  const cells = makeCellsOf()(
+    {h:9, up:1, fills:[{id:5,count:2},{id:8,count:2}], aisleRows:[8]},
+    undefined,
+    {splitEnds:true}
+  );
+  assert.deepEqual(cells.map(c=>c.id), [null,5,5,null,null,null,8,8,null]);
+});
+
+test("両端詰めは端と中央の配置不可セルを飛ばす", () => {
+  const cells = makeCellsOf()(
+    {h:8, fills:[{id:5,count:2},{id:8,count:2}]},
+    new Set([0,4]),
+    {splitEnds:true}
+  );
+  assert.deepEqual(cells.map(c=>c.id), [null,5,5,null,null,null,8,8]);
+  assert.equal(cells[0].blocked, true);
+  assert.equal(cells[4].blocked, true);
+});
+
+test("手動配置で通常容量を超えた分だけ緊急用マスを使う", () => {
+  const cells = makeCellsOf()(
+    {h:8, fills:[{id:5,count:4},{id:8,count:4}], aisleRows:[7]},
+    undefined,
+    {splitEnds:true}
+  );
+  assert.equal(cells.filter(c=>c.id===5).length, 4);
+  assert.equal(cells.filter(c=>c.id===8).length, 4);
+  assert.equal(cells[7].id!==null, true);
+});
+
+test("通常7通路1の両端詰めは中央を潰してから通路まで連続する", () => {
+  const before = makeCellsOf()(
+    {h:8, fills:[{id:5,count:3},{id:8,count:3}], aisleRows:[7]},
+    undefined,
+    {splitEnds:true}
+  );
+  assert.deepEqual(before.map(c=>c.id), [5,5,5,null,8,8,8,null]);
+
+  const after = makeCellsOf()(
+    {h:8, fills:[{id:5,count:5},{id:8,count:3}], aisleRows:[7]},
+    undefined,
+    {splitEnds:true}
+  );
+  assert.deepEqual(after.map(c=>c.id), [5,5,5,5,5,8,8,8]);
 });
 
 test("配置不可セルは連続配置の容量に数えない", () => {
@@ -554,7 +664,7 @@ test("手動移動は配置不可セルを飛ばして描画される", () => {
     functionSource("moveCells") + "; return moveCells;"
   )();
   const cellsOf = new Function(
-    functionSource("fillOrder") + functionSource("cellsOf") + "; return cellsOf;"
+    functionSource("fillOrder") + functionSource("cellGroups") + functionSource("cellsOf") + "; return cellsOf;"
   )();
   const next = [
     { name: "移動元", cols: [{ h: 2, fills: [{ id: 1, count: 1 }] }] },
@@ -1058,7 +1168,7 @@ test("自動配置は緊急用の通路マスの手前で止まる", () => {
 
 test("緊急用の通路マスには印を付け、荷物は飛ばさずに入れる", () => {
   const cellsOf = new Function(
-    functionSource("fillOrder") + functionSource("cellsOf") + "; return cellsOf;"
+    functionSource("fillOrder") + functionSource("cellGroups") + functionSource("cellsOf") + "; return cellsOf;"
   )();
   const cells = cellsOf({ h: 3, fills: [{ id: 5, count: 3 }], aisleRows: [2] });
   assert.deepEqual(cells.map(cell => [cell.row, cell.id, cell.aisleRow]), [
@@ -1463,7 +1573,7 @@ test("最終行と緊急用マスが別ロットなら本体の最終行に太�
 // 列だけ「up の行を後回しにする」順番で詰める（表示位置そのものは変えない）
 test("up の列は通常マスを先に詰め、准緊急用マス(上端)は最後に埋める", () => {
   const cellsOf = new Function(
-    functionSource("fillOrder") + functionSource("cellsOf") + "; return cellsOf;"
+    functionSource("fillOrder") + functionSource("cellGroups") + functionSource("cellsOf") + "; return cellsOf;"
   )();
   // h9・up1・aisleRows[8]。7個入れても上端(row0)は空のまま
   const cells7 = cellsOf({ h: 9, up: 1, fills: [{ id: 0, count: 7 }], aisleRows: [8] });
@@ -1476,7 +1586,7 @@ test("up の列は通常マスを先に詰め、准緊急用マス(上端)は最
 
 test("up が無い列は今までどおり row 0 から詰める", () => {
   const cellsOf = new Function(
-    functionSource("fillOrder") + functionSource("cellsOf") + "; return cellsOf;"
+    functionSource("fillOrder") + functionSource("cellGroups") + functionSource("cellsOf") + "; return cellsOf;"
   )();
   const cells = cellsOf({ h: 8, fills: [{ id: 0, count: 3 }], aisleRows: [7] });
   assert.deepEqual(cells.slice(0, 3).map(c => c.id), [0, 0, 0]);
@@ -1485,7 +1595,7 @@ test("up が無い列は今までどおり row 0 から詰める", () => {
 
 test("up の列で准緊急用マスまで埋まったら緊急用マスは使わない", () => {
   const cellsOf = new Function(
-    functionSource("fillOrder") + functionSource("cellsOf") + "; return cellsOf;"
+    functionSource("fillOrder") + functionSource("cellGroups") + functionSource("cellsOf") + "; return cellsOf;"
   )();
   const cells = cellsOf({ h: 9, up: 1, fills: [{ id: 0, count: 8 }], aisleRows: [8] });
   assert.equal(cells[8].id, null); // 緊急用マス(row8)は自動配置の対象外、8個では届かない

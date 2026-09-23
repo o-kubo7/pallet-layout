@@ -2837,31 +2837,77 @@ function colTopOffset(sp,col){
    緊急用マス（aisleRows）はさらにその後ろ、常に最後。
    盤（cellsOf）と紙（gridRows/sheetGridAnchors の colCells 生成）が
    同じ順番を使わないと、盤と紙で埋まり方の見え方がずれる */
-function fillOrder(col){
+function fillOrder(col,fromEnd=false){
   const aisleRows=Array.isArray(col.aisleRows)?col.aisleRows:[];
   const up=Number.isFinite(col.up)?col.up:0;
-  const order=[];
-  for(let i=up;i<col.h;i++) if(!aisleRows.includes(i)) order.push(i);
-  for(let i=0;i<up;i++) order.push(i);
-  for(let i=0;i<col.h;i++) if(aisleRows.includes(i)) order.push(i);
-  return order;
+  const normal=[], raised=[], emergency=[];
+  for(let i=up;i<col.h;i++) if(!aisleRows.includes(i)) normal.push(i);
+  for(let i=0;i<up;i++) raised.push(i);
+  for(let i=0;i<col.h;i++) if(aisleRows.includes(i)) emergency.push(i);
+  const orient=rows=>fromEnd?rows.slice().reverse():rows;
+  return [...orient(normal),...orient(raised),...orient(emergency)];
 }
-function cellsOf(col,blockedRows){
+function cellGroups(fills){
+  const out=[], byId=new Map();
+  (Array.isArray(fills)?fills:[]).forEach(fill=>{
+    let group=byId.get(fill.id);
+    if(!group){ group={id:fill.id,count:0}; byId.set(fill.id,group); out.push(group); }
+    group.count+=fill.count;
+  });
+  return out;
+}
+function cellsOf(col,blockedRows,options){
+  options=options||{};
   const blocked=blockedRows instanceof Set ? blockedRows : col.blockedRows;
+  const fromEnd=!!options.fromEnd;
+  const splitEnds=!!options.splitEnds;
   // 緊急用の通路マスは印を付けるだけ。blocked と違って飛ばさない。
   // 飛ばすと、列が埋まっても手で運んだ荷物が入らなくなる
   const aisleRows=Array.isArray(col.aisleRows)?col.aisleRows:[];
-  const arr=Array.from({length:col.h},(_,i)=>({id:null,seg:false,row:i,
+  const arr=Array.from({length:col.h},(_,i)=>({id:null,seg:null,row:i,
     blocked:blocked instanceof Set && blocked.has(i),
     aisleRow:aisleRows.includes(i)}));
-  const order=fillOrder(col);
-  let oi=0;
-  col.fills.forEach((f,fi)=>{
-    for(let k=0;k<f.count;k++){
-      while(oi<order.length && arr[order[oi]].blocked) oi++;
-      if(oi<order.length){ const r=order[oi]; arr[r]={id:f.id,seg:(k===0&&fi>0),row:r,blocked:false,aisleRow:aisleRows.includes(r)}; oi++; }
+  const fills=Array.isArray(col.fills)?col.fills:[];
+  const groups=cellGroups(fills);
+  const split=splitEnds && groups.length===2;
+  const assigned=new Set();
+  const assign=(id,count,order,segRow=null,segValue=null)=>{
+    if(count<=0) return;
+    for(const r of order){
+      if(arr[r].blocked || assigned.has(r)) continue;
+      arr[r]={id,seg:r===segRow?segValue:null,row:r,blocked:false,aisleRow:aisleRows.includes(r)};
+      assigned.add(r);
+      if(--count===0) break;
     }
-  });
+  };
+  if(split){
+    const firstOrder=fillOrder(col,fromEnd);
+    const secondOrder=fillOrder(col,!fromEnd);
+    const firstRows=firstOrder.filter(r=>!arr[r].blocked);
+    const secondRows=secondOrder.filter(r=>!arr[r].blocked);
+    const firstCount=Math.min(groups[0].count,firstRows.length);
+    const secondCount=Math.min(groups[1].count,secondRows.length);
+    const firstBoundary=firstRows[0];
+    const secondBoundary=secondRows[secondCount-1];
+    assign(groups[0].id,groups[0].count,firstOrder,firstBoundary,fromEnd?"after":"before");
+    // 第2ロットの境界は両端詰めの中央側に置く。
+    assign(groups[1].id,groups[1].count,secondOrder,secondBoundary,fromEnd?"before":"after");
+  }else{
+    const order=fillOrder(col,fromEnd);
+    let oi=0;
+    fills.forEach((f,fi)=>{
+      let first=true;
+      for(let k=0;k<f.count;k++){
+        while(oi<order.length && (arr[order[oi]].blocked || assigned.has(order[oi]))) oi++;
+        if(oi<order.length){
+          const r=order[oi++];
+          arr[r]={id:f.id,seg:first&&fi>0?(fromEnd?"after":"before"):null,row:r,blocked:false,aisleRow:aisleRows.includes(r)};
+          assigned.add(r);
+          first=false;
+        }
+      }
+    });
+  }
   return arr;
 }
 function drawZone(elId, spaces, colorOf){
