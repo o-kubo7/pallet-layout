@@ -2,7 +2,7 @@
   {
     "id": "demo-100p",
     "title": "100P 配置確認",
-    "baseArea": "軒下①",
+    "baseArea": "メイン",
     "slots": {
       "top": [
         {
@@ -20,43 +20,43 @@
       ],
       "bottom": [
         {
-          "id": "M1",
+          "id": "仕掛品1/111-1111",
           "areas": [
             "メイン"
           ]
         },
         {
-          "id": "M2",
+          "id": "仕掛品1/111-1112",
           "areas": [
             "メイン"
           ]
         },
         {
-          "id": "M3",
+          "id": "仕掛品1/111-1113",
           "areas": [
             "メイン"
           ]
         },
         {
-          "id": "M4",
+          "id": "仕掛品2/222-2222",
           "areas": [
             "メイン"
           ]
         },
         {
-          "id": "M5",
+          "id": "仕掛品2/222-2223",
           "areas": [
             "メイン"
           ]
         },
         {
-          "id": "M6",
+          "id": "仕掛品3/333-3334",
           "areas": [
             "メイン"
           ]
         },
         {
-          "id": "M7",
+          "id": "仕掛品3/333-3333",
           "areas": [
             "メイン"
           ]
@@ -64,7 +64,7 @@
         {
           "id": "仕掛品4/444-4444",
           "areas": [
-            "退避"
+            "PC横"
           ]
         }
       ],
@@ -74,16 +74,17 @@
       "layout": "normal",
       "top": [
         "製品1/111",
-        "製品2/222"
+        "製品2/222",
+        "仕掛品4/444-4444"
       ],
       "bottom": [
-        "M1",
-        "M2",
-        "M3",
-        "M4",
-        "M5",
-        "M6",
-        "M7"
+        "仕掛品1/111-1111",
+        "仕掛品1/111-1112",
+        "仕掛品1/111-1113",
+        "仕掛品2/222-2222",
+        "仕掛品2/222-2223",
+        "仕掛品3/333-3334",
+        "仕掛品3/333-3333"
       ],
       "moved": [],
       "movedBottom": [
@@ -95,7 +96,7 @@
   {
     "id": "normal-boundary",
     "title": "通常様式の境界",
-    "baseArea": "軒下①",
+    "baseArea": "メイン",
     "slots": {
       "top": [
         {
@@ -194,7 +195,7 @@
   {
     "id": "normal-to-middle",
     "title": "通常から中量様式へ",
-    "baseArea": "軒下①",
+    "baseArea": "メイン",
     "slots": {
       "top": [
         {
@@ -300,7 +301,7 @@
   {
     "id": "middle-boundary",
     "title": "中量様式の境界",
-    "baseArea": "軒下①",
+    "baseArea": "メイン",
     "slots": {
       "top": [
         {
@@ -413,7 +414,7 @@
   {
     "id": "middle-to-wide",
     "title": "中量から多量様式へ",
-    "baseArea": "軒下①",
+    "baseArea": "メイン",
     "slots": {
       "top": [
         {
@@ -533,7 +534,7 @@
   {
     "id": "wide-boundary",
     "title": "多量様式の境界",
-    "baseArea": "軒下①",
+    "baseArea": "メイン",
     "slots": {
       "top": [
         {
@@ -660,7 +661,7 @@
   {
     "id": "wide-overflow",
     "title": "多量様式の追記欄",
-    "baseArea": "軒下①",
+    "baseArea": "メイン",
     "slots": {
       "top": [
         {
@@ -795,7 +796,7 @@
   {
     "id": "split-delivery",
     "title": "分納",
-    "baseArea": "軒下①",
+    "baseArea": "メイン",
     "slots": {
       "top": [],
       "bottom": [
@@ -812,7 +813,13 @@
       "layout": "normal",
       "top": [],
       "bottom": [
-        "M1"
+        "M1",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
       ],
       "moved": [],
       "movedBottom": [],
@@ -822,7 +829,7 @@
   {
     "id": "same-name-different-lot",
     "title": "同名・異ロット",
-    "baseArea": "軒下①",
+    "baseArea": "メイン",
     "slots": {
       "top": [],
       "bottom": [
@@ -846,7 +853,12 @@
       "top": [],
       "bottom": [
         "M1",
-        "M2"
+        "M2",
+        null,
+        null,
+        null,
+        null,
+        null
       ],
       "moved": [],
       "movedBottom": [],
@@ -856,7 +868,7 @@
   {
     "id": "half-pallet",
     "title": "半パレット",
-    "baseArea": "軒下①",
+    "baseArea": "メイン",
     "slots": {
       "top": [],
       "bottom": [
@@ -873,7 +885,13 @@
       "layout": "normal",
       "top": [],
       "bottom": [
-        "M1"
+        "M1",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
       ],
       "moved": [],
       "movedBottom": [],
@@ -883,7 +901,7 @@
   {
     "id": "top-rescue",
     "title": "上段欄の救済",
-    "baseArea": "軒下①",
+    "baseArea": "メイン",
     "slots": {
       "top": [
         {
@@ -983,7 +1001,8 @@
         "T3",
         "T4",
         "T5",
-        "T6"
+        "T6",
+        "T7"
       ],
       "bottom": [
         "M1",
@@ -993,7 +1012,8 @@
         "M5",
         "M6",
         "M7",
-        "T7"
+        "T7",
+        null
       ],
       "moved": [
         "T7"
@@ -1005,7 +1025,7 @@
   {
     "id": "stash-overflow",
     "title": "退避欄を含む追記",
-    "baseArea": "軒下①",
+    "baseArea": "メイン",
     "slots": {
       "top": [
         {
@@ -1134,7 +1154,9 @@
         "T3",
         "T4",
         "T5",
-        "T6"
+        "T6",
+        "S1",
+        "S2"
       ],
       "bottom": [
         "M1",
