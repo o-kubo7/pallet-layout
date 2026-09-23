@@ -208,7 +208,10 @@ test("run の退避積み戻しは、倉庫の空きが無いロットが複数�
   lots.forEach(l => assert.equal(l.pallets, l.stashed, `${l.id} の pallets が元に戻っていない`));
 });
 
-const VALIDATE_PIECES = [...STASH_PIECES, "cloneSpaces", "validateStashMove"];
+// dropHalfMarks は validateStashMove が呼ぶ（Task 3: 移動時に「半」の手動指定を消す）。
+// このファイルの load() は名前だけを渡して自動で closures を作る素朴な合成なので、
+// validateStashMove の依存が増えたら都度ここに足す必要がある。
+const VALIDATE_PIECES = [...STASH_PIECES, "cloneSpaces", "dropHalfMarks", "validateStashMove"];
 
 // 倉庫1エリアと退避スペース。棟A の列0 に 25 枚入っている
 function warehouseAndStash(count = 25) {

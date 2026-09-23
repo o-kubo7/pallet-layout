@@ -927,6 +927,7 @@ test("手動移動先の配置不可セルを空き容量に含めない", () =>
 test("手動移動は配置不可セルを飛ばして描画される", () => {
   const moveCells = new Function(
     functionSource("normalizeFills") +
+    functionSource("dropHalfMarks") +
     functionSource("moveCells") + "; return moveCells;"
   )();
   const cellsOf = new Function(

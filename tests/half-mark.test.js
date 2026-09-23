@@ -237,3 +237,42 @@ test("半を手動で設定する の保存キーと初期値", () => {
   assert.match(source, /halfManual:"palletApp\.halfManual"/);
   assert.match(source, /let halfManualEnabled=false;/);
 });
+
+test("moveCells: 移動したロットの指定を移動元・移動先から消し、他ロットと他の列は残す", () => {
+  const moveCells = new Function(
+    functionSource("normalizeFills") + functionSource("dropHalfMarks") +
+    functionSource("moveCells") + "; return moveCells;"
+  )();
+  const next = [{ name: "メイン", cols: [
+    { h: 7, fills: [{ id: 0, count: 5 }], halfMarks: { "0": [{ k: 0, seq: 1 }], "1": [{ k: 0, seq: 2 }] } },
+    { h: 7, fills: [{ id: 1, count: 2 }], halfMarks: { "1": [{ k: 1, seq: 3 }] } },
+    { h: 7, fills: [{ id: 0, count: 2 }], halfMarks: { "0": [{ k: 1, seq: 4 }] } },
+  ] }];
+  moveCells(next, 0, { "メイン|0": 1 }, "メイン", 1);
+  assert.deepEqual(next[0].cols[0].halfMarks, { "1": [{ k: 0, seq: 2 }] });
+  assert.deepEqual(next[0].cols[1].halfMarks, { "1": [{ k: 1, seq: 3 }] });
+  assert.deepEqual(next[0].cols[2].halfMarks, { "0": [{ k: 1, seq: 4 }] });
+});
+
+test("退避への移動でも、移動したロットの指定を移動元から消す", () => {
+  assert.match(functionSource("validateStashMove"), /dropHalfMarks\(next, lotId, Object\.keys\(counts\)\)/);
+});
+
+test("盤はメインの半のマスに角バッジを付ける", () => {
+  const root = { innerHTML: "", children: [], appendChild(node) { this.children.push(node); } };
+  const doc = {
+    getElementById: () => root,
+    createElement: () => ({ className: "", classList: { add() {} }, style: {}, innerHTML: "" }),
+  };
+  const drawZone = new Function("document", "FLOOR_POS", "activeShift", "blockedCellKey", "used", "usableCount",
+    "halfCellsFor",
+    ["fillOrder", "cellGroups", "cellsOf", "cellLayoutOptions", "spaceCells", "colTopOffset", "drawZone"]
+      .map(functionSource).join("\n") + "; return drawZone;"
+  )(doc, {}, () => ({ blocked: [] }), () => "", col => col.fills.reduce((n, f) => n + f.count, 0), col => col.h,
+    () => ({ "0_4": { lotId: 0, manual: false } }));
+  drawZone("map", [{ name: "メイン", cols: [{ h: 7, fills: [{ id: 0, count: 5 }] }] }], { 0: "#aaa" });
+  const html = root.children[0].innerHTML;
+  assert.match(html, /<div class="cell half"[^>]*data-row="4"[^>]*>1<span class="halfbadge" aria-hidden="true">半<\/span><\/div>/);
+  assert.equal((html.match(/halfbadge/g) || []).length, 1);
+  assert.match(source, /\.cell \.halfbadge\{position:absolute;top:0;right:0/);
+});
