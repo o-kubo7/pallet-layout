@@ -166,6 +166,8 @@
              transform:translate(-50%,-160%);white-space:nowrap}
   .cell.segline{border-top:2px dashed #374151}
   .cell.segline-h{border-left:2px dashed #374151}
+  .cell.segline-after{border-bottom:2px dashed #374151}
+  .cell.segline-h-after{border-right:2px dashed #374151}
   /* 列にあと何枚入るかは、盤の上でいちばん見たい数字。10px・#9ca3af では
      白地でコントラストが約2.5:1 しかなく読めないので、14px・#4b5563 にする。
      line-height を詰めるのは、字を大きくしたぶん盤が縦に伸びるのを抑えるため
@@ -2915,11 +2917,21 @@ function cellsOf(col,blockedRows,options){
   }
   return arr;
 }
+function cellLayoutOptions(space,col){
+  const main=space && space.name==="メイン";
+  const nokishita=space && space.name==="軒下①";
+  const topThree=nokishita && col && col.row===0 && col.h===3;
+  return {fromEnd:nokishita&&!topThree, splitEnds:main};
+}
+function spaceCells(space){
+  return space.cols.map(col=>cellsOf(col,col.blockedRows,cellLayoutOptions(space,col)));
+}
 function drawZone(elId, spaces, colorOf){
   // 作り直すと .sel クラスは消えるので、選択の状態も一緒に捨てる
   if(typeof clearSel==="function") clearSel();
   const el=document.getElementById(elId); el.innerHTML="";
   spaces.forEach(sp=>{
+    const laidOut=spaceCells(sp);
     const horizontal = sp.orient==="h";
     const topAlign = sp.align==="top" && !horizontal;
     const wrap=document.createElement("div"); wrap.className="space";
@@ -2943,7 +2955,7 @@ function drawZone(elId, spaces, colorOf){
     // 1 列ぶんの HTML を作る。blockStart は位置指定モードでは常に false。
     // place は位置指定モードのときだけ渡す grid-area の指定
     const colHtml=(col,ci,blockStart,place)=>{
-      const arr=cellsOf(col);
+      const arr=laidOut[ci];
       let cells="";
       arr.forEach(a=>{
         const filled=a.id!=null;
@@ -2956,7 +2968,8 @@ function drawZone(elId, spaces, colorOf){
           cls.push("blocked");
           if(filled) cls.push("has-lot");
         }
-        if(a.seg)cls.push(horizontal?"segline-h":"segline");
+        if(a.seg==="before")cls.push(horizontal?"segline-h":"segline");
+        if(a.seg==="after")cls.push(horizontal?"segline-h-after":"segline-after");
         // ロットコードは 1111-2222 のように長いことがあり 30px のマスに入らない。
         // 凡例と同じ通し番号を出す。id は readLots() が付ける0始まりの連番。
         const label=filled?String(a.id+1):"";
@@ -6118,12 +6131,9 @@ function gridShift(sp,colCells){
 // と比較できる。欄数は常に表の列数の半分なので、normal/wide でも同じ座標系になる。
 function sheetGridAnchors(sp, order){
   if(!sp || !sp.cols || order.some(o=>!o.lab && !sp.cols[o.c])) return null;
-  const colCells=sp.cols.map(col=>{
-    const arr=Array(col.h).fill(null);
-    const ord=fillOrder(col); let oi=0;
-    (col.fills||[]).forEach(f=>{ for(let k=0;k<f.count;k++){ if(oi<ord.length) arr[ord[oi++]]={id:f.id}; } });
-    return arr;
-  });
+  const colCells=spaceCells(sp).map(cells=>cells.map(cell=>
+    cell.id==null ? null : {id:cell.id}
+  ));
   const g=gridShift(sp,colCells);
   // 紙の行番号で返す。drawLeaders() は この row で tr.grow を直接引くので、
   // gridRows() と同じずらしを通さないと線が 1 行ずれる
@@ -6177,13 +6187,10 @@ function gridRows(pad, overflow, marks){
   if(warn && warn.kind!=="extra") return {html:"", anchors:[], warn};
   // 以降は order という名前で参照する（本体を書き換えないため）
   const order=SHEET_GRID_ORDER;
-  // 各列の中身（上詰め。up の准緊急用マスは fillOrder() で後回しにする）
-  const colCells=sp.cols.map(col=>{
-    const arr=Array(col.h).fill(null);
-    const ord=fillOrder(col); let oi=0;
-    col.fills.forEach(f=>{ for(let k=0;k<f.count;k++){ if(oi<ord.length) arr[ord[oi++]]={id:f.id}; } });
-    return arr;
-  });
+  // 盤と同じ配置済みセルから、紙で必要なロットIDだけを取り出す
+  const colCells=spaceCells(sp).map(cells=>cells.map(cell=>
+    cell.id==null ? null : {id:cell.id}
+  ));
   // 荷物ごとのマス一覧（通常列と通路列を分ける）
   const norm={}, aisle={};
   colCells.forEach((arr,ci)=>arr.forEach((c,ri)=>{

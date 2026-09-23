@@ -400,13 +400,12 @@ function defaultSpace(name) {
 }
 
 // gridRows は lastSp / lastLots など外の値を見るので、注入して組み立てる
-function makeGridRows(cols, order) {
+function makeGridRows(cols, order, lots=[]) {
   return new Function(
     "lastSp", "sheetAreas", "gridWarn", "SHEET_GRID_ORDER", "overflowTable", "lastLots", "tailAreaOf",
     functionSource("aisleRowCount") +
-    functionSource("fillOrder") +
     functionSource("gridShift") +
-    functionSource("fillOrder") + functionSource("sheetGridAnchors") +
+    layoutSources() + functionSource("sheetGridAnchors") +
     functionSource("gridRows") + "; return gridRows;"
   )(
     [{ name: "メイン", cols }],
@@ -414,9 +413,15 @@ function makeGridRows(cols, order) {
     () => null,
     order,
     () => "",
-    [],
+    lots,
     () => null
   );
+}
+
+function layoutSources(){
+  return functionSource("fillOrder") + functionSource("cellGroups") +
+    functionSource("cellsOf") + functionSource("cellLayoutOptions") +
+    functionSource("spaceCells");
 }
 
 test("旧形式の時間帯データは配置不可セルなしとして読み込む", () => {
@@ -467,7 +472,7 @@ test("配置表のメイン配置不可セルには斜線用クラスを出力�
     // gridRows は内部で gridShift を呼ぶようになったため、依存元も注入する
     functionSource("aisleRowCount") +
     functionSource("gridShift") +
-    functionSource("fillOrder") + functionSource("sheetGridAnchors") + functionSource("gridRows") + "; return gridRows;"
+    layoutSources() + functionSource("sheetGridAnchors") + functionSource("gridRows") + "; return gridRows;"
   )(
     [{ name: "メイン", cols: [{ h: 1, fills: [], blockedRows: new Set([0]) }] }],
     () => ["メイン"],
@@ -517,6 +522,82 @@ function makeCellsOf() {
     "; return cellsOf;"
   )();
 }
+
+function makeLayoutFunctions(){
+  return new Function(
+    functionSource("fillOrder") +
+    functionSource("cellGroups") +
+    functionSource("cellsOf") +
+    functionSource("cellLayoutOptions") +
+    functionSource("spaceCells") +
+    "; return {cellLayoutOptions,spaceCells};"
+  )();
+}
+
+test("両端詰めはメインだけに適用する", () => {
+  const {cellLayoutOptions}=makeLayoutFunctions();
+  assert.deepEqual(cellLayoutOptions({name:"メイン"},{h:8}), {fromEnd:false,splitEnds:true});
+  assert.deepEqual(cellLayoutOptions({name:"PC横"},{h:8}), {fromEnd:false,splitEnds:false});
+  assert.deepEqual(cellLayoutOptions({name:"軒下①"},{h:11,row:2}), {fromEnd:true,splitEnds:false});
+});
+
+test("軒下①は上段3マスだけ左詰めにする", () => {
+  const {spaceCells}=makeLayoutFunctions();
+  const space={name:"軒下①",cols:[
+    {h:3,row:0,off:9,fills:[{id:1,count:1}]},
+    {h:11,row:2,off:0,fills:[{id:2,count:7}]},
+    {h:11,row:3,off:0,fills:[{id:3,count:7}]},
+    {h:8,row:4,off:0,fills:[{id:4,count:7}]},
+    {h:2,row:4,off:9,fills:[{id:5,count:1}]},
+  ]};
+  const cells=spaceCells(space).map(row=>row.map(c=>c.id));
+  assert.deepEqual(cells[0],[1,null,null]);
+  assert.deepEqual(cells[1],[null,null,null,null,2,2,2,2,2,2,2]);
+  assert.deepEqual(cells[2],[null,null,null,null,3,3,3,3,3,3,3]);
+  assert.deepEqual(cells[3],[null,4,4,4,4,4,4,4]);
+  assert.deepEqual(cells[4],[null,5]);
+});
+
+test("軒下①の2ロット列は両端に分けず右から連続して詰める", () => {
+  const {spaceCells}=makeLayoutFunctions();
+  const [cells]=spaceCells({name:"軒下①",cols:[
+    {h:8,row:4,off:0,fills:[{id:5,count:2},{id:8,count:2}]}
+  ]});
+  assert.deepEqual(cells.map(c=>c.id), [null,null,null,null,8,8,5,5]);
+});
+
+test("メインの手動混載結果も両端に展開する", () => {
+  const {spaceCells}=makeLayoutFunctions();
+  const [cells]=spaceCells({name:"メイン",cols:[
+    {h:7,fills:[{id:8,count:2,mix:true},{id:5,count:2}]}
+  ]});
+  assert.deepEqual(cells.map(c=>c.id), [8,8,null,null,null,5,5]);
+});
+
+test("配置表と引き出し線は画面と同じspaceCellsを使う", () => {
+  const anchors=functionSource("sheetGridAnchors");
+  const rows=functionSource("gridRows");
+  assert.match(anchors,/spaceCells\(sp\)/);
+  assert.match(rows,/spaceCells\(sp\)/);
+  assert.doesNotMatch(anchors,/col\.fills\|\|\[\]/);
+  assert.doesNotMatch(rows,/col\.fills\.forEach/);
+});
+
+test("配置表のメイン2ロットも中央を空けて両端に置く", () => {
+  const gridRows=makeGridRows([
+    {h:7,fills:[{id:0,count:2},{id:1,count:2}]}
+  ],[{c:0}],[{id:0,half:0},{id:1,half:0}]);
+  const html=gridRows(0,[]).html;
+  const rows=html.match(/<tr class="grow">[\s\S]*?<\/tr>/g);
+  assert.equal(rows.length,7);
+  assert.match(rows[0],/<span class="mk">/);
+  assert.match(rows[1],/<span class="mk">/);
+  assert.doesNotMatch(rows[2],/<span class="mk">/);
+  assert.doesNotMatch(rows[3],/<span class="mk">/);
+  assert.doesNotMatch(rows[4],/<span class="mk">/);
+  assert.match(rows[5],/<span class="mk">/);
+  assert.match(rows[6],/<span class="mk">/);
+});
 
 test("メインの2ロットは両端に詰めて中央を空ける", () => {
   const cells = makeCellsOf()(
@@ -830,7 +911,7 @@ test("sheetPlacementはグリッドセル中心に近い下段欄へメインロ
     "sheetSlots", "stashSlots", "sheetLayout", "slotAreaNote", "mergeLots", "sheetAreas", "lastSp", "SHEET_GRID_ORDER",
     functionSource("aisleRowCount") +
     functionSource("gridShift") +
-    functionSource("fillOrder") + functionSource("sheetGridAnchors") +
+    layoutSources() + functionSource("sheetGridAnchors") +
     functionSource("arrangeBottomSlots") +
     functionSource("arrangeOverflowSlots") +
     functionSource("sheetPlacement") + "; return sheetPlacement;"
@@ -1389,7 +1470,7 @@ test("引き出し線の行は紙の行番号で返す", () => {
     "lastLots",
     functionSource("aisleRowCount") +
     functionSource("gridShift") +
-    functionSource("fillOrder") + functionSource("sheetGridAnchors") + "; return sheetGridAnchors;"
+    layoutSources() + functionSource("sheetGridAnchors") + "; return sheetGridAnchors;"
   )([]);
   // 0列目は上に飛び出す列。准緊急用マス(row0)まで埋めるにはcount:8必要。
   // 1列目は飛び出さない列で、先頭(row0)に荷物がある
@@ -1410,7 +1491,7 @@ test("上に飛び出したマスが空の日は行がずれない", () => {
     "lastLots",
     functionSource("aisleRowCount") +
     functionSource("gridShift") +
-    functionSource("fillOrder") + functionSource("sheetGridAnchors") + "; return sheetGridAnchors;"
+    layoutSources() + functionSource("sheetGridAnchors") + "; return sheetGridAnchors;"
   )([]);
   const sp = { name: "メイン", cols: [
     { h: 9, up: 1, fills: [], aisleRows: [8] },
