@@ -626,6 +626,35 @@ test("メイン2ロットの破線はロット内ではなく中央側の境界�
   assert.ok(classes(5).includes("segline-after"),"row 5 の下辺が第2ロットの中央側境界");
 });
 
+test("既定メインの上揃えでは2ロットの破線を中央側の辺に出す", () => {
+  const root={innerHTML:"",children:[],appendChild(node){this.children.push(node);}};
+  const doc={
+    getElementById:()=>root,
+    createElement:()=>({className:"",classList:{add(){}},style:{},innerHTML:""})
+  };
+  const drawZone=new Function("document","FLOOR_POS","activeShift","blockedCellKey","used","usableCount",
+    layoutSources()+functionSource("colTopOffset")+functionSource("drawZone")+"; return drawZone;"
+  )(doc,{},()=>({blocked:[]}),()=>"",col=>col.fills.reduce((n,f)=>n+f.count,0),col=>col.h);
+  const space={...defaultSpace("メイン"),cols:[{h:7,fills:[{id:0,count:2},{id:1,count:2}]}]};
+  const [cells]=makeLayoutFunctions().spaceCells(space);
+  assert.deepEqual(cells.map(c=>c.seg),[null,"before",null,null,null,"after",null]);
+  drawZone("map",[space],{0:"#aaa",1:"#bbb"});
+  const html=root.children[0].innerHTML;
+  const classes=row=>{
+    const match=html.match(new RegExp(`<div class="([^"]*)" data-row="${row}"`));
+    assert.ok(match,`row ${row} must render`);
+    return match[1].split(" ");
+  };
+  assert.match(html,/<div class="col top">/);
+  assert.match(source,/\.col\.top\{flex-direction:column\}/);
+  assert.match(source,/\.cell\.segline\{border-top:/);
+  assert.match(source,/\.cell\.segline-after\{border-bottom:/);
+  assert.ok(classes(1).includes("segline-after"),"row 1 の下辺が第1ロットの中央側境界");
+  assert.ok(!classes(1).includes("segline"),"row 1 の上辺は同じロットの row 0 に接する");
+  assert.ok(classes(5).includes("segline"),"row 5 の上辺が第2ロットの中央側境界");
+  assert.ok(!classes(5).includes("segline-after"),"row 5 の下辺は同じロットの row 6 に接する");
+});
+
 test("配置表の第2ロット半パレット印は降順配置の末尾に付ける", () => {
   const gridRows=makeGridRows([
     {h:7,fills:[{id:0,count:2},{id:1,count:3}]}
