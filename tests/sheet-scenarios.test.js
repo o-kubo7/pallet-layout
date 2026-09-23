@@ -185,6 +185,23 @@ test("分納は同名同ロットでも各行を切り上げて合計する", ()
   validateConsoleScenario(scenario);
 });
 
+test("100Pデモの10行は元Excelの転記値と一致する", () => {
+  const scenario = consoleScenarios.find(s => s.id === "demo-100p");
+  assert.deepEqual(scenario.input.map(row => [row.type, row.name, row.lot, row.snp, row.qty]), [
+    ["製品", "製品1", "111", 500, 4000],
+    ["製品", "製品2", "222", 500, 2750],
+    ["充填品", "仕掛品1", "111-1111", 1500, 24000],
+    ["充填品", "仕掛品1", "111-1112", 1500, 18000],
+    ["充填品", "仕掛品1", "111-1113", 1500, 11250],
+    ["充填品", "仕掛品2", "222-2222", 1500, 15000],
+    ["充填品", "仕掛品2", "222-2223", 1500, 15000],
+    ["充填品", "仕掛品3", "333-3333", 2000, 17500],
+    ["充填品", "仕掛品3", "333-3334", 2000, 14000],
+    ["充填品", "仕掛品4", "444-4444", 2000, 27000],
+  ]);
+  assert.equal(scenario.expectedTotalPallets, 100);
+});
+
 test("自動割当シナリオは12件でIDが一意", () => {
   assert.equal(allocationScenarios.length, 12);
   assert.equal(new Set(allocationScenarios.map(s => s.id)).size, 12);
