@@ -215,6 +215,7 @@ test("Consoleコードと手動確認表はシナリオJSONに同期する", () 
     consoleScenarios.map(s => `${s.id}.console.js`).sort());
   for (const scenario of consoleScenarios) {
     const code = fs.readFileSync(path.join(caseDir, `${scenario.id}.console.js`), "utf8");
+    assert.match(code, /document\.querySelector\("#slipList \.slip:last-child"\)/);
     assert.match(code, /現在の時間帯の入力を置き換えます/);
     assert.match(code, /switchTab\("input"\)/);
     assert.match(code, /clearLots\(\)/);
@@ -243,6 +244,7 @@ test("Consoleコードが使う入力画面APIとDOM構造を本体が提供す�
     assert.match(source, new RegExp(`function ${name}\\(`), `${name} が見つからない`);
   }
   assert.match(source, /id="slipList"/);
+  assert.match(source, /section\.className="slip"/);
   assert.match(source, /class="btn btn-ghost btn-slip-action-add"/);
   assert.match(source, /<tbody><\/tbody>/);
   assert.match(source, /tr\.querySelectorAll\("select,input"\)/);
