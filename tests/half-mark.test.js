@@ -166,6 +166,16 @@ test("halfMarkSet: 手動指定が half 未満なら既存の指定を残す（�
   assert.deepEqual(sp.cols[0].halfMarks, { "0": [{ k: 0, seq: 1 }, { k: 3, seq: 2 }] });
 });
 
+test("halfMarkSet: col.halfMarks が壊れたデータ（文字列・配列）でも消えずに書き直す", () => {
+  const { spaceCells, halfMarkSet } = halfFns();
+  const spBroken = main([{ h: 4, fills: [{ id: 0, count: 4 }], halfMarks: "broken" }]);
+  halfMarkSet(spBroken, spaceCells(spBroken), 0, 0, 0, 1);
+  assert.deepEqual(spBroken.cols[0].halfMarks, { "0": [{ k: 3, seq: 1 }] });
+  const spArray = main([{ h: 4, fills: [{ id: 0, count: 4 }], halfMarks: [] }]);
+  halfMarkSet(spArray, spaceCells(spArray), 0, 0, 0, 1);
+  assert.deepEqual(spArray.cols[0].halfMarks, { "0": [{ k: 3, seq: 1 }] });
+});
+
 test("halfMarkClear: そのロットの指定だけを全列から消す", () => {
   const { halfMarkClear } = halfFns();
   const sp = main([
@@ -215,6 +225,15 @@ test("配置図のグリッドは halfCells で半を決める", () => {
   const fn = functionSource("gridRows");
   assert.match(fn, /halfCells\(sp,/);
   assert.doesNotMatch(fn, /splitIds/);
+});
+
+test("updateFlag: fitFlagHalf は件数の隠れ状態を読むため fitFlagCount の後に呼ぶ", () => {
+  const fn = functionSource("updateFlag");
+  const iCount = fn.indexOf("fitFlagCount();");
+  const iHalf = fn.indexOf("fitFlagHalf();");
+  assert.notEqual(iCount, -1);
+  assert.notEqual(iHalf, -1);
+  assert.ok(iCount < iHalf, "fitFlagCount() must run before fitFlagHalf()");
 });
 
 test("書き足しの署名は halfMarks を含めない", () => {

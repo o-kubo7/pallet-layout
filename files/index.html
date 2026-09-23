@@ -153,6 +153,8 @@
   /* 選択中のマス。マスの背景はロットの色なので、色ではなく枠で示す。
      touch-action:none は「選択された時点」で必要。ドラッグ開始まで待つと
      ブラウザが先にパンを始めてしまい pointercancel で中断する。 */
+  .cell.sel{box-shadow:inset 0 0 0 2px #fff, 0 0 0 2px #111827;border-color:#111827;
+            touch-action:none}
   /* 「半」の角バッジ（設計書 4-3・案B）。ロット番号は残し、右上に小さく「半」を出す。
      .cell は overflow:hidden なので、position:relative にしてマスの内側に収める */
   .cell.half{position:relative}
@@ -160,8 +162,6 @@
                    background:#fff;color:#111;font-size:10px;font-weight:700;line-height:13px;text-align:center;
                    border-left:1px solid #111;border-bottom:1px solid #111;border-bottom-left-radius:6px;
                    pointer-events:none}
-  .cell.sel{box-shadow:inset 0 0 0 2px #fff, 0 0 0 2px #111827;border-color:#111827;
-            touch-action:none}
   /* 矩形選択の枠。position:fixed で画面座標のまま置く。
      #mapBody に position を足すと stashDock の sticky と float に響くため。 */
   .rubberbox{position:fixed;z-index:70;pointer-events:none;
@@ -3001,9 +3001,9 @@ function halfCells(sp, lots, opts){
   const o=opts||{};
   const manualOn=!!o.manualOn;
   const areaOf=typeof o.areaOf==="function" ? o.areaOf : ()=>null;
-  const laidOut=o.laidOut||spaceCells(sp);
   const out={};
   if(!sp || sp.name!=="メイン") return out;
+  const laidOut=o.laidOut||spaceCells(sp);
   (lots||[]).forEach(lot=>{
     const n=lot.half||0;
     if(n<=0) return;
@@ -3046,10 +3046,13 @@ function halfMarkSet(sp, laidOut, lotId, ci, row, n){
   const seq=manual.reduce((mx,m)=>Math.max(mx,m.seq),0)+1;
   const keep=manual.length+1>n ? manual.slice(manual.length+1-n) : manual;
   halfMarkClear(sp, lotId);
+  // keep だけを書き直すため、範囲外・重複の指定はここで意図的に消える
+  // （設計3-2の「データからは消さない」は表示側の話で、ここには適用しない）
   [...keep.map(m=>({ci:m.ci,k:m.k,seq:m.seq})), {ci,k,seq}].forEach(m=>{
     const col=sp.cols[m.ci];
-    col.halfMarks=col.halfMarks||{};
-    (col.halfMarks[String(lotId)]=col.halfMarks[String(lotId)]||[]).push({k:m.k, seq:m.seq});
+    if(!col.halfMarks || typeof col.halfMarks!=="object" || Array.isArray(col.halfMarks)) col.halfMarks={};
+    if(!Array.isArray(col.halfMarks[String(lotId)])) col.halfMarks[String(lotId)]=[];
+    col.halfMarks[String(lotId)].push({k:m.k, seq:m.seq});
   });
 }
 // そのロットの手動指定を全列から消す。空になった halfMarks は列から取り除く
