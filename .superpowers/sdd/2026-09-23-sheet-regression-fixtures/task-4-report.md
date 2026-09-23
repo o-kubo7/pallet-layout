@@ -22,5 +22,5 @@
 ## 製品差分・コミット・懸念
 
 - `git diff -- files/` と `git diff 26672b8..HEAD -- files/` はどちらも出力なしでした。製品ファイルは変更していません。
-- 指定対象だけをステージして `test: generate manual sheet console cases` としてコミットします。
+- Task 4 の指定対象16ファイルを `976b6bf test: generate manual sheet console cases` としてコミットしました。この記述の更新はレポート追記コミットに含めます。
 - 懸念: 実装と生成物、テスト差分が作業開始時点ですでに存在していたため、このレポートは既存実装のレビューと検証を記録しています。既存の別ドラフト・計画・`outputs/` には触れていません。
