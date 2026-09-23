@@ -1,0 +1,1159 @@
+[
+  {
+    "id": "demo-100p",
+    "title": "100P 配置確認",
+    "baseArea": "軒下①",
+    "slots": {
+      "top": [
+        {
+          "id": "製品1/111",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "製品2/222",
+          "areas": [
+            "軒下①"
+          ]
+        }
+      ],
+      "bottom": [
+        {
+          "id": "M1",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M2",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M3",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M4",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M5",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M6",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M7",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "仕掛品4/444-4444",
+          "areas": [
+            "退避"
+          ]
+        }
+      ],
+      "stash": []
+    },
+    "expected": {
+      "layout": "normal",
+      "top": [
+        "製品1/111",
+        "製品2/222"
+      ],
+      "bottom": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7"
+      ],
+      "moved": [],
+      "movedBottom": [
+        "仕掛品4/444-4444"
+      ],
+      "overflow": []
+    }
+  },
+  {
+    "id": "normal-boundary",
+    "title": "通常様式の境界",
+    "baseArea": "軒下①",
+    "slots": {
+      "top": [
+        {
+          "id": "T1",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T2",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T3",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T4",
+          "areas": [
+            "軒下①"
+          ]
+        }
+      ],
+      "bottom": [
+        {
+          "id": "M1",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M2",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M3",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M4",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M5",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M6",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M7",
+          "areas": [
+            "メイン"
+          ]
+        }
+      ],
+      "stash": []
+    },
+    "expected": {
+      "layout": "normal",
+      "top": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "bottom": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7"
+      ],
+      "moved": [],
+      "movedBottom": [],
+      "overflow": []
+    }
+  },
+  {
+    "id": "normal-to-middle",
+    "title": "通常から中量様式へ",
+    "baseArea": "軒下①",
+    "slots": {
+      "top": [
+        {
+          "id": "T1",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T2",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T3",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T4",
+          "areas": [
+            "軒下①"
+          ]
+        }
+      ],
+      "bottom": [
+        {
+          "id": "M1",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M2",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M3",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M4",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M5",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M6",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M7",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "P1",
+          "areas": [
+            "PC横"
+          ]
+        }
+      ],
+      "stash": []
+    },
+    "expected": {
+      "layout": "middle",
+      "top": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "bottom": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7",
+        "P1"
+      ],
+      "moved": [],
+      "movedBottom": [],
+      "overflow": []
+    }
+  },
+  {
+    "id": "middle-boundary",
+    "title": "中量様式の境界",
+    "baseArea": "軒下①",
+    "slots": {
+      "top": [
+        {
+          "id": "T1",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T2",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T3",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T4",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T5",
+          "areas": [
+            "軒下①"
+          ]
+        }
+      ],
+      "bottom": [
+        {
+          "id": "M1",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M2",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M3",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M4",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M5",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M6",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M7",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M8",
+          "areas": [
+            "メイン"
+          ]
+        }
+      ],
+      "stash": []
+    },
+    "expected": {
+      "layout": "middle",
+      "top": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "bottom": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7",
+        "M8"
+      ],
+      "moved": [],
+      "movedBottom": [],
+      "overflow": []
+    }
+  },
+  {
+    "id": "middle-to-wide",
+    "title": "中量から多量様式へ",
+    "baseArea": "軒下①",
+    "slots": {
+      "top": [
+        {
+          "id": "T1",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T2",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T3",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T4",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T5",
+          "areas": [
+            "軒下①"
+          ]
+        }
+      ],
+      "bottom": [
+        {
+          "id": "M1",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M2",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M3",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M4",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M5",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M6",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M7",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M8",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "P1",
+          "areas": [
+            "PC横"
+          ]
+        }
+      ],
+      "stash": []
+    },
+    "expected": {
+      "layout": "wide",
+      "top": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "bottom": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7",
+        "M8",
+        "P1"
+      ],
+      "moved": [],
+      "movedBottom": [],
+      "overflow": []
+    }
+  },
+  {
+    "id": "wide-boundary",
+    "title": "多量様式の境界",
+    "baseArea": "軒下①",
+    "slots": {
+      "top": [
+        {
+          "id": "T1",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T2",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T3",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T4",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T5",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T6",
+          "areas": [
+            "軒下①"
+          ]
+        }
+      ],
+      "bottom": [
+        {
+          "id": "M1",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M2",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M3",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M4",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M5",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M6",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M7",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M8",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M9",
+          "areas": [
+            "メイン"
+          ]
+        }
+      ],
+      "stash": []
+    },
+    "expected": {
+      "layout": "wide",
+      "top": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6"
+      ],
+      "bottom": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7",
+        "M8",
+        "M9"
+      ],
+      "moved": [],
+      "movedBottom": [],
+      "overflow": []
+    }
+  },
+  {
+    "id": "wide-overflow",
+    "title": "多量様式の追記欄",
+    "baseArea": "軒下①",
+    "slots": {
+      "top": [
+        {
+          "id": "T1",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T2",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T3",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T4",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T5",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T6",
+          "areas": [
+            "軒下①"
+          ]
+        }
+      ],
+      "bottom": [
+        {
+          "id": "M1",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M2",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M3",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M4",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M5",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M6",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M7",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M8",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M9",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "P1",
+          "areas": [
+            "PC横"
+          ]
+        }
+      ],
+      "stash": []
+    },
+    "expected": {
+      "layout": "wide",
+      "top": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6"
+      ],
+      "bottom": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7",
+        "M8",
+        "M9"
+      ],
+      "moved": [],
+      "movedBottom": [],
+      "overflow": [
+        "P1"
+      ]
+    }
+  },
+  {
+    "id": "split-delivery",
+    "title": "分納",
+    "baseArea": "軒下①",
+    "slots": {
+      "top": [],
+      "bottom": [
+        {
+          "id": "M1",
+          "areas": [
+            "メイン"
+          ]
+        }
+      ],
+      "stash": []
+    },
+    "expected": {
+      "layout": "normal",
+      "top": [],
+      "bottom": [
+        "M1"
+      ],
+      "moved": [],
+      "movedBottom": [],
+      "overflow": []
+    }
+  },
+  {
+    "id": "same-name-different-lot",
+    "title": "同名・異ロット",
+    "baseArea": "軒下①",
+    "slots": {
+      "top": [],
+      "bottom": [
+        {
+          "id": "M1",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M2",
+          "areas": [
+            "メイン"
+          ]
+        }
+      ],
+      "stash": []
+    },
+    "expected": {
+      "layout": "normal",
+      "top": [],
+      "bottom": [
+        "M1",
+        "M2"
+      ],
+      "moved": [],
+      "movedBottom": [],
+      "overflow": []
+    }
+  },
+  {
+    "id": "half-pallet",
+    "title": "半パレット",
+    "baseArea": "軒下①",
+    "slots": {
+      "top": [],
+      "bottom": [
+        {
+          "id": "M1",
+          "areas": [
+            "メイン"
+          ]
+        }
+      ],
+      "stash": []
+    },
+    "expected": {
+      "layout": "normal",
+      "top": [],
+      "bottom": [
+        "M1"
+      ],
+      "moved": [],
+      "movedBottom": [],
+      "overflow": []
+    }
+  },
+  {
+    "id": "top-rescue",
+    "title": "上段欄の救済",
+    "baseArea": "軒下①",
+    "slots": {
+      "top": [
+        {
+          "id": "T1",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T2",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T3",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T4",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T5",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T6",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T7",
+          "areas": [
+            "軒下①"
+          ]
+        }
+      ],
+      "bottom": [
+        {
+          "id": "M1",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M2",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M3",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M4",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M5",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M6",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M7",
+          "areas": [
+            "メイン"
+          ]
+        }
+      ],
+      "stash": []
+    },
+    "expected": {
+      "layout": "wide",
+      "top": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6"
+      ],
+      "bottom": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7",
+        "T7"
+      ],
+      "moved": [
+        "T7"
+      ],
+      "movedBottom": [],
+      "overflow": []
+    }
+  },
+  {
+    "id": "stash-overflow",
+    "title": "退避欄を含む追記",
+    "baseArea": "軒下①",
+    "slots": {
+      "top": [
+        {
+          "id": "T1",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T2",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T3",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T4",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T5",
+          "areas": [
+            "軒下①"
+          ]
+        },
+        {
+          "id": "T6",
+          "areas": [
+            "軒下①"
+          ]
+        }
+      ],
+      "bottom": [
+        {
+          "id": "M1",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M2",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M3",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M4",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M5",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M6",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M7",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M8",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "M9",
+          "areas": [
+            "メイン"
+          ]
+        },
+        {
+          "id": "P1",
+          "areas": [
+            "PC横"
+          ]
+        }
+      ],
+      "stash": [
+        {
+          "id": "S1",
+          "areas": [
+            "退避"
+          ],
+          "stash": true,
+          "note": "※未定"
+        },
+        {
+          "id": "S2",
+          "areas": [
+            "退避"
+          ],
+          "stash": true,
+          "note": "※未定"
+        }
+      ]
+    },
+    "expected": {
+      "layout": "wide",
+      "top": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6"
+      ],
+      "bottom": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7",
+        "M8",
+        "M9"
+      ],
+      "moved": [],
+      "movedBottom": [],
+      "overflow": [
+        "P1",
+        "S1",
+        "S2"
+      ]
+    }
+  }
+]
