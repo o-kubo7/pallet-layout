@@ -2933,6 +2933,109 @@ function cellLayoutOptions(space,col){
 function spaceCells(space){
   return space.cols.map(col=>cellsOf(col,col.blockedRows,cellLayoutOptions(space,col)));
 }
+/* ---------- 「半」の位置（メインだけ） ----------
+   盤（drawZone）と紙（gridRows）が同じ halfCells() を使うので、両者の位置は必ず一致する。
+   手動指定は col.halfMarks = {"<lotId>": [{k,seq}]}。k は「その列にあるそのロットの
+   マスの下から k 番目」、seq は指定した順番。下から数えるので、同じ列の他ロットが
+   動いてもロットのまとまりに対する位置は変わらない。
+   テストは new Function で関数本体だけを評価するので、"メイン" はここに直接書く。 */
+// 有効な手動指定を古い順に返す。有効 = その列にそのロットのマスが k+1 個以上ある
+function manualHalfList(sp, laidOut, lotId){
+  const out=[], seen=new Set();
+  sp.cols.forEach((col,ci)=>{
+    const marks=col.halfMarks && col.halfMarks[String(lotId)];
+    if(!Array.isArray(marks) || !laidOut[ci]) return;
+    const rows=laidOut[ci].filter(c=>c.id===lotId).map(c=>c.row);   // 物理行の昇順
+    marks.forEach(m=>{
+      if(!m || !Number.isInteger(m.k) || m.k<0 || m.k>=rows.length) return;
+      out.push({ci, row:rows[rows.length-1-m.k], k:m.k, seq:Number(m.seq)||0});
+    });
+  });
+  // 同じマスへの重複指定は古いほうだけ残す
+  return out.sort((a,b)=>a.seq-b.seq).filter(m=>{
+    const key=m.ci+"_"+m.row;
+    if(seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+}
+// メインで「半」を付けるマス。戻り値のキーは "<列>_<行>"。
+// opts.areaOf(id) は表の「P 半」を付けるエリア名（halfAreaOf）。手動指定が無いロットは
+// これがメインのときだけメインに付ける
+function halfCells(sp, lots, opts){
+  const o=opts||{};
+  const manualOn=!!o.manualOn;
+  const areaOf=typeof o.areaOf==="function" ? o.areaOf : ()=>null;
+  const laidOut=o.laidOut||spaceCells(sp);
+  const out={};
+  if(!sp || sp.name!=="メイン") return out;
+  (lots||[]).forEach(lot=>{
+    const n=lot.half||0;
+    if(n<=0) return;
+    const id=lot.id;
+    // 詰め順で後ろの列ほど末尾。通路列は最後に使われるので末尾側に並べる
+    // （従来の gridRows も通路列にあれば通路列に半を付けていた）
+    const normal=[], aisle=[];
+    laidOut.forEach((cells,ci)=>{
+      if(!cells.some(c=>c.id===id)) return;
+      (sp.cols[ci] && sp.cols[ci].aisle ? aisle : normal).push(ci);
+    });
+    const cols=[...normal,...aisle];
+    if(!cols.length) return;
+    const manual=manualOn ? manualHalfList(sp,laidOut,id).slice(0,n) : [];
+    if(!manual.length && areaOf(id)!==sp.name) return;
+    manual.forEach(m=>{ out[m.ci+"_"+m.row]={lotId:id, manual:true}; });
+    let rest=n-manual.length;
+    for(let i=cols.length-1;i>=0 && rest>0;i--){
+      const ci=cols[i];
+      const rows=laidOut[ci].filter(c=>c.id===id).map(c=>c.row).reverse();   // 下から
+      for(const r of rows){
+        if(rest<=0) break;
+        const key=ci+"_"+r;
+        if(out[key]) continue;
+        out[key]={lotId:id, manual:false};
+        rest--;
+      }
+    }
+  });
+  return out;
+}
+// そのマスを手動指定にする。「半」の総数 n を保つため、手動指定が n 個に達していたら
+// 一番古いものを外す（n 個未満なら、自動の半が1つ減るだけで既存の指定は残る）
+function halfMarkSet(sp, laidOut, lotId, ci, row, n){
+  const rows=laidOut[ci].filter(c=>c.id===lotId).map(c=>c.row);
+  const pos=rows.indexOf(row);
+  if(pos<0 || n<=0) return;
+  const k=rows.length-1-pos;
+  const manual=manualHalfList(sp,laidOut,lotId).filter(m=>!(m.ci===ci && m.row===row));
+  const seq=manual.reduce((mx,m)=>Math.max(mx,m.seq),0)+1;
+  const keep=manual.length+1>n ? manual.slice(manual.length+1-n) : manual;
+  halfMarkClear(sp, lotId);
+  [...keep.map(m=>({ci:m.ci,k:m.k,seq:m.seq})), {ci,k,seq}].forEach(m=>{
+    const col=sp.cols[m.ci];
+    col.halfMarks=col.halfMarks||{};
+    (col.halfMarks[String(lotId)]=col.halfMarks[String(lotId)]||[]).push({k:m.k, seq:m.seq});
+  });
+}
+// そのロットの手動指定を全列から消す。空になった halfMarks は列から取り除く
+function halfMarkClear(sp, lotId){
+  sp.cols.forEach(col=>{
+    if(!col.halfMarks) return;
+    delete col.halfMarks[String(lotId)];
+    if(!Object.keys(col.halfMarks).length) delete col.halfMarks;
+  });
+}
+// 移動したロットの指定を、移動元・移動先の列から消す。keys は "<エリア>|<列>"。
+// 枚数だけのデータでは「半」の現物がどのマスと一緒に動いたか分からないため
+function dropHalfMarks(spaces, lotId, keys){
+  (keys||[]).forEach(key=>{
+    const p=String(key).split("|");
+    const s=spaces.find(x=>x.name===p[0]);
+    const col=s && s.cols[parseInt(p[1])];
+    if(!col || !col.halfMarks) return;
+    delete col.halfMarks[String(lotId)];
+    if(!Object.keys(col.halfMarks).length) delete col.halfMarks;
+  });
+}
 function drawZone(elId, spaces, colorOf){
   // 作り直すと .sel クラスは消えるので、選択の状態も一緒に捨てる
   if(typeof clearSel==="function") clearSel();
