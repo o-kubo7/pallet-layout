@@ -216,7 +216,6 @@ test("Consoleコードと手動確認表はシナリオJSONに同期する", () 
   for (const scenario of consoleScenarios) {
     const code = fs.readFileSync(path.join(caseDir, `${scenario.id}.console.js`), "utf8");
     assert.match(code, /document\.querySelector\("#slipList \.slip:last-child"\)/);
-    assert.match(code, /現在の時間帯の入力を置き換えます/);
     assert.match(code, /switchTab\("input"\)/);
     assert.match(code, /clearLots\(\)/);
     assert.match(code, /addSlip\("fax"\)/);
@@ -237,6 +236,20 @@ test("Consoleコードと手動確認表はシナリオJSONに同期する", () 
     assert.ok(guide.includes(`${scenario.id}.console.js`));
     for (const checkItem of scenario.manualChecks) assert.ok(guide.includes(checkItem));
   }
+});
+
+test("Consoleと確認表は現在時間帯の配置不可設定もリセットされると伝える", () => {
+  const resetNotice = "現在の時間帯の入力と配置関連状態（配置不可設定を含む）をリセットします";
+  const unaffectedNotice = "反対側の時間帯と品目マスタは変更しません";
+  for (const scenario of consoleScenarios) {
+    const code = fs.readFileSync(
+      path.join("tests/console-cases", `${scenario.id}.console.js`), "utf8");
+    assert.ok(code.includes(resetNotice), `${scenario.id}: リセット範囲の説明`);
+    assert.ok(code.includes(unaffectedNotice), `${scenario.id}: 変更しない範囲の説明`);
+  }
+  const guide = fs.readFileSync("docs/testing/sheet-manual-cases.md", "utf8");
+  assert.ok(guide.includes(resetNotice), "確認表: リセット範囲の説明");
+  assert.ok(guide.includes(unaffectedNotice), "確認表: 変更しない範囲の説明");
 });
 
 test("Consoleコードが使う入力画面APIとDOM構造を本体が提供する", () => {
