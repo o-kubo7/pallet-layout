@@ -2954,6 +2954,8 @@ function drawZone(elId, spaces, colorOf){
     // place は位置指定モードのときだけ渡す grid-area の指定
     const colHtml=(col,ci,blockStart,place)=>{
       const arr=laidOut[ci];
+      const splitAtEnds=cellLayoutOptions(sp,col).splitEnds && cellGroups(col.fills).length===2;
+      const flipSegEdge=topAlign && splitAtEnds;
       let cells="";
       arr.forEach(a=>{
         const filled=a.id!=null;
@@ -2966,8 +2968,8 @@ function drawZone(elId, spaces, colorOf){
           cls.push("blocked");
           if(filled) cls.push("has-lot");
         }
-        if(a.seg==="before")cls.push(horizontal?"segline-h":topAlign?"segline-after":"segline");
-        if(a.seg==="after")cls.push(horizontal?"segline-h-after":topAlign?"segline":"segline-after");
+        if(a.seg==="before")cls.push(horizontal?"segline-h":flipSegEdge?"segline-after":"segline");
+        if(a.seg==="after")cls.push(horizontal?"segline-h-after":flipSegEdge?"segline":"segline-after");
         // ロットコードは 1111-2222 のように長いことがあり 30px のマスに入らない。
         // 凡例と同じ通し番号を出す。id は readLots() が付ける0始まりの連番。
         const label=filled?String(a.id+1):"";

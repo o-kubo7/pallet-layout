@@ -655,6 +655,30 @@ test("既定メインの上揃えでは2ロットの破線を中央側の辺に�
   assert.ok(!classes(5).includes("segline-after"),"row 5 の下辺は同じロットの row 6 に接する");
 });
 
+test("既定退避の上揃えでは次ロット先頭の上辺を区切る", () => {
+  const root={innerHTML:"",children:[],appendChild(node){this.children.push(node);}};
+  const doc={
+    getElementById:()=>root,
+    createElement:()=>({className:"",classList:{add(){}},style:{},innerHTML:""})
+  };
+  const drawZone=new Function("document","FLOOR_POS","activeShift","blockedCellKey","used","usableCount",
+    layoutSources()+functionSource("colTopOffset")+functionSource("drawZone")+"; return drawZone;"
+  )(doc,{},()=>({blocked:[]}),()=>"",col=>col.fills.reduce((n,f)=>n+f.count,0),col=>col.h);
+  const space={...defaultSpace("退避"),cols:[{h:5,fills:[{id:0,count:2},{id:1,count:2}]}]};
+  const [cells]=makeLayoutFunctions().spaceCells(space);
+  assert.deepEqual(cells.map(c=>c.seg),[null,null,"before",null,null]);
+  drawZone("map",[space],{0:"#aaa",1:"#bbb"});
+  const html=root.children[0].innerHTML;
+  const match=html.match(/<div class="([^"]*)" data-row="2"/);
+  assert.ok(match);
+  const classes=match[1].split(" ");
+  assert.match(html,/<div class="col top">/);
+  assert.match(source,/\.col\.top\{flex-direction:column\}/);
+  assert.match(source,/\.cell\.segline\{border-top:/);
+  assert.ok(classes.includes("segline"),"row 2 の上辺が第2ロットの先頭境界");
+  assert.ok(!classes.includes("segline-after"),"row 2 の下辺は第2ロット内部");
+});
+
 test("配置表の第2ロット半パレット印は降順配置の末尾に付ける", () => {
   const gridRows=makeGridRows([
     {h:7,fills:[{id:0,count:2},{id:1,count:3}]}
