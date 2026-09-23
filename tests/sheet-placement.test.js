@@ -751,6 +751,42 @@ test("両端詰めでも通常マスより先に准緊急用マスを使わな�
   assert.deepEqual(cells.map(c=>c.id), [null,5,5,null,null,null,8,8,null]);
 });
 
+test("メイン准緊急込み2+6は両ロットを物理的に連続させる", () => {
+  const cells=makeCellsOf()(
+    {h:9,up:1,aisleRows:[8],fills:[{id:5,count:2},{id:8,count:6}]},
+    undefined,{splitEnds:true}
+  );
+  assert.deepEqual(cells.map(c=>c.id),[5,5,8,8,8,8,8,8,null]);
+  assert.deepEqual(cells.filter(c=>c.seg).map(c=>[c.row,c.seg]),[[1,"before"],[2,"after"]]);
+});
+
+test("メイン准緊急込み3+5は両ロットを物理的に連続させる", () => {
+  const cells=makeCellsOf()(
+    {h:9,up:1,aisleRows:[8],fills:[{id:5,count:3},{id:8,count:5}]},
+    undefined,{splitEnds:true}
+  );
+  assert.deepEqual(cells.map(c=>c.id),[5,5,5,8,8,8,8,8,null]);
+  assert.deepEqual(cells.filter(c=>c.seg).map(c=>[c.row,c.seg]),[[2,"before"],[3,"after"]]);
+});
+
+test("メイン准緊急込み8+1の境界はロット内部や外端に出ない", () => {
+  const cells=makeCellsOf()(
+    {h:9,up:1,aisleRows:[8],fills:[{id:5,count:8},{id:8,count:1}]},
+    undefined,{splitEnds:true}
+  );
+  assert.deepEqual(cells.map(c=>c.id),[5,5,5,5,5,5,5,5,8]);
+  assert.deepEqual(cells.filter(c=>c.seg).map(c=>[c.row,c.seg]),[[7,"before"],[8,"after"]]);
+});
+
+test("メイン准緊急込み1+7の境界はロット内部や外端に出ない", () => {
+  const cells=makeCellsOf()(
+    {h:9,up:1,aisleRows:[8],fills:[{id:5,count:1},{id:8,count:7}]},
+    undefined,{splitEnds:true}
+  );
+  assert.deepEqual(cells.map(c=>c.id),[5,8,8,8,8,8,8,8,null]);
+  assert.deepEqual(cells.filter(c=>c.seg).map(c=>[c.row,c.seg]),[[0,"before"],[1,"after"]]);
+});
+
 test("両端詰めは端と中央の配置不可セルを飛ばす", () => {
   const cells = makeCellsOf()(
     {h:8, fills:[{id:5,count:2},{id:8,count:2}]},

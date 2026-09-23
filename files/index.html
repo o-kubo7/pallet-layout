@@ -2873,12 +2873,12 @@ function cellsOf(col,blockedRows,options){
   const groups=cellGroups(fills);
   const split=splitEnds && groups.length===2;
   const assigned=new Set();
-  const assign=(id,count,order,segRow=null,segValue=null)=>{
+  const assign=(id,count,order)=>{
     const rows=[];
     if(count<=0) return rows;
     for(const r of order){
       if(arr[r].blocked || assigned.has(r)) continue;
-      arr[r]={id,seg:r===segRow?segValue:null,row:r,blocked:false,aisleRow:aisleRows.includes(r)};
+      arr[r]={id,seg:null,row:r,blocked:false,aisleRow:aisleRows.includes(r)};
       assigned.add(r);
       rows.push(r);
       if(--count===0) break;
@@ -2886,17 +2886,26 @@ function cellsOf(col,blockedRows,options){
     return rows;
   };
   if(split){
-    const firstOrder=fillOrder(col,fromEnd);
-    const secondOrder=fillOrder(col,!fromEnd);
-    const firstAssigned=assign(groups[0].id,groups[0].count,firstOrder);
-    // 最初に埋めた端ではなく、最後に割り当てた中央側の端へ境界を置く。
-    if(firstAssigned.length) arr[firstAssigned[firstAssigned.length-1]].seg=fromEnd?"after":"before";
-    // 第2ロットの境界は両端詰めの中央側に置く。
-    const secondAssigned=assign(groups[1].id,groups[1].count,secondOrder);
-    const secondBoundary=secondAssigned.length
-      ? (fromEnd?Math.max(...secondAssigned):Math.min(...secondAssigned))
-      : undefined;
-    if(secondBoundary!==undefined) arr[secondBoundary].seg=fromEnd?"before":"after";
+    const up=Number.isFinite(col.up)?col.up:0;
+    const available=fillOrder(col).filter(r=>!arr[r].blocked);
+    const normal=available.filter(r=>r>=up && !aisleRows.includes(r));
+    // 通常マスを使い切ったときだけ、物理的に隣接する准緊急・緊急用マスを足す。
+    const raised=available.filter(r=>r<up && !aisleRows.includes(r)).reverse();
+    const emergency=available.filter(r=>aisleRows.includes(r));
+    const total=groups[0].count+groups[1].count;
+    const raisedCount=Math.max(0,total-normal.length);
+    const emergencyCount=Math.max(0,raisedCount-raised.length);
+    const active=[...normal,...raised.slice(0,raisedCount),...emergency.slice(0,emergencyCount)]
+      .sort((a,b)=>a-b);
+    assign(groups[0].id,groups[0].count,fromEnd?active.slice().reverse():active);
+    assign(groups[1].id,groups[1].count,fromEnd?active:active.slice().reverse());
+    // 割当順ではなく完成したセルの物理的位置から、両ロットの中央側を求める。
+    const first=arr.filter(c=>c.id===groups[0].id);
+    const second=arr.filter(c=>c.id===groups[1].id);
+    if(first.length && second.length){
+      arr[fromEnd?first[0].row:first[first.length-1].row].seg=fromEnd?"after":"before";
+      arr[fromEnd?second[second.length-1].row:second[0].row].seg=fromEnd?"before":"after";
+    }
   }else{
     const order=fillOrder(col,fromEnd);
     let oi=0;
