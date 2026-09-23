@@ -189,3 +189,51 @@ test("dropHalfMarks: 指定した列の、そのロットの指定だけを消�
   assert.equal(spaces[0].cols[1].halfMarks, undefined);
   assert.deepEqual(spaces[0].cols[2].halfMarks, { "0": [{ k: 2, seq: 4 }] });
 });
+
+test("halfAreaOf: 設定ONでメインに有効な手動指定があればメイン、なければ末尾エリア", () => {
+  const make = (enabled) => new Function(
+    "lastSp", "halfManualEnabled", "tailAreaOf",
+    ["fillOrder", "cellGroups", "cellsOf", "cellLayoutOptions", "spaceCells", "manualHalfList", "halfAreaOf"]
+      .map(functionSource).join("\n") + "; return halfAreaOf;"
+  )([
+    { name: "メイン", cols: [{ h: 4, fills: [{ id: 0, count: 2 }], halfMarks: { "0": [{ k: 0, seq: 1 }] } }] },
+    { name: "軒下①", cols: [{ h: 4, fills: [{ id: 0, count: 1 }] }] },
+  ], enabled, () => "軒下①");
+  assert.equal(make(true)(0), "メイン");
+  assert.equal(make(false)(0), "軒下①");
+  assert.equal(make(true)(9), "軒下①");
+});
+
+test("表の「P 半」は halfAreaOf で決める", () => {
+  assert.match(functionSource("sheetEntries"), /halfAreaOf\(e\.lot\.id\)/);
+  assert.doesNotMatch(functionSource("sheetEntries"), /tailAreaOf\(/);
+  assert.match(functionSource("stashSlots"), /halfAreaOf\(e\.lot\.id\)/);
+  assert.doesNotMatch(functionSource("stashSlots"), /tailAreaOf\(/);
+});
+
+test("配置図のグリッドは halfCells で半を決める", () => {
+  const fn = functionSource("gridRows");
+  assert.match(fn, /halfCells\(sp,/);
+  assert.doesNotMatch(fn, /splitIds/);
+});
+
+test("書き足しの署名は halfMarks を含めない", () => {
+  const currentSig = new Function(
+    "schedule", "hasResult", "sheetPlacement", "sheetEditSigFrom", "lastFp", "lastLots",
+    "snapshotSpaces", "lastSp", "spacesToText", "mergeLots", "fracMode", "SHEET_LAYOUTS",
+    functionSource("currentSheetSig") + "; return currentSheetSig;"
+  );
+  const lay = { top: 0, bottom: 0 };
+  const pl = { lay, top: [], bottom: [], overflow: [] };
+  const sigOf = sp => currentSig({}, true, () => pl, parts => JSON.stringify(parts.sp), "", [],
+    value => JSON.parse(JSON.stringify(value)), sp, () => "", false, false,
+    { middle: {}, wide: {} })(pl);
+  const plain = [{ name: "メイン", cols: [{ h: 4, fills: [{ id: 0, count: 2 }] }] }];
+  const marked = [{ name: "メイン", cols: [{ h: 4, fills: [{ id: 0, count: 2 }], halfMarks: { "0": [{ k: 0, seq: 1 }] } }] }];
+  assert.equal(sigOf(marked), sigOf(plain));
+});
+
+test("半を手動で設定する の保存キーと初期値", () => {
+  assert.match(source, /halfManual:"palletApp\.halfManual"/);
+  assert.match(source, /let halfManualEnabled=false;/);
+});

@@ -1261,6 +1261,7 @@ let hasResult=false;
 let fracMode=false;   // true なら「満載数P 半」表記
 let sheetEditSilent=false;
 let splitConfirmEnabled=true;
+let halfManualEnabled=false;   // 配置編集で「半」の位置を手動で決めるか。既定は off（設定タブで保存）
 const TIMING_KEYS=["am","pm"];
 const TIMING_LABEL={am:"あさ",pm:"ひる"};
 const SCHEDULE_VERSION=1;
@@ -1273,7 +1274,7 @@ let scheduleLoadWarning=[];
 let spacesWereReset=false;
 
 /* ---------- 保存（localStorage / 使えない環境はメモリ保持） ---------- */
-const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", mix:"palletApp.mix", splitConfirm:"palletApp.splitConfirm", undoLabel:"palletApp.undoLabel", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent", sampleBtns:"palletApp.sampleBtns"};
+const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", mix:"palletApp.mix", splitConfirm:"palletApp.splitConfirm", halfManual:"palletApp.halfManual", undoLabel:"palletApp.undoLabel", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent", sampleBtns:"palletApp.sampleBtns"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
 const SPACES_SAVE_VERSION = 4;   // 現場の実測で置き場が増えたので上げる
@@ -5138,6 +5139,14 @@ function tailAreaOf(id){
   lastSp.forEach(s=>{ if(s.cols.some(c=>c.fills.some(f=>f.id===id))) last=s.name; });
   return last;
 }
+// 表の「P 半」を付けるエリア。設定 ON でメインに有効な手動指定があればメイン。
+// それ以外は従来どおり、そのロットの末尾のマスがあるエリア
+function halfAreaOf(id){
+  const on=typeof halfManualEnabled!=="undefined" && halfManualEnabled;
+  const main=on && lastSp ? lastSp.find(s=>s.name==="メイン") : null;
+  if(main && manualHalfList(main, spaceCells(main), id).length) return "メイン";
+  return tailAreaOf(id);
+}
 /* 配置図の表の欄をロット単位で作る。
    同じロットが同じ段の複数エリアにまたがっても1欄にまとめ、
    パレット数はその段での合計にする。
@@ -5163,8 +5172,9 @@ function sheetEntries(names, baseArea){
   });
   return order.map(e=>{
     const extra = baseArea ? e.areas.filter(n=>n!==baseArea) : [];
-    // 「半」はロットの末尾のマスに付くので、その欄にだけ持たせる（上下段で二重に出さない）
-    const tail = tailAreaOf(e.lot.id);
+    // 「半」の欄は halfAreaOf() で決める（手動指定があればメイン、なければ末尾のエリア）。
+    // その欄にだけ持たせる（上下段で二重に出さない）
+    const tail = halfAreaOf(e.lot.id);
     const half = e.areas.includes(tail) ? Math.min(e.lot.half||0, e.pallets) : 0;
     // areas は mergeEntries() のまとめキーに使う。置き場所が違うロットは
     // 注釈が唯一の場所情報なので、まとめずに別の欄へ分ける
@@ -5301,10 +5311,10 @@ function stashSlots(){
     e.pallets+=f.count;
   })));
   const entries=order.map(e=>{
-    // 「半」はロットの末尾のマスに付く。tailAreaOf() は lastSp の並びで
-    // 最後にそのロットを持つスペースを返し、退避は DEFAULT_SPACES の末尾にある。
+    // 「半」の欄は halfAreaOf() で決める。lastSp の並びで最後にそのロットを
+    // 持つスペースを返し、退避は DEFAULT_SPACES の末尾にある。
     // したがって退避に1枚でもあるロットの「半」はこの欄に出る（設計書 §7(f)）
-    const half = (tailAreaOf(e.lot.id)==="退避") ? Math.min(e.lot.half||0, e.pallets) : 0;
+    const half = (halfAreaOf(e.lot.id)==="退避") ? Math.min(e.lot.half||0, e.pallets) : 0;
     return {lot:e.lot, pallets:e.pallets, half, areas:["退避"],
             note:"※未定", stash:true};
   });
@@ -5576,7 +5586,9 @@ function currentSheetSig(pl){
   return sheetEditSigFrom({
     fp: lastFp,
     lots: lastLots,
-    sp: snapshotSpaces(lastSp),
+    // halfMarks（「半」の手動指定）は紙の欄の並びを変えないので署名に入れない。
+    // 入れると「半」を指定しただけで書き足しが前の配置の扱いになって消える
+    sp: snapshotSpaces(lastSp).map(s=>({...s, cols:s.cols.map(({halfMarks,...c})=>c)})),
     spacesText: spacesToText(true),
     mergeLots: mergeLots,
     fracMode: fracMode,
@@ -6300,47 +6312,18 @@ function gridRows(pad, overflow, marks){
   // 以降は order という名前で参照する（本体を書き換えないため）
   const order=SHEET_GRID_ORDER;
   // 盤と同じ配置済みセルから、紙で必要なロットIDだけを取り出す
-  const colCells=spaceCells(sp).map(cells=>cells.map(cell=>
+  const laid=spaceCells(sp);
+  const colCells=laid.map(cells=>cells.map(cell=>
     cell.id==null ? null : {id:cell.id}
   ));
-  // 荷物ごとのマス一覧（通常列と通路列を分ける）
-  const norm={}, aisle={}, ordered={};
-  const splitIds=new Set();
-  colCells.forEach((arr,ci)=>{
-    const col=sp.cols[ci];
-    const options=cellLayoutOptions(sp,col);
-    const groups=cellGroups(col.fills);
-    groups.forEach((group,gi)=>{
-      const split=options.splitEnds && groups.length===2;
-      const fromEnd=options.fromEnd !== (split && gi===1);
-      // 両端詰めは完成セルを物理順に読む。非両端詰めは従来の詰め順を保つ。
-      const rows=split
-        ? arr.flatMap((c,ri)=>c && c.id===group.id?[ri]:[])
-        : fillOrder(col,fromEnd);
-      if(split && fromEnd) rows.reverse();
-      if(split) splitIds.add(String(group.id));
-      rows.forEach(ri=>{
-        const c=arr[ri];
-        if(!c || c.id!==group.id) return;
-        const key=ci+"_"+ri;
-        (ordered[c.id]=ordered[c.id]||[]).push(key);
-        (col.aisle ? (aisle[c.id]=aisle[c.id]||[]) : (norm[c.id]=norm[c.id]||[])).push(key);
-      });
-    });
-  });
-  // 両端詰めは物理的な割当方向の末尾。従来の連続配置は通路を優先する。
-  // 末尾のマスが他のエリアにあるロットは、半パレットもそちらに置かれているので付けない
-  // （下段・上段のパレット数の「半」表記と場所を一致させる）。
+  // 「半」を付けるマス。盤（drawZone）と同じ halfCells() を使うので位置は必ず一致する。
+  // 既定はそのロットのまとまりの下端、設定 ON なら手動指定を優先する
   const isHalf={};
-  const ids=new Set([...Object.keys(norm),...Object.keys(aisle)]);
-  ids.forEach(id=>{
-    const lot=lastLots.find(l=>l.id==id); const n=lot?(lot.half||0):0;
-    if(n<=0) return;
-    if(tailAreaOf(Number(id))!==sp.name) return;
-    const list = splitIds.has(id) ? (ordered[id]||[])
-      : ((aisle[id]&&aisle[id].length) ? aisle[id] : (norm[id]||[]));
-    list.slice(-n).forEach(k=>{ isHalf[k]=true; });
-  });
+  Object.keys(halfCells(sp, lastLots, {
+    manualOn: typeof halfManualEnabled!=="undefined" && halfManualEnabled,
+    areaOf: id=>halfAreaOf(id),
+    laidOut: laid,
+  })).forEach(k=>{ isHalf[k]=true; });
 
   const g=gridShift(sp,colCells);
   // 追記欄はグリッドの全行と列番号行をまたぐ。行数は日によって変わる

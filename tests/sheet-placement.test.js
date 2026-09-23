@@ -400,12 +400,13 @@ function defaultSpace(name) {
 }
 
 // gridRows は lastSp / lastLots など外の値を見るので、注入して組み立てる
-function makeGridRows(cols, order, lots=[], tailAreaOf=()=>null) {
+function makeGridRows(cols, order, lots=[], tailAreaOf=()=>null, halfManual=false) {
   return new Function(
     "lastSp", "sheetAreas", "gridWarn", "SHEET_GRID_ORDER", "overflowTable", "lastLots", "tailAreaOf",
+    "halfManualEnabled",
     functionSource("aisleRowCount") +
     functionSource("gridShift") +
-    layoutSources() + functionSource("sheetGridAnchors") +
+    layoutSources() + halfSources() + functionSource("sheetGridAnchors") +
     functionSource("gridRows") + "; return gridRows;"
   )(
     [{ name: "メイン", cols }],
@@ -414,8 +415,14 @@ function makeGridRows(cols, order, lots=[], tailAreaOf=()=>null) {
     order,
     () => "",
     lots,
-    tailAreaOf
+    tailAreaOf,
+    halfManual
   );
+}
+
+function halfSources(){
+  return functionSource("manualHalfList") + functionSource("halfCells") +
+    functionSource("halfAreaOf");
 }
 
 function layoutSources(){
@@ -472,7 +479,7 @@ test("配置表のメイン配置不可セルには斜線用クラスを出力�
     // gridRows は内部で gridShift を呼ぶようになったため、依存元も注入する
     functionSource("aisleRowCount") +
     functionSource("gridShift") +
-    layoutSources() + functionSource("sheetGridAnchors") + functionSource("gridRows") + "; return gridRows;"
+    layoutSources() + halfSources() + functionSource("sheetGridAnchors") + functionSource("gridRows") + "; return gridRows;"
   )(
     [{ name: "メイン", cols: [{ h: 1, fills: [], blockedRows: new Set([0]) }] }],
     () => ["メイン"],
@@ -679,16 +686,16 @@ test("既定退避の上揃えでは次ロット先頭の上辺を区切る", ()
   assert.ok(!classes.includes("segline-after"),"row 2 の下辺は第2ロット内部");
 });
 
-test("配置表の第2ロット半パレット印は降順配置の末尾に付ける", () => {
+test("配置表の第2ロット半パレット印はまとまりの下端に付ける", () => {
   const gridRows=makeGridRows([
     {h:7,fills:[{id:0,count:2},{id:1,count:3}]}
   ],[{c:0}],[{id:0,half:0},{id:1,half:1}],()=>"メイン");
   const rows=gridRows(0,[]).html.match(/<tr class="grow">[\s\S]*?<\/tr>/g);
-  assert.match(rows[4],/<span class="mk">半<\/span>/);
-  assert.match(rows[6],/<span class="mk"><\/span>/);
+  assert.match(rows[6],/<span class="mk">半<\/span>/);
+  assert.match(rows[4],/<span class="mk"><\/span>/);
 });
 
-test("配置表の准緊急込み2+6は第1ロット末尾row1に半を付ける", () => {
+test("配置表の准緊急込み2+6は第1ロットのまとまりの下端row1に半を付ける", () => {
   const gridRows=makeGridRows([
     {h:9,up:1,aisleRows:[8],fills:[{id:0,count:2},{id:1,count:6}]}
   ],[{c:0}],[{id:0,half:1},{id:1,half:0}],()=>"メイン");
@@ -698,14 +705,35 @@ test("配置表の准緊急込み2+6は第1ロット末尾row1に半を付ける
   assert.match(rows[1],/<span class="mk">半<\/span>/);
 });
 
-test("配置表の両端詰め1+8は第2ロットの物理的な末尾row1に半を付ける", () => {
+test("配置表の両端詰め1+8は第2ロットの下端（緊急用マス）に半を付ける", () => {
   const gridRows=makeGridRows([
     {h:9,up:1,aisleRows:[8],fills:[{id:0,count:1},{id:1,count:8}]}
   ],[{c:0}],[{id:0,half:0},{id:1,half:1}],()=>"メイン");
   const html=gridRows(0,[]).html;
   const rows=html.match(/<tr class="grow">[\s\S]*?<\/tr>/g);
-  assert.match(rows[1],/<span class="mk">半<\/span>/);
-  assert.doesNotMatch(html,/<td class="colno aisle g[^"]*"><span class="mk">半<\/span>/);
+  assert.doesNotMatch(rows[1],/<span class="mk">半<\/span>/);
+  assert.match(html,/<td class="colno aisle g[^"]*"><span class="mk">半<\/span>/);
+});
+
+test("配置表: 准緊急マスのある単独ロットは准緊急マスではなく下端に半を付ける", () => {
+  const gridRows=makeGridRows([
+    {h:9,up:1,aisleRows:[8],fills:[{id:0,count:8}]}
+  ],[{c:0}],[{id:0,half:1}],()=>"メイン");
+  const rows=gridRows(0,[]).html.match(/<tr class="grow">[\s\S]*?<\/tr>/g);
+  assert.match(rows[0],/<span class="mk"><\/span>/);
+  assert.match(rows[7],/<span class="mk">半<\/span>/);
+});
+
+test("配置表: 設定ONなら手動指定の位置に半を付け、OFFなら下端に戻す", () => {
+  const cols=()=>[{h:7,fills:[{id:0,count:5}],halfMarks:{"0":[{k:4,seq:1}]}}];
+  const on=makeGridRows(cols(),[{c:0}],[{id:0,half:1}],()=>"メイン",true)(0,[]).html
+    .match(/<tr class="grow">[\s\S]*?<\/tr>/g);
+  assert.match(on[0],/<span class="mk">半<\/span>/);
+  assert.match(on[4],/<span class="mk"><\/span>/);
+  const off=makeGridRows(cols(),[{c:0}],[{id:0,half:1}],()=>"メイン",false)(0,[]).html
+    .match(/<tr class="grow">[\s\S]*?<\/tr>/g);
+  assert.match(off[0],/<span class="mk"><\/span>/);
+  assert.match(off[4],/<span class="mk">半<\/span>/);
 });
 
 test("メインの2ロットは両端に詰めて中央を空ける", () => {
