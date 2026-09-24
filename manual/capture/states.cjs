@@ -27,7 +27,14 @@ module.exports=async function(browser){
   expect(s1.slipCount==='FAX伝票 4枚 ／ 仮 1件','s1 の伝票枚数',s1.slipCount);
   out.s1={total:s1.total,slipCount:s1.slipCount};
   const prov=sc.page.locator('#slipList .slip').last();
-  const qty=prov.locator('tbody tr').last().locator('input').nth(3);
+  const rows=prov.locator('tbody tr');
+  const lot1=rows.nth(0).locator('input').nth(1);
+  await lot1.fill('333-3334');
+  await lot1.press('Tab');
+  const lot2=rows.nth(1).locator('input').nth(1);
+  await lot2.fill('444-4444');
+  await lot2.press('Tab');
+  const qty=rows.last().locator('input').nth(3);
   await qty.fill('27000');
   await qty.press('Tab');
   await prov.getByRole('button',{name:'FAX受領済みにする',exact:true}).click();

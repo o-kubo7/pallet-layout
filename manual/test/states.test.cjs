@@ -26,7 +26,8 @@ test('s1 は FAX⑤ を仮伝票にし、仕掛品4 を予定の 28500 にして
   const am=sched(st).shifts.am;
   assert.equal(am.slips[4].status,'provisional');
   assert.ok(am.slips.slice(0,4).every(s=>s.status==='fax'));
-  const p4=flat(st).find(i=>i.lot==='444-4444');
+  const srcP4=srcItems.find(i=>i.lot==='444-4444');
+  const p4=flat(st).find(i=>i.id===srcP4.id);
   assert.equal(p4.qty,'28500');
   assert.equal(am.result,null);
   assert.equal(am.manual,null);
@@ -34,6 +35,16 @@ test('s1 は FAX⑤ を仮伝票にし、仕掛品4 を予定の 28500 にして
   assert.deepEqual(am.sheetEdits,{sig:'',marks:{}});
   // 品目IDと並びは s2 と同じ（受領後に指紋が一致するため）
   assert.deepEqual(flat(st).map(i=>i.id),srcItems.map(i=>i.id));
+});
+
+test('s1 の仮伝票（FAX⑤）2品目はロットが空欄',()=>{
+  const st=S.makePlanned(src);
+  const provItems=sched(st).shifts.am.slips[4].items;
+  assert.equal(provItems.length,2);
+  assert.ok(provItems.every(i=>i.lot===''),'仮伝票のロットが空欄ではない');
+  // idと並びは変わらない（受領後の指紋一致のため）
+  assert.deepEqual(provItems.map(i=>i.id),
+    srcItems.filter(i=>i.lot==='333-3334'||i.lot==='444-4444').map(i=>i.id));
 });
 
 test('設定は 半表示 ON・分割確認 ON・半手動 OFF に固定する',()=>{

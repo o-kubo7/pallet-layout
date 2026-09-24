@@ -65,10 +65,17 @@ module.exports=async function(browser){
   expect(!!reg,'未登録品目の確認が出ていない',sc.dialogs);
   out.dialogs={register:reg};
 
-  // FAX⑤ 到着：仕掛品4 を 27000 に直して受領
+  // FAX⑤ 到着：仮伝票にロットを入力してから、仕掛品4 を 27000 に直して受領
   await gotoTab(sc.page,'入力');
   const prov=sc.page.locator('#slipList .slip').last();
-  const qty=prov.locator('tbody tr').last().locator('input').nth(3);
+  const rows=prov.locator('tbody tr');
+  const lot1=rows.nth(0).locator('input').nth(1);
+  await lot1.fill('333-3334');
+  await lot1.press('Tab');
+  const lot2=rows.nth(1).locator('input').nth(1);
+  await lot2.fill('444-4444');
+  await lot2.press('Tab');
+  const qty=rows.last().locator('input').nth(3);
   await qty.fill('27000');
   await qty.press('Tab');
   await shot(sc.page,'slip-provisional-fixed','#slipList .slip:last-child');

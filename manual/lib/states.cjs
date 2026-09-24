@@ -38,6 +38,8 @@ function makePlanned(src){
   const am=next.shifts.am;
   am.slips=splitSlips(items,i=>i===4?'provisional':'fax');
   am.slips[4].items.find(i=>i.lot==='444-4444').qty='28500';
+  // 仮伝票はFAX未着時点の入力なのでロットは空欄（FAX到着後に受領操作で入力する）
+  am.slips[4].items.forEach(i=>{i.lot='';});
   am.result=null;
   am.manual=null;
   am.resultFingerprint=null;
