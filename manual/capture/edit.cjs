@@ -7,16 +7,15 @@ const {openScene,loadState,gotoTab,shot,clipShot,unionRect,appMainSig,mainSig}=r
 const {expect,record}=require('../lib/verify.cjs');
 const MAIN='#zone-near .space:has(.colwrap[data-space="メイン"])';
 const col=c=>`#zone-near .colwrap[data-space="メイン"][data-col="${c}"]`;
-// P7 board-auto/board-manual: 軒下②・出庫口横・軒下①・壁・メインだけを含む範囲（5棟壁際・PC横・EV横・退避は含めない）。
-// .fl-wall は倉庫の幅いっぱいに伸びていて、対象スペースより右へ大きくはみ出す
-// （右にPC横・EV横があるぶん、壁も右まで続くため）。矩形の算出には含めない
-// （軒下〜メインの間にあるので、縦の範囲には自然に入って写る）。
-const BOARD_SEL=[
+// P7 4.3 の盤の図: 軒下②・出庫口横・軒下①（倉庫外）と、メイン（倉庫内）を別々に切り詰めて撮る。
+// 1枚に収めると2列並びでも文字が小さいため、倉庫外／メインの2段・自動/手動の2列で計4枚にする
+// （5棟壁際・PC横・EV横・退避は含めない）。
+const BOARD_OUT_SEL=[
   '#zone-far .space:has(.colwrap[data-space="軒下②"])',
   '#zone-far .space:has(.colwrap[data-space="出庫口横"])',
   '#zone-far .space:has(.colwrap[data-space="軒下①"])',
-  MAIN,
 ].join(',');
+const BOARD_MAIN_SEL=MAIN;
 
 async function selectCells(page,locator,n){
   await locator.nth(0).click();
@@ -124,15 +123,18 @@ module.exports=async function(browser){
   await sc.context.close();
 
   // ---- P7 4.3 自動配置と手動配置の盤 ----
-  // 盤全体だと文字が読めない大きさになるため、軒下②・出庫口横・軒下①・壁・メインに切り詰める。
-  // 2枚は同じ範囲・同じ大きさで撮る（片方で求めた矩形をもう片方にも使い回す）。
+  // 1枚（倉庫外＋壁＋メイン）だと2列並びでも文字が小さいため、倉庫外（軒下②・出庫口横・軒下①）と
+  // メインを別々の画像に分ける。自動／手動の同じ段は同じ矩形で撮る（片方で求めた矩形を使い回す）。
   sc=await openScene(browser,{state:S.stripManual(s2),viewport:{width:1100,height:1200},tab:'配置編集'});
   out.autoMatchesResult=JSON.stringify(await appMainSig(sc.page))===JSON.stringify(mainSig(am.result.sp));
-  const boardRect=await unionRect(sc.page,BOARD_SEL,6);
-  await clipShot(sc.page,'board-auto',boardRect);
+  const boardOutRect=await unionRect(sc.page,BOARD_OUT_SEL,6);
+  const boardMainRect=await unionRect(sc.page,BOARD_MAIN_SEL,6);
+  await clipShot(sc.page,'board-auto-out',boardOutRect);
+  await clipShot(sc.page,'board-auto-main',boardMainRect);
   await sc.context.close();
   sc=await openScene(browser,{state:s2,viewport:{width:1100,height:1200},tab:'配置編集'});
-  await clipShot(sc.page,'board-manual',boardRect);
+  await clipShot(sc.page,'board-manual-out',boardOutRect);
+  await clipShot(sc.page,'board-manual-main',boardMainRect);
   await sc.context.close();
 
   // ---- P6 4.4 退避：仕掛品3 333-3334（id 8）を丸ごと退避 → 配置図に「※未定」 ----
@@ -146,8 +148,10 @@ module.exports=async function(browser){
   const stashed=await sc.page.evaluate(()=>stashSpaces(lastSp).reduce((n,s)=>n+s.cols.reduce((m,c)=>m+used(c),0),0));
   expect(stashed===7,'退避に7枚入っていない',stashed);
   out.stash={lot:8,count:stashed};
-  // 見出し・説明文を除き、退避スペースのマスと容量帯だけに切り詰める（p08 で大きく載せるため）
-  await clipShot(sc.page,'stash-floor',await unionRect(sc.page,'#zone-stash, #stashBar',6));
+  // 見出し・説明文を除き、退避スペースのマスと「退避中：…」の行だけに切り詰める（p08 で大きく載せるため）。
+  // #zone-stash・#stashBar はコンテナ自体が幅いっぱいに伸びるため、そのまま unionRect すると
+  // 右側に空白が広く残る。実際に描かれた要素（.space・span）だけを対象にする。
+  await clipShot(sc.page,'stash-floor',await unionRect(sc.page,'#zone-stash .space, #stashBar span',6));
   await gotoTab(sc.page,'配置図');
   // 退避は注釈「※未定」ではなく、上段の見出し「未定」の欄として載る（アプリの実際の挙動に合わせる）
   const head=await sc.page.evaluate(()=>{
@@ -185,7 +189,10 @@ module.exports=async function(browser){
   const nb=await bc.count();
   for(let i=0;i<nb;i++) await bc.nth(i).click();
   await shot(sc.page,'blocked-main',MAIN);
-  await shot(sc.page,'blocked-actions','#blockedEditActions');
+  // 帯全体（#blockedEditActions）は幅いっぱいに伸びて文字が小さくなる。
+  // ヒント文（#blockedEditHelp）は flex:1 で幅いっぱいに伸びる要素のため、
+  // 含めると矩形も伸びてしまう。ボタン2つだけに切り詰める（P3 の input-actions と同じやり方）。
+  await clipShot(sc.page,'blocked-actions',await unionRect(sc.page,'#blockedEditActions button',6));
   await sc.page.locator('#blockedRunBtn').click();
   await sc.page.waitForTimeout(800);
   await shot(sc.page,'blocked-after',MAIN);
