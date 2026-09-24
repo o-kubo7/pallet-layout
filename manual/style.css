@@ -16,6 +16,9 @@ p{margin:6px 0}
 .cols p,.cols3 p{margin-top:0}
 .shot{display:block;width:100%;height:auto;border:1px solid #d5dddf;border-radius:4px}
 .shot.fit{width:auto;max-width:100%;margin:0 auto;object-fit:contain}
+.h9{max-height:9mm}.h10{max-height:10mm}.h12{max-height:12mm}
+.fig-tight{margin:0}
+.dialog-example.tight{margin:0}
 .h40{max-height:40mm}.h50{max-height:50mm}.h60{max-height:60mm}.h70{max-height:70mm}
 .h80{max-height:80mm}.h95{max-height:95mm}.h115{max-height:115mm}
 figure{margin:7px 0}
@@ -27,6 +30,12 @@ figcaption,.caption{font-size:9pt;color:#536973;margin:4px 0;line-height:1.5}
 .tbl th{background:#edf3f3;color:#36565c;text-align:left;font-weight:600}
 .tbl td,.tbl th{border-bottom:1px solid #d3dedf;padding:6px 9px;vertical-align:top}
 .tbl td.r,.tbl th.r{text-align:right}
+.tbl.compare{border-collapse:separate;border-spacing:0 6px;margin:9px 0}
+.tbl.compare th,.tbl.compare td{border-bottom:none;padding:8px 10px}
+.tbl.compare th{background:none;padding-bottom:4px}
+.tbl.compare td:first-child,.tbl.compare th:nth-child(1){background:#eef0f1;border-radius:5px 0 0 5px}
+.tbl.compare td:last-child,.tbl.compare th:nth-child(3){background:#e9f3f1;border-radius:0 5px 5px 0}
+.tbl.compare td.arrow,.tbl.compare th:nth-child(2){width:26px;min-width:26px;text-align:center;color:#77908e;background:none;padding:8px 2px;font-weight:700}
 aside{background:#f0f5f4;border-left:3px solid #538d8b;padding:8px 12px;margin:9px 0;font-size:10pt}
 aside.warn{background:#fdf6ec;border-left-color:#c98a2e}
 .flow{display:flex;align-items:center;gap:10px;margin:12px 0}

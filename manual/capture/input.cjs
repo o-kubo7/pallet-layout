@@ -1,5 +1,5 @@
 // P1〜P4 の撮影。s2 から完成図、s1 から入力の場面を撮る
-const {openScene,loadState,gotoTab,shot,clipShot,inputInfo}=require('../lib/scene.cjs');
+const {openScene,loadState,gotoTab,shot,clipShot,unionRect,inputInfo}=require('../lib/scene.cjs');
 const {expect,record}=require('../lib/verify.cjs');
 
 module.exports=async function(browser){
@@ -31,7 +31,8 @@ module.exports=async function(browser){
   expect(planned.slipCount==='FAX伝票 4枚 ／ 仮 1件','s1 の伝票枚数',planned.slipCount);
   out.planned={total:planned.total,slipCount:planned.slipCount};
   await shot(sc.page,'input-head','.input-head');
-  await shot(sc.page,'input-actions','.input-add-actions');
+  // ボタンが並ぶ部分だけを撮る（右側の余白を切る）
+  await clipShot(sc.page,'input-actions',await unionRect(sc.page,'.input-add-actions button',4));
   await shot(sc.page,'slip-fax1','#slipList .slip:nth-child(1)');
   await shot(sc.page,'slip-fax2','#slipList .slip:nth-child(2)');
   await shot(sc.page,'slip-fax3','#slipList .slip:nth-child(3)');
@@ -41,7 +42,8 @@ module.exports=async function(browser){
   // 「半」表示の設定
   await gotoTab(sc.page,'設定');
   await sc.page.locator('#subtab-display').click();
-  await shot(sc.page,'setting-frac','.cfgsec:has(#fracChk)');
+  // 見出しとチェックボックスの行だけを撮る（横の余白を切る）
+  await clipShot(sc.page,'setting-frac',await unionRect(sc.page,'.cfgsec:has(#fracChk) h3, .cfgsec:has(#fracChk) label.chk',6));
   await gotoTab(sc.page,'入力');
 
   // 自動配置 → 未登録品目の登録確認（confirm。文言を記録）
