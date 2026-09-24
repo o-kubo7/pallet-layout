@@ -1,0 +1,93 @@
+// P8〜P10 の撮影。s2 の配置図と設定タブ
+const fs=require('node:fs');
+const path=require('node:path');
+const {execFileSync}=require('node:child_process');
+const P=require('../lib/paths.cjs');
+const {openScene,loadState,gotoTab,shot,clipShot,unionRect}=require('../lib/scene.cjs');
+const {expect,record}=require('../lib/verify.cjs');
+
+module.exports=async function(browser){
+  const out={};
+  const s2=loadState('s2-final.json');
+
+  // ツールバーは幅1000pxの画面だと margin-left:auto の分だけ中央に大きな空白が
+  // できる（表示倍率と右側のボタン群の間）。実機（Pixel 9a、約412px幅）相当の
+  // 狭い画面で撮ると flex-wrap で2段に折り返り、空白の少ない自然な見た目になる
+  let scNarrow=await openScene(browser,{state:s2,viewport:{width:420,height:950},tab:'配置図'});
+  await clipShot(scNarrow.page,'sheet-toolbar',await unionRect(scNarrow.page,'.sheet-toolbar > *',4));
+  await scNarrow.context.close();
+
+  let sc=await openScene(browser,{state:s2,tab:'配置図'});
+  out.notice=(await sc.page.locator('#sheetMsg').innerText()).trim();
+  expect(out.notice.includes('下段に入りきらない'),'上段へ回した通知が出ていない',out.notice);
+  // #sheetMsg はカード幅いっぱいのブロックになるため、中の文字幅で切る
+  const noticeRect=await sc.page.evaluate(()=>{
+    const el=document.querySelector('#sheetMsg .msg')||document.querySelector('#sheetMsg');
+    const r=document.createRange();
+    r.selectNodeContents(el);
+    const tr=r.getBoundingClientRect();
+    const er=el.getBoundingClientRect();
+    const pad=8;
+    return {x:tr.left+scrollX-pad,y:er.top+scrollY-pad,width:(tr.right-tr.left)+pad*2,height:(er.bottom-er.top)+pad*2};
+  });
+  await clipShot(sc.page,'sheet-notice',noticeRect);
+  // 上段（日付の表を除く、軒下①・PC横の表）
+  await clipShot(sc.page,'sheet-top',await unionRect(sc.page,'#sheetView td[data-ek^="top|"]',3));
+  // 111-1113（7P 半）の欄と、その下のメイン列（「半」の印）
+  const r=await sc.page.evaluate(()=>{
+    const q=k=>document.querySelector(`#sheetView td[data-ek="${k}"]`).getBoundingClientRect();
+    const a=q('bottom|2|name');
+    const sv=document.querySelector('#sheetView').getBoundingClientRect();
+    return {x:a.left+scrollX-2,y:a.top+scrollY-2,width:a.width+4,height:sv.bottom-a.top+4};
+  });
+  await clipShot(sc.page,'sheet-half-column',r);
+
+  // テキスト編集：仕掛品3 の2ロット（333-3334 7P、333-3333 8P 半）＝16枚分
+  const slot=await sc.page.evaluate(()=>{
+    for(let i=0;i<9;i++){
+      const td=document.querySelector(`#sheetView td[data-ek="bottom|${i}|lot"]`);
+      if(td && td.innerText.trim()==='333-3333') return i;
+    }
+    return -1;
+  });
+  expect(slot>0,'333-3333 の欄が見つからない',slot);
+  const pair=`#sheetView td[data-ek^="bottom|${slot-1}|"], #sheetView td[data-ek^="bottom|${slot}|"]`;
+  await clipShot(sc.page,'text-edit-before',await unionRect(sc.page,pair,3));
+  await sc.page.locator('#sheetEditBtn').click();
+  const note=sc.page.locator(`#sheetView td[data-ek="bottom|${slot}|note"]`);
+  await note.click();
+  const editor=note.locator('textarea,input');
+  await editor.fill('（計16P）');
+  await editor.press('Tab');
+  await sc.page.locator('#sheetEditBtn').click();
+  await sc.page.waitForTimeout(300);
+  const noteText=(await sc.page.locator(`#sheetView td[data-ek="bottom|${slot}|note"]`).innerText()).trim();
+  expect(noteText.includes('（計16P）'),'注釈に書き足せていない',noteText);
+  await clipShot(sc.page,'text-edit-after',await unionRect(sc.page,pair,3));
+  out.textEdit={slot,note:'（計16P）'};
+  await sc.context.close();
+
+  // 印刷イメージ（A4横）：アプリの印刷用CSSで PDF にし、1ページ目を PNG にする
+  sc=await openScene(browser,{state:s2,tab:'配置図'});
+  const tmpPdf=path.join(P.DIST,'print-a4.pdf');
+  fs.mkdirSync(P.DIST,{recursive:true});
+  await sc.page.pdf({path:tmpPdf,preferCSSPageSize:true,printBackground:true});
+  // 印刷時の高さ予算はアプリ側が警告する。ここでは、A4横の1ページ目が出力されることだけを確かめる
+  execFileSync('sips',['-s','format','png','-Z','1600',tmpPdf,'--out',path.join(P.ASSETS,'print-a4.png')]);
+  const dim=execFileSync('sips',['-g','pixelWidth','-g','pixelHeight',path.join(P.ASSETS,'print-a4.png')]).toString();
+  const w=+(/pixelWidth: (\d+)/.exec(dim)||[])[1], h=+(/pixelHeight: (\d+)/.exec(dim)||[])[1];
+  out.print={width:w,height:h};
+  expect(w>h,'印刷イメージが横向きではない',out.print);
+  const warn=await sc.page.locator('#sheetMsg .msg.warn').count();
+  expect(warn===0,'配置図に警告が出ている（1ページに収まらない可能性）');
+  fs.rmSync(tmpPdf);
+  await sc.context.close();
+
+  // 設定タブ
+  sc=await openScene(browser,{state:s2,tab:'設定'});
+  // #cfgTabs はカード幅いっぱいのブロックになるため、ボタン群の外接矩形で切る
+  await clipShot(sc.page,'settings-subtabs',await unionRect(sc.page,'#cfgTabs button',4));
+  await sc.context.close();
+
+  record('sheet',out);
+};
