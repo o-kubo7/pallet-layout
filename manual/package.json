@@ -3,7 +3,7 @@
   "private": true,
   "description": "操作マニュアルの撮影・組版・PDF化",
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test test/*.test.cjs",
     "states": "node make-states.cjs",
     "capture": "node capture.cjs",
     "build": "node build.cjs",
