@@ -1,0 +1,43 @@
+{
+  "focusBefore": "<button class=\"item-delete\" aria-label=\"品目を削除\" onclick=\"removeItemRow(this)\">×</button>",
+  "focusAfter": "BODY",
+  "noteEdited": "9\n月\n23\n日\n\t\t軒下①\t軒下②\n月\t火\t水\t木\t金\t\t仕掛品3\t製品1\t\t\n\n100\nP\n\tあさ\tひる\t\t333-3333/333-3334\t111\t\t\n\t8P 半/7P\t8P\t\t\n\t\t（計16P）\t\t\t\n\n製品2\t仕掛品1\t仕掛品1\t仕掛品1\t仕掛品2\t仕掛品2\t仕掛品4\n222\t111-1111\t111-1112\t111-1113\t222-2222\t222-2223\t444-4444\n5P 半\t16P\t12P\t7P 半\t10P\t10P\t13P 半\n\t\t\t\t\t\t※PC横\n\n\t\t\t\t\t\t\t\t\t\t\t\t\t\n\t\t\t\t①\t\t\t\t①\t\t\t\t\t①\n\t\t\t\t②\t\t\t\t②\t\t\t\t\t②\n\t\t\t\t③\t\t\t\t③\t\t\t\t\t③\n\t\t\t\t④\t\t\t\t④\t\t\t\t\t④\n\t\t\t\t⑤\t\t\t\t⑤\t\t\t\t\t⑤\n半\t\t\t\t⑥\t\t\t\t⑥\t\t\t\t\t⑥\n\t\t\t\t⑦\t\t\t半\t⑦\t\t\t\t\t⑦\n\t1\t2\t3\t\t4\t5\t6\t\t7\t8\t9\t\t",
+  "selectionFive": 5,
+  "insufficientMove": {
+    "target": {
+      "name": "メイン",
+      "col": 1,
+      "free": 1
+    },
+    "unchanged": true
+  },
+  "move": {
+    "dest": {
+      "name": "メイン",
+      "col": 3
+    },
+    "selectionAfter": 0
+  },
+  "marqueeDuring": {
+    "selected": 2,
+    "started": true
+  },
+  "marqueeSelected": 2,
+  "emptyClickCleared": true,
+  "stash": {
+    "selected": 10,
+    "after": 10,
+    "undo": 0,
+    "redo": 10
+  },
+  "autoStash": 9,
+  "planned": {
+    "pallets": 101,
+    "count": "FAX伝票 4枚 ／ 仮 1件"
+  },
+  "confirmed": {
+    "pallets": 100,
+    "count": "FAX伝票 5枚 ／ 仮 0件"
+  },
+  "printEnabled": true
+}

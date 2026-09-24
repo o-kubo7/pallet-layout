@@ -1,0 +1,11 @@
+{
+  "planned": {
+    "pallets": 101,
+    "count": "FAX伝票 4枚 ／ 仮 1件"
+  },
+  "confirmed": {
+    "pallets": 100,
+    "count": "FAX伝票 5枚 ／ 仮 0件"
+  },
+  "printEnabled": true
+}

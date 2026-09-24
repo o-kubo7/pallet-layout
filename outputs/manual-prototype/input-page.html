@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><title>操作マニュアル 試作・入力の基本</title>
+<style>
+@page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;background:#e8ecee;color:#24313a;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;font-size:10.5pt;line-height:1.55}.page{width:210mm;min-height:297mm;margin:20px auto;background:white;padding:12mm 16mm 11mm;position:relative}.eyebrow{font-size:9pt;color:#476070;letter-spacing:.08em;display:flex;justify-content:space-between;border-bottom:1px solid #bac7cb;padding-bottom:7px}.active{font-weight:700;color:#155c63}h1{font-size:24pt;line-height:1.2;margin:15px 0 7px}h2{font-size:13pt;margin:14px 0 6px;color:#155c63}p{margin:5px 0}.lead{color:#55616b;margin-bottom:12px}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.source{border:1px solid #bdc9cc;padding:8px 10px;background:#fbfcfc}.source b{display:block;font-size:10pt;margin-bottom:5px}.source table{border-collapse:collapse;width:100%;font-size:9.5pt}.source th{text-align:left;font-weight:500;color:#65757b;font-size:8.5pt;border-bottom:1px solid #d4dddf;padding:3px 0}.source td{padding:5px 0 1px}.source .note{font-size:8pt;color:#68767b;margin-top:4px}.shot{display:block;width:100%;border:1px solid #d5dddf;border-radius:4px}.headshot{margin:7px 0 8px}.caption{font-size:9pt;color:#536973;margin:5px 0}.steps{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0}.steps p{font-size:9.7pt;margin:0}.num{color:#155c63;font-weight:700}.note-box{background:#f0f5f4;border-left:3px solid #538d8b;padding:8px 11px;margin-top:8px;font-size:10pt}.checkline{font-size:10pt;margin-top:8px;padding-top:7px;border-top:1px solid #d5dddf}.footer{margin-top:12px;padding-top:6px;border-top:1px solid #bdc9cc;display:flex;justify-content:space-between;font-size:8pt;color:#60717a}.pill{display:inline-block;border:1px solid #adbfbd;border-radius:4px;padding:1px 8px;margin:0 4px;background:white;font-weight:700}.tiny{font-size:9pt} @media print{body{background:white}.page{margin:0;min-height:297mm;height:297mm;break-after:page}*{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+</style>
+<article class="page">
+<div class="eyebrow"><span>パレット配置アプリ 操作マニュアル</span><span><span class="active">入力</span> → 配置編集 → 配置図</span></div>
+<h1>3. 入力</h1><p class="lead">FAXの内容と予定表のSNPを入力し、枚数を確認します。</p>
+<h2>3.1 その日の入力を始める</h2>
+<div class="steps"><p><span class="num">①</span>「あさ／ひる」を確認し、前回分があれば「入力をクリア」を押します。</p><p><span class="num">②</span> 搬入日と、作成する「あさ／ひる」を確認します。搬入日は共通です。</p></div>
+<img class="shot headshot" src="assets/input-head.png" alt="入力画面上部：搬入日、朝昼、クリア、FAX伝票1枚">
+<p class="caption">クリアされるのは選択中の側だけです。朝・昼の両方を作る日は、それぞれ確認します。</p>
+<h2>3.2 FAXと予定表を見て入力する</h2>
+<div class="row">
+<div class="source"><b>デモ用FAX① <span class="tiny">／ 発送内容</span></b><table><tr><th>品名</th><th>ロット</th><th>個数</th></tr><tr><td>製品1</td><td>111</td><td>4,000</td></tr></table><div class="note">架空の発送伝票から必要項目を抜粋</div></div>
+<div class="source"><b>予定表 <span class="tiny">／ SNPの確認</span></b><table><tr><th>品名</th><th>SNP</th></tr><tr><td>製品1</td><td>500</td></tr></table><div class="note">SNPは予定表と照合します。</div></div>
+</div>
+<p class="caption"><span class="num">③</span>「＋ FAX伝票を追加」を押し、種別・品名・ロット・SNP・個数を入力します。</p>
+<img class="shot" src="assets/input-slip.png" alt="製品1・ロット111・SNP500・個数4000を入力した実画面。計算結果は8P">
+<p class="caption"><span class="num">④</span> 同じFAXの別品目・ロットは「＋ 品目を追加」。次のFAXは別の伝票として追加します。</p>
+<h2>3.3 SNP・パレット数・FAX枚数を確認する</h2>
+<p>同じ品目でもSNPが異なる場合があります。自動入力された場合も、予定表と照合してください。</p>
+<div class="note-box"><b>入力確認は「半」表示がおすすめです。</b><br><span class="tiny">設定 → 表示設定 → 入力画面での端数を「半」で表示：オン</span><br>SNP 500・個数2,750なら <span class="pill">5P 半</span><br><span class="tiny">オフでは「6P」。どちらも満載5枚＋端数1枚で、場所は6枚分です。</span></div>
+<p class="checkline"><b>画面上部のFAX枚数 ＝ 手元の実物の枚数</b><br>実物1枚につき1伝票として入力し、入力漏れを確認します。仮伝票は別に数えられます。</p>
+<div class="footer"><span>試作版・PC操作用　｜　次ページ：仮伝票・品目登録・自動配置</span><span>3 / 10</span></div>
+</article></html>
