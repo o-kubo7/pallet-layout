@@ -61,6 +61,10 @@
       "count": 7,
       "sheetHead": "未定"
     },
+    "blockedRun": {
+      "hasResult": true,
+      "blockedColFilled": false
+    },
     "half": {
       "before": 7,
       "after": 0,

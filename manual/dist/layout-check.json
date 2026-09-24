@@ -26,7 +26,7 @@
   },
   {
     "page": 6,
-    "spaceToFooter": 7,
+    "spaceToFooter": 4,
     "images": true
   },
   {
@@ -36,22 +36,22 @@
   },
   {
     "page": 8,
-    "spaceToFooter": 138,
+    "spaceToFooter": 164,
     "images": true
   },
   {
     "page": 9,
-    "spaceToFooter": 8,
+    "spaceToFooter": 119,
     "images": true
   },
   {
     "page": 10,
-    "spaceToFooter": 4,
+    "spaceToFooter": 33,
     "images": true
   },
   {
     "page": 11,
-    "spaceToFooter": 1,
+    "spaceToFooter": 66,
     "images": true
   },
   {

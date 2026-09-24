@@ -1,4 +1,4 @@
-// P1〜P4 の撮影。s2 から完成図、s1 から入力の場面を撮る
+// P1〜P5 の撮影。s2 から完成図、s1 から入力の場面を撮る
 const {openScene,loadState,gotoTab,shot,clipShot,unionRect,inputInfo}=require('../lib/scene.cjs');
 const {expect,record}=require('../lib/verify.cjs');
 
@@ -24,7 +24,7 @@ module.exports=async function(browser){
   await shot(sc.page,'tabs','.tabs');
   await sc.context.close();
 
-  // P3・P4: s1（FAX①〜④＋仮1件）
+  // P3〜P5: s1（FAX①〜④＋仮1件）
   sc=await openScene(browser,{state:loadState('s1-planned.json'),tab:'入力'});
   const planned=await inputInfo(sc.page);
   expect(planned.total===101,'s1 の合計が101Pではない',planned);

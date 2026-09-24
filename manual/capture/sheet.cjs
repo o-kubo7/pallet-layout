@@ -1,9 +1,9 @@
-// P8〜P10 の撮影。s2 の配置図と設定タブ
+// P10〜P12 の撮影。s2 の配置図と設定タブ
 const fs=require('node:fs');
 const path=require('node:path');
 const {execFileSync}=require('node:child_process');
 const P=require('../lib/paths.cjs');
-const {openScene,loadState,gotoTab,shot,clipShot,unionRect}=require('../lib/scene.cjs');
+const {openScene,loadState,clipShot,unionRect}=require('../lib/scene.cjs');
 const {expect,record}=require('../lib/verify.cjs');
 
 module.exports=async function(browser){
@@ -49,8 +49,14 @@ module.exports=async function(browser){
     return -1;
   });
   expect(slot>0,'333-3333 の欄が見つからない',slot);
-  const pair=`#sheetView td[data-ek^="bottom|${slot-1}|"], #sheetView td[data-ek^="bottom|${slot}|"]`;
-  await clipShot(sc.page,'text-edit-before',await unionRect(sc.page,pair,3));
+  // 333-3334（7P）・333-3333（8P 半）の2欄と、その下の注釈行だけに絞る（品名・ロットの行は含めない）。
+  // 拡大率を上げるため、注釈が読めるぎりぎりまで範囲を狭くする
+  const pairFields=[
+    `bottom|${slot-1}|pallet`,`bottom|${slot-1}|note`,
+    `bottom|${slot}|pallet`,`bottom|${slot}|note`,
+  ];
+  const pair=pairFields.map(k=>`#sheetView td[data-ek="${k}"]`).join(', ');
+  await clipShot(sc.page,'text-edit-before',await unionRect(sc.page,pair,4));
   await sc.page.locator('#sheetEditBtn').click();
   const note=sc.page.locator(`#sheetView td[data-ek="bottom|${slot}|note"]`);
   await note.click();
@@ -61,7 +67,7 @@ module.exports=async function(browser){
   await sc.page.waitForTimeout(300);
   const noteText=(await sc.page.locator(`#sheetView td[data-ek="bottom|${slot}|note"]`).innerText()).trim();
   expect(noteText.includes('（計16P）'),'注釈に書き足せていない',noteText);
-  await clipShot(sc.page,'text-edit-after',await unionRect(sc.page,pair,3));
+  await clipShot(sc.page,'text-edit-after',await unionRect(sc.page,pair,4));
   out.textEdit={slot,note:'（計16P）'};
   await sc.context.close();
 

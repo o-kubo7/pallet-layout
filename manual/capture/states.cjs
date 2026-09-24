@@ -2,7 +2,7 @@
 const fs=require('node:fs');
 const path=require('node:path');
 const P=require('../lib/paths.cjs');
-const {openScene,loadState,inputInfo,mainSig,appMainSig,gotoTab}=require('../lib/scene.cjs');
+const {openScene,loadState,inputInfo,mainSig,appMainSig}=require('../lib/scene.cjs');
 const {expect,record}=require('../lib/verify.cjs');
 
 module.exports=async function(browser){

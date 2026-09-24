@@ -1,4 +1,4 @@
-// P5〜P7 の撮影。すべて s2（手動配置）から始め、場面ごとに開き直す
+// P6〜P9 の撮影。すべて s2（手動配置）から始め、場面ごとに開き直す
 const fs=require('node:fs');
 const path=require('node:path');
 const P=require('../lib/paths.cjs');
@@ -34,7 +34,7 @@ module.exports=async function(browser){
   const src=JSON.parse(fs.readFileSync(path.join(P.STATE,'source-export.json'),'utf8'));
   const am=JSON.parse(src['palletApp.schedule']).shifts.am;
 
-  // ---- P5 移動（3コマ）：隣の列へ。空きより多いと移動できない → 空きと同じ枚数で移動 ----
+  // ---- P6 移動（3コマ）：隣の列へ。空きより多いと移動できない → 空きと同じ枚数で移動 ----
   // 分割の確認は隣の列への移動では出ない（隣接は1か所と数える）。確認は次の場面で別に記録する
   let sc=await openScene(browser,{state:s2,viewport:{width:1100,height:1200},tab:'配置編集'});
   const plan=await sc.page.evaluate(()=>{
@@ -64,11 +64,18 @@ module.exports=async function(browser){
   await cells.nth(plan.free).click({modifiers:['Shift']});
   expect(await sc.page.evaluate(()=>sel.cells.size)===plan.free,'選択数が空きと一致しない');
   // 列の外接矩形に加え、ドラッグ中の吹き出し（.dragghost、pointer 位置に
-  // translate(-50%,-160%) で中央合わせ）がはみ出す分を左右へ固定マージンで確保する。
+  // translate(-50%,-160%) で中央合わせ）がはみ出す分を左へ固定マージンで確保する。
+  // 右側は固定マージンだと隣の列が途中で切れるため、列の境界で止まるように
+  // 次の列が実在するときだけ、その列の幅ぶんだけ足す（無ければ足さない）。
   // 3コマ（select/drag/after）は同じ矩形を使う。
   const GHOST_MARGIN=60;
   const colRect=await colsRect(sc.page,plan.src,plan.dest);
-  const rect={x:colRect.x-GHOST_MARGIN,y:colRect.y,width:colRect.width+GHOST_MARGIN*2,height:colRect.height};
+  const hi=Math.max(plan.src,plan.dest);
+  const rightExtra=await sc.page.evaluate(hi=>{
+    const next=document.querySelector(`#zone-near .colwrap[data-space="メイン"][data-col="${hi+1}"]`);
+    return next ? next.getBoundingClientRect().width : 0;
+  },hi);
+  const rect={x:colRect.x-GHOST_MARGIN,y:colRect.y,width:colRect.width+GHOST_MARGIN+rightExtra,height:colRect.height};
   await clipShot(sc.page,'move-1-select',rect);
   // ドラッグ中を撮る
   const from=await cells.nth(0).boundingBox();
@@ -93,7 +100,7 @@ module.exports=async function(browser){
   await shot(sc.page,'undo-toolbar','#toolFlag');
   await sc.context.close();
 
-  // ---- P5 分割の確認：離れた列へ1枚動かし、confirm の文言だけを記録する（撮影しない） ----
+  // ---- P6 分割の確認：離れた列へ1枚動かし、confirm の文言だけを記録する（撮影しない） ----
   sc=await openScene(browser,{state:s2,viewport:{width:1100,height:1200},tab:'配置編集'});
   const far=await sc.page.evaluate(()=>{
     const sp=lastSp.find(s=>s.name==='メイン');
@@ -127,6 +134,7 @@ module.exports=async function(browser){
   // メインを別々の画像に分ける。自動／手動の同じ段は同じ矩形で撮る（片方で求めた矩形を使い回す）。
   sc=await openScene(browser,{state:S.stripManual(s2),viewport:{width:1100,height:1200},tab:'配置編集'});
   out.autoMatchesResult=JSON.stringify(await appMainSig(sc.page))===JSON.stringify(mainSig(am.result.sp));
+  expect(out.autoMatchesResult,'配置編集で開いた自動配置が入力タブの結果と一致しない',out.autoMatchesResult);
   const boardOutRect=await unionRect(sc.page,BOARD_OUT_SEL,6);
   const boardMainRect=await unionRect(sc.page,BOARD_MAIN_SEL,6);
   await clipShot(sc.page,'board-auto-out',boardOutRect);
@@ -137,7 +145,7 @@ module.exports=async function(browser){
   await clipShot(sc.page,'board-manual-main',boardMainRect);
   await sc.context.close();
 
-  // ---- P6 4.4 退避：仕掛品3 333-3334（id 8）を丸ごと退避 → 配置図に「※未定」 ----
+  // ---- P8 4.4 退避：仕掛品3 333-3334（id 8）を丸ごと退避 → 配置図に見出し「未定」の欄 ----
   sc=await openScene(browser,{state:s2,viewport:{width:1100,height:1200},tab:'配置編集'});
   const lot8=sc.page.locator('#zone-near .cell[data-lot="8"]');
   const n8=await lot8.count();
@@ -182,7 +190,7 @@ module.exports=async function(browser){
   out.stash.sheetHead='未定';
   await sc.context.close();
 
-  // ---- P6 4.5 配置不可：メインの1列を配置不可にして自動配置を実行 ----
+  // ---- P8 4.5 配置不可：メインの1列を配置不可にして自動配置を実行 ----
   sc=await openScene(browser,{state:s2,viewport:{width:1100,height:1200},tab:'配置編集'});
   await sc.page.locator('#blockedEditBtn').click();
   const bc=sc.page.locator(`${col(1)} .cell`);
@@ -195,32 +203,51 @@ module.exports=async function(browser){
   await clipShot(sc.page,'blocked-actions',await unionRect(sc.page,'#blockedEditActions button',6));
   await sc.page.locator('#blockedRunBtn').click();
   await sc.page.waitForTimeout(800);
-  await shot(sc.page,'blocked-after',MAIN);
+  // blocked-after.png はどのページでも使わないため撮らない。
+  // 代わりに、配置不可にしたマスを避けて自動配置が成功したことだけを確かめる
+  const blockedRun=await sc.page.evaluate(()=>{
+    if(!hasResult||!lastSp) return {hasResult:false};
+    const col=lastSp.find(s=>s.name==='メイン').cols[1];
+    return {hasResult:true,blockedColFilled:col.fills.length>0};
+  });
+  expect(blockedRun.hasResult && !blockedRun.blockedColFilled,'配置不可のマスを避けた自動配置が実行できていない',blockedRun);
+  out.blockedRun=blockedRun;
   await sc.context.close();
 
-  // ---- P7 「半」：初期位置の印 → 設定 ON → 半を設定 → 半を自動に戻す ----
+  // ---- P9 「半」：初期位置の印 → 設定 ON → 半を設定 → 半を自動に戻す ----
   sc=await openScene(browser,{state:S.withSettings(s2,{'palletApp.halfManual':'true'}),viewport:{width:1100,height:1200},tab:'配置編集'});
   const halfCol=`#zone-near .colwrap[data-space="メイン"]:has(.cell.half[data-lot="4"])`;
   expect(await sc.page.locator(halfCol).count()===1,'111-1113 の「半」の列が1つではない');
-  await shot(sc.page,'half-badge',halfCol);
   const lot4=sc.page.locator(`${halfCol} .cell[data-lot="4"]`);
+  // 列全体だと縦に長く「半」の印が小さくなるため、そのロットのマスだけに絞る
+  const lot4Sel=`${halfCol} .cell[data-lot="4"]`;
+  await clipShot(sc.page,'half-badge',await unionRect(sc.page,lot4Sel,4));
   const idxHalf=async()=>lot4.evaluateAll(es=>es.findIndex(e=>e.classList.contains('half')));
   const halfBefore=await idxHalf();
   await gotoTab(sc.page,'設定');
   await sc.page.locator('#subtab-display').click();
   expect(await sc.page.locator('#halfManualChk').isChecked(),'「半」の手動設定が ON になっていない');
-  await shot(sc.page,'setting-placement','.cfgsec:has(#halfManualChk)');
+  // 見出し「配置のしかた」は他のチェックボックスと共有のため含めない。#halfManualChk の行だけに絞る
+  // （label.chk は inline-flex で文字幅に収まるので、そのまま使う。p03 の setting-frac と同じやり方）
+  const placementRect=await sc.page.evaluate(()=>{
+    const label=document.querySelector('label.chk:has(#halfManualChk)');
+    const r=label.getBoundingClientRect();
+    // 前後のチェックボックス・ヒント文と間隔が詰まっているため、pad は小さくする
+    const pad=2;
+    return {x:r.left+scrollX-pad,y:r.top+scrollY-pad,width:r.width+pad*2,height:r.height+pad*2};
+  });
+  await clipShot(sc.page,'setting-placement',placementRect);
   await gotoTab(sc.page,'配置編集');
   // 一番上のマス（「半」ではない）を選ぶ
   await lot4.nth(0).click();
   expect((await sc.page.locator('#halfBtnText').innerText()).trim()==='半を設定','ボタンが「半を設定」ではない');
-  await shot(sc.page,'half-before',halfCol);
+  await clipShot(sc.page,'half-before',await unionRect(sc.page,lot4Sel,4));
   await shot(sc.page,'half-button','#toolFlag');
   await sc.page.locator('#halfBtn').click();
   await sc.page.waitForTimeout(300);
   const halfAfter=await idxHalf();
   expect(halfAfter===0 && halfBefore!==0,'「半」が選んだマスへ移っていない',{halfBefore,halfAfter});
-  await shot(sc.page,'half-after',halfCol);
+  await clipShot(sc.page,'half-after',await unionRect(sc.page,lot4Sel,4));
   await lot4.nth(0).click();
   const autoLabel=(await sc.page.locator('#halfBtnText').innerText()).trim();
   expect(autoLabel==='半を自動に戻す','指定した「半」を選んでも「半を自動に戻す」にならない',autoLabel);
