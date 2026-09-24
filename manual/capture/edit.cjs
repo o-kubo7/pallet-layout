@@ -54,7 +54,12 @@ module.exports=async function(browser){
   // 1枚外して、空きと同じ枚数にする
   await cells.nth(plan.free).click({modifiers:['Shift']});
   expect(await sc.page.evaluate(()=>sel.cells.size)===plan.free,'選択数が空きと一致しない');
-  const rect=await colsRect(sc.page,plan.src,plan.dest);
+  // 列の外接矩形に加え、ドラッグ中の吹き出し（.dragghost、pointer 位置に
+  // translate(-50%,-160%) で中央合わせ）がはみ出す分を左右へ固定マージンで確保する。
+  // 3コマ（select/drag/after）は同じ矩形を使う。
+  const GHOST_MARGIN=60;
+  const colRect=await colsRect(sc.page,plan.src,plan.dest);
+  const rect={x:colRect.x-GHOST_MARGIN,y:colRect.y,width:colRect.width+GHOST_MARGIN*2,height:colRect.height};
   await clipShot(sc.page,'move-1-select',rect);
   // ドラッグ中を撮る
   const from=await cells.nth(0).boundingBox();
@@ -75,7 +80,7 @@ module.exports=async function(browser){
   const selectionCleared=await sc.page.evaluate(()=>sel.cells.size===0);
   expect(selectionCleared,'移動後に選択が解除されていない');
   out.move={...plan,insufficientUnchanged,moved:true,selectionCleared};
-  await clipShot(sc.page,'move-3-after',await colsRect(sc.page,plan.src,plan.dest));
+  await clipShot(sc.page,'move-3-after',rect);
   await shot(sc.page,'undo-toolbar','#toolFlag');
   await sc.context.close();
 
