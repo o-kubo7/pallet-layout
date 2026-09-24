@@ -3,8 +3,15 @@ const fs=require('node:fs');
 const path=require('node:path');
 const {execFileSync}=require('node:child_process');
 const P=require('../lib/paths.cjs');
-const {openScene,loadState,clipShot,unionRect}=require('../lib/scene.cjs');
+const {openScene,loadState,gotoTab,clipShot,unionRect}=require('../lib/scene.cjs');
 const {expect,record}=require('../lib/verify.cjs');
+// 倉庫外（軒下①）の列。#zone-far 側は #zone-near と同じ colwrap の作りなので
+// data-space・data-col で選べる（capture/edit.cjs の col() と同じやり方）
+const FAR_COL=c=>`#zone-far .colwrap[data-space="軒下①"][data-col="${c}"]`;
+async function selectCells(page,locator,n){
+  await locator.nth(0).click();
+  for(let i=1;i<n;i++) await locator.nth(i).click({modifiers:['Shift']});
+}
 
 module.exports=async function(browser){
   const out={};
@@ -58,36 +65,72 @@ module.exports=async function(browser){
   await clipShot(scZoom.page,'sheet-half-column-zoom',rZoom);
   await scZoom.context.close();
 
-  // テキスト編集：仕掛品3 の2ロット（333-3334 7P、333-3333 8P 半）＝16枚分
-  const slot=await sc.page.evaluate(()=>{
-    for(let i=0;i<9;i++){
-      const td=document.querySelector(`#sheetView td[data-ek="bottom|${i}|lot"]`);
-      if(td && td.innerText.trim()==='333-3333') return i;
+  // テキスト編集：s2 とは別に開き、配置編集で 仕掛品3 の2ロット
+  // （333-3334 7枚＝data-lot=8、333-3333 9枚＝data-lot=7）を、倉庫外の軒下①の
+  // 空きへすべて移す。s2 の軒下①は、他ロットが一部入っている列（0・1）を避けて、
+  // 空の列だけ（列2＝空き2、列3＝空き2、列4＝空き11）を使う（ちょうど16枚分）。
+  // 2ロットとも軒下①だけに乗ると、mergeEntries() が1つの欄にまとめる（files/index.html）。
+  let scEd=await openScene(browser,{state:s2,viewport:{width:1100,height:1200},tab:'配置編集'});
+  const farFree=await scEd.page.evaluate(()=>{
+    const sp=lastSp.find(s=>s.name==='軒下①');
+    return sp.cols.map((c,i)=>({i,free:columnFreeCount(c,c.blockedRows),empty:c.fills.length===0}));
+  });
+  const emptyCols=farFree.filter(c=>c.empty).sort((a,b)=>b.free-a.free);
+  expect(emptyCols.length>=3 && emptyCols.slice(0,3).reduce((n,c)=>n+c.free,0)>=16,
+    '軒下① の空きが16枚に届かない（BLOCKED）',farFree);
+  const [c11,c3,c2]=emptyCols;
+
+  const lot8cells=scEd.page.locator('#zone-near .cell[data-lot="8"]');
+  expect(await lot8cells.count()===7,'333-3334 のマスが7枚ではない');
+  await selectCells(scEd.page,lot8cells,7);
+  await lot8cells.nth(0).dragTo(scEd.page.locator(FAR_COL(c11.i)));
+  await scEd.page.waitForTimeout(300);
+
+  // 333-3333（9枚）を、空いている枠（列c11の残り・列c3・列c2）に順に分けて移す
+  const moveLot7=async(n,colSel)=>{
+    const cells=scEd.page.locator('#zone-near .cell[data-lot="7"]');
+    expect(await cells.count()>=n,'333-3333 の残りマスが足りない',{n,count:await cells.count()});
+    await selectCells(scEd.page,cells,n);
+    await cells.nth(0).dragTo(scEd.page.locator(colSel));
+    await scEd.page.waitForTimeout(300);
+  };
+  await moveLot7(c11.free-7,FAR_COL(c11.i));
+  await moveLot7(c3.free,FAR_COL(c3.i));
+  await moveLot7(c2.free,FAR_COL(c2.i));
+
+  await gotoTab(scEd.page,'配置図');
+  const slot=await scEd.page.evaluate(()=>{
+    const cells=[...document.querySelectorAll('#sheetView td[data-ek^="top|"][data-ek$="|name"]')];
+    for(const td of cells){
+      if(td.innerText.trim()==='仕掛品3'){
+        const m=/^top\|(\d+)\|name$/.exec(td.getAttribute('data-ek'));
+        if(m) return +m[1];
+      }
     }
     return -1;
   });
-  expect(slot>0,'333-3333 の欄が見つからない',slot);
-  // 333-3334（7P）・333-3333（8P 半）の2欄と、その下の注釈行だけに絞る（品名・ロットの行は含めない）。
-  // 拡大率を上げるため、注釈が読めるぎりぎりまで範囲を狭くする
-  const pairFields=[
-    `bottom|${slot-1}|pallet`,`bottom|${slot-1}|note`,
-    `bottom|${slot}|pallet`,`bottom|${slot}|note`,
-  ];
-  const pair=pairFields.map(k=>`#sheetView td[data-ek="${k}"]`).join(', ');
-  await clipShot(sc.page,'text-edit-before',await unionRect(sc.page,pair,4));
-  await sc.page.locator('#sheetEditBtn').click();
-  const note=sc.page.locator(`#sheetView td[data-ek="bottom|${slot}|note"]`);
+  expect(slot>=0,'配置図に仕掛品3の欄が見つからない（BLOCKED）');
+  const lotText=(await scEd.page.locator(`#sheetView td[data-ek="top|${slot}|lot"]`).innerText()).trim();
+  const palText=(await scEd.page.locator(`#sheetView td[data-ek="top|${slot}|pallet"]`).innerText()).trim();
+  expect(lotText.includes('333-3333') && lotText.includes('333-3334') && palText.includes('/'),
+    '仕掛品3 の2ロットが1つの欄にまとまっていない（BLOCKED）',{lotText,palText});
+
+  // 見出しは含めず、品名・ロット・P数・注釈の各行だけを撮る
+  const fields=['name','lot','pallet','note'].map(k=>`#sheetView td[data-ek="top|${slot}|${k}"]`).join(', ');
+  await clipShot(scEd.page,'text-edit-before',await unionRect(scEd.page,fields,4));
+  await scEd.page.locator('#sheetEditBtn').click();
+  const note=scEd.page.locator(`#sheetView td[data-ek="top|${slot}|note"]`);
   await note.click();
   const editor=note.locator('textarea,input');
-  await editor.fill('（計16P）');
+  await editor.fill('（合計16P）');
   await editor.press('Tab');
-  await sc.page.locator('#sheetEditBtn').click();
-  await sc.page.waitForTimeout(300);
-  const noteText=(await sc.page.locator(`#sheetView td[data-ek="bottom|${slot}|note"]`).innerText()).trim();
-  expect(noteText.includes('（計16P）'),'注釈に書き足せていない',noteText);
-  await clipShot(sc.page,'text-edit-after',await unionRect(sc.page,pair,4));
-  out.textEdit={slot,note:'（計16P）'};
-  await sc.context.close();
+  await scEd.page.locator('#sheetEditBtn').click();
+  await scEd.page.waitForTimeout(300);
+  const noteText=(await scEd.page.locator(`#sheetView td[data-ek="top|${slot}|note"]`).innerText()).trim();
+  expect(noteText.includes('（合計16P）'),'注釈に書き足せていない',noteText);
+  await clipShot(scEd.page,'text-edit-after',await unionRect(scEd.page,fields,4));
+  out.textEdit={slot,tier:'top',note:'（合計16P）',pallets:palText};
+  await scEd.context.close();
 
   // 印刷イメージ（A4横）：アプリの印刷用CSSで PDF にし、1ページ目を PNG にする
   sc=await openScene(browser,{state:s2,tab:'配置図'});

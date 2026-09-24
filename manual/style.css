@@ -14,7 +14,7 @@ p{margin:6px 0}
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
 .cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:start}
 .cols p,.cols3 p{margin-top:0}
-.shot{display:block;width:100%;height:auto;border:1px solid #d5dddf;border-radius:4px}
+.shot{display:block;width:100%;height:auto;border:1.5px solid #7f9197;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.18)}
 .shot.fit{width:auto;max-width:100%;margin:0 auto;object-fit:contain}
 .h9{max-height:9mm}.h10{max-height:10mm}.h12{max-height:12mm}
 .fig-tight{margin:0}
@@ -70,8 +70,7 @@ aside.warn{background:#fdf6ec;border-left-color:#c98a2e}
 .hl-wrap{position:relative}
 .hl-wrap.tight{display:inline-block}
 .hl-box{position:absolute;top:-3px;bottom:-3px;border:3px solid #e8335a;border-radius:6px;pointer-events:none}
-.hl-box.blue{border-color:#12a5d8}
 /* 元の図から拡大図へ向かう矢印・拡大図の枠（P9・P10で使用） */
 .zoom-row{display:flex;align-items:center;gap:6px}
-.zoom-arrow{flex:none;color:#12a5d8}
-.shot.zoom-blue{border:3px solid #12a5d8;border-radius:8px}
+.zoom-arrow{flex:none;color:#e8335a}
+.shot.zoom-hl{border:3px solid #e8335a;border-radius:8px}

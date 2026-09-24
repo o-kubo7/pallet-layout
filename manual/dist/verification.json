@@ -74,8 +74,10 @@
   "sheet": {
     "notice": "※ 下段に入りきらない 1 件を上段の空き欄に回しています。",
     "textEdit": {
-      "slot": 6,
-      "note": "（計16P）"
+      "slot": 2,
+      "tier": "top",
+      "note": "（合計16P）",
+      "pallets": "8P 半/7P"
     },
     "print": {
       "width": 1600,
