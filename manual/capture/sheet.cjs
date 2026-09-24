@@ -10,14 +10,12 @@ module.exports=async function(browser){
   const out={};
   const s2=loadState('s2-final.json');
 
-  // ツールバーは幅1000pxの画面だと margin-left:auto の分だけ中央に大きな空白が
-  // できる（表示倍率と右側のボタン群の間）。実機（Pixel 9a、約412px幅）相当の
-  // 狭い画面で撮ると flex-wrap で2段に折り返り、空白の少ない自然な見た目になる
-  let scNarrow=await openScene(browser,{state:s2,viewport:{width:420,height:950},tab:'配置図'});
-  await clipShot(scNarrow.page,'sheet-toolbar',await unionRect(scNarrow.page,'.sheet-toolbar > *',4));
-  await scNarrow.context.close();
-
   let sc=await openScene(browser,{state:s2,tab:'配置図'});
+  // ツールバー全体は表示倍率セレクトと右側のボタン群の間に大きな空白ができる
+  // （margin-left:auto）。PC表示のまま、右側のボタン群（テキスト編集・印刷）
+  // だけを切り出す（p11 で使うのはこの2ボタン）
+  // sheetClearBtn は hidden のため対象から外す（矩形が0になり union が崩れる）
+  await clipShot(sc.page,'sheet-toolbar',await unionRect(sc.page,'#sheetEditBtn, #printBtn',4));
   out.notice=(await sc.page.locator('#sheetMsg').innerText()).trim();
   expect(out.notice.includes('下段に入りきらない'),'上段へ回した通知が出ていない',out.notice);
   // #sheetMsg はカード幅いっぱいのブロックになるため、中の文字幅で切る
