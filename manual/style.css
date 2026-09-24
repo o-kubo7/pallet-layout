@@ -65,3 +65,4 @@ aside.warn{background:#fdf6ec;border-left-color:#c98a2e}
 .webnav a{color:#155c63;background:#fff;padding:5px 10px;border-radius:3px;text-decoration:none}
 @media print{body{background:#fff}.page{margin:0}.webnav{display:none}*{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 @media screen and (max-width:800px){.page{margin:0 auto 14px}}
+.frame{border:1px solid #9aa9ae;border-radius:6px;padding:8px 10px;margin:8px 0}
