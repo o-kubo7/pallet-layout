@@ -7,6 +7,16 @@ const {openScene,loadState,gotoTab,shot,clipShot,unionRect,appMainSig,mainSig}=r
 const {expect,record}=require('../lib/verify.cjs');
 const MAIN='#zone-near .space:has(.colwrap[data-space="メイン"])';
 const col=c=>`#zone-near .colwrap[data-space="メイン"][data-col="${c}"]`;
+// P7 board-auto/board-manual: 軒下②・出庫口横・軒下①・壁・メインだけを含む範囲（5棟壁際・PC横・EV横・退避は含めない）。
+// .fl-wall は倉庫の幅いっぱいに伸びていて、対象スペースより右へ大きくはみ出す
+// （右にPC横・EV横があるぶん、壁も右まで続くため）。矩形の算出には含めない
+// （軒下〜メインの間にあるので、縦の範囲には自然に入って写る）。
+const BOARD_SEL=[
+  '#zone-far .space:has(.colwrap[data-space="軒下②"])',
+  '#zone-far .space:has(.colwrap[data-space="出庫口横"])',
+  '#zone-far .space:has(.colwrap[data-space="軒下①"])',
+  MAIN,
+].join(',');
 
 async function selectCells(page,locator,n){
   await locator.nth(0).click();
@@ -113,14 +123,16 @@ module.exports=async function(browser){
   out.splitMove=far;
   await sc.context.close();
 
-  // ---- P6 4.3 自動配置と手動配置の盤 ----
+  // ---- P7 4.3 自動配置と手動配置の盤 ----
+  // 盤全体だと文字が読めない大きさになるため、軒下②・出庫口横・軒下①・壁・メインに切り詰める。
+  // 2枚は同じ範囲・同じ大きさで撮る（片方で求めた矩形をもう片方にも使い回す）。
   sc=await openScene(browser,{state:S.stripManual(s2),viewport:{width:1100,height:1200},tab:'配置編集'});
   out.autoMatchesResult=JSON.stringify(await appMainSig(sc.page))===JSON.stringify(mainSig(am.result.sp));
-  // 盤全体（倉庫外・壁・倉庫内）。退避スペースは含めない
-  await shot(sc.page,'board-auto','.floor:not(.stashfloor)');
+  const boardRect=await unionRect(sc.page,BOARD_SEL,6);
+  await clipShot(sc.page,'board-auto',boardRect);
   await sc.context.close();
   sc=await openScene(browser,{state:s2,viewport:{width:1100,height:1200},tab:'配置編集'});
-  await shot(sc.page,'board-manual','.floor:not(.stashfloor)');
+  await clipShot(sc.page,'board-manual',boardRect);
   await sc.context.close();
 
   // ---- P6 4.4 退避：仕掛品3 333-3334（id 8）を丸ごと退避 → 配置図に「※未定」 ----
@@ -134,7 +146,8 @@ module.exports=async function(browser){
   const stashed=await sc.page.evaluate(()=>stashSpaces(lastSp).reduce((n,s)=>n+s.cols.reduce((m,c)=>m+used(c),0),0));
   expect(stashed===7,'退避に7枚入っていない',stashed);
   out.stash={lot:8,count:stashed};
-  await shot(sc.page,'stash-floor','.stashfloor');
+  // 見出し・説明文を除き、退避スペースのマスと容量帯だけに切り詰める（p08 で大きく載せるため）
+  await clipShot(sc.page,'stash-floor',await unionRect(sc.page,'#zone-stash, #stashBar',6));
   await gotoTab(sc.page,'配置図');
   // 退避は注釈「※未定」ではなく、上段の見出し「未定」の欄として載る（アプリの実際の挙動に合わせる）
   const head=await sc.page.evaluate(()=>{
