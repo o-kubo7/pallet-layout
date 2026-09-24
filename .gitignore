@@ -2,3 +2,6 @@
 .superpowers/
 .worktrees/
 docs/memos/
+
+# 操作マニュアルの制作用
+manual/node_modules/

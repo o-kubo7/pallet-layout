@@ -1,0 +1,16 @@
+{
+  "name": "pallet-layout-manual",
+  "private": true,
+  "description": "操作マニュアルの撮影・組版・PDF化",
+  "scripts": {
+    "test": "node --test test/",
+    "states": "node make-states.cjs",
+    "capture": "node capture.cjs",
+    "build": "node build.cjs",
+    "render": "node render.cjs",
+    "all": "npm run states && npm run capture && npm run build && npm run render"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}
