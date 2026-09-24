@@ -42,8 +42,20 @@ module.exports=async function(browser){
   // 「半」表示の設定
   await gotoTab(sc.page,'設定');
   await sc.page.locator('#subtab-display').click();
-  // 見出しとチェックボックスの行だけを撮る（横の余白を切る）
-  await clipShot(sc.page,'setting-frac',await unionRect(sc.page,'.cfgsec:has(#fracChk) h3, .cfgsec:has(#fracChk) label.chk',6));
+  // 見出しとチェックボックスの行だけを撮る（横の余白を切る）。
+  // h3 はブロック要素で幅いっぱいに広がるため、Range で文字そのものの幅を測る。
+  // label.chk は inline-flex で文字幅に収まるのでそのまま使う。
+  const fracRect=await sc.page.evaluate(()=>{
+    const h3=document.querySelector('.cfgsec:has(#fracChk) h3');
+    const label=document.querySelector('.cfgsec:has(#fracChk) label.chk');
+    const textRect=el=>{ const r=document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect(); };
+    const rs=[textRect(h3),label.getBoundingClientRect()];
+    const x=Math.min(...rs.map(v=>v.left)), y=Math.min(...rs.map(v=>v.top));
+    const right=Math.max(...rs.map(v=>v.right)), bottom=Math.max(...rs.map(v=>v.bottom));
+    const pad=6;
+    return {x:x+scrollX-pad,y:y+scrollY-pad,width:(right-x)+pad*2,height:(bottom-y)+pad*2};
+  });
+  await clipShot(sc.page,'setting-frac',fracRect);
   await gotoTab(sc.page,'入力');
 
   // 自動配置 → 未登録品目の登録確認（confirm。文言を記録）
