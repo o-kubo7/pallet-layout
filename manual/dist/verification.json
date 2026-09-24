@@ -1,0 +1,81 @@
+{
+  "states": {
+    "s2": {
+      "total": 100,
+      "slipCount": "FAX伝票 5枚 ／ 仮 0件",
+      "mainRestored": true
+    },
+    "s1": {
+      "total": 101,
+      "slipCount": "FAX伝票 4枚 ／ 仮 1件"
+    },
+    "received": {
+      "total": 100,
+      "slipCount": "FAX伝票 5枚 ／ 仮 0件",
+      "fpMatchesS2": true
+    },
+    "app": {
+      "cacheVersion": "v76",
+      "commit": "4602e62"
+    }
+  },
+  "input": {
+    "itemGroupNames": [
+      "仕掛品1",
+      "仕掛品1",
+      "仕掛品1"
+    ],
+    "planned": {
+      "total": 101,
+      "slipCount": "FAX伝票 4枚 ／ 仮 1件"
+    },
+    "dialogs": {
+      "register": "次の品目が未登録です。「設定」タブに登録しますか？\n\n　・製品1　SNP 500\n　・製品2　SNP 500\n　・仕掛品1　SNP 1500\n　・仕掛品2　SNP 1500\n　・仕掛品3　SNP 2000\n　・仕掛品4　SNP 2000\n\n（キャンセルしても配置図は作成します）"
+    },
+    "confirmed": {
+      "total": 100,
+      "slipCount": "FAX伝票 5枚 ／ 仮 0件"
+    }
+  },
+  "edit": {
+    "move": {
+      "dest": 0,
+      "free": 2,
+      "src": 1,
+      "lot": 3,
+      "insufficientUnchanged": true,
+      "moved": true,
+      "selectionCleared": true
+    },
+    "dialogs": {
+      "split": "仕掛品1 / 111-1112 が 1か所から 2か所に分かれます。このまま移動しますか？"
+    },
+    "splitMove": {
+      "src": 0,
+      "dest": 4,
+      "lot": 3
+    },
+    "autoMatchesResult": true,
+    "stash": {
+      "lot": 8,
+      "count": 7,
+      "sheetHead": "未定"
+    },
+    "half": {
+      "before": 7,
+      "after": 0,
+      "autoLabel": "半を自動に戻す"
+    }
+  },
+  "sheet": {
+    "notice": "※ 下段に入りきらない 1 件を上段の空き欄に回しています。",
+    "textEdit": {
+      "slot": 6,
+      "note": "（計16P）"
+    },
+    "print": {
+      "width": 1600,
+      "height": 1131
+    }
+  }
+}

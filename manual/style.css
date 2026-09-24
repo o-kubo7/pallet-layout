@@ -19,8 +19,8 @@ p{margin:6px 0}
 .h9{max-height:9mm}.h10{max-height:10mm}.h12{max-height:12mm}
 .fig-tight{margin:0}
 .dialog-example.tight{margin:0}
-.h40{max-height:40mm}.h50{max-height:50mm}.h60{max-height:60mm}.h70{max-height:70mm}
-.h80{max-height:80mm}.h95{max-height:95mm}.h115{max-height:115mm}
+.h20{max-height:20mm}.h30{max-height:30mm}.h40{max-height:40mm}.h45{max-height:45mm}.h50{max-height:50mm}.h60{max-height:60mm}.h70{max-height:70mm}
+.h80{max-height:80mm}.h85{max-height:85mm}.h95{max-height:95mm}.h115{max-height:115mm}
 figure{margin:7px 0}
 figcaption,.caption{font-size:9pt;color:#536973;margin:4px 0;line-height:1.5}
 .muted{font-size:9.5pt;color:#65757c}
