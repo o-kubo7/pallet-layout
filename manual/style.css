@@ -68,4 +68,10 @@ aside.warn{background:#fdf6ec;border-left-color:#c98a2e}
 .frame{border:1px solid #9aa9ae;border-radius:6px;padding:8px 10px;margin:8px 0}
 /* 画像の一部を枠で囲んで強調する（位置と幅は画像に対する%で指定） */
 .hl-wrap{position:relative}
+.hl-wrap.tight{display:inline-block}
 .hl-box{position:absolute;top:-3px;bottom:-3px;border:3px solid #e8335a;border-radius:6px;pointer-events:none}
+.hl-box.blue{border-color:#12a5d8}
+/* 元の図から拡大図へ向かう矢印・拡大図の枠（P9・P10で使用） */
+.zoom-row{display:flex;align-items:center;gap:6px}
+.zoom-arrow{flex:none;color:#12a5d8}
+.shot.zoom-blue{border:3px solid #12a5d8;border-radius:8px}

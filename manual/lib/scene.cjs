@@ -15,8 +15,8 @@ function launch(){
 function loadState(name){
   return JSON.parse(fs.readFileSync(path.join(P.STATE,name),'utf8'));
 }
-async function openScene(browser,{state,viewport={width:1000,height:950},tab=null}){
-  const context=await browser.newContext({viewport,deviceScaleFactor:2,serviceWorkers:'block'});
+async function openScene(browser,{state,viewport={width:1000,height:950},tab=null,deviceScaleFactor=2}){
+  const context=await browser.newContext({viewport,deviceScaleFactor,serviceWorkers:'block'});
   await context.addInitScript(data=>{
     if(sessionStorage.getItem('manual-seeded')) return;
     localStorage.clear();
@@ -70,6 +70,19 @@ async function unionRect(page,selector,pad=2){
   if(!r) throw new Error('要素がありません: '+selector);
   return {x:r.x-pad,y:r.y-pad,width:r.width+pad*2,height:r.height+pad*2};
 }
+// selector に一致する要素のうち末尾 n 個（DOM順）の外接矩形。拡大図の切り出し用
+async function tailRect(page,selector,n,pad=2){
+  const r=await page.locator(selector).evaluateAll((els,n)=>{
+    const tail=els.slice(-n);
+    if(!tail.length) return null;
+    const rs=tail.map(e=>e.getBoundingClientRect());
+    const x=Math.min(...rs.map(v=>v.left)), y=Math.min(...rs.map(v=>v.top));
+    const right=Math.max(...rs.map(v=>v.right)), bottom=Math.max(...rs.map(v=>v.bottom));
+    return {x:x+scrollX,y:y+scrollY,width:right-x,height:bottom-y};
+  },n);
+  if(!r) throw new Error('要素がありません: '+selector);
+  return {x:r.x-pad,y:r.y-pad,width:r.width+pad*2,height:r.height+pad*2};
+}
 async function inputInfo(page){
   return page.evaluate(()=>({
     total:readLots().lots.reduce((n,l)=>n+l.pallets,0),
@@ -88,4 +101,4 @@ async function appMainSig(page){
     return main.cols.map(c=>c.fills.map(f=>f.id+':'+f.count).join(','));
   });
 }
-module.exports={launch,loadState,openScene,gotoTab,shot,clipShot,unionRect,inputInfo,mainSig,appMainSig};
+module.exports={launch,loadState,openScene,gotoTab,shot,clipShot,unionRect,tailRect,inputInfo,mainSig,appMainSig};

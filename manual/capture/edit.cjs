@@ -3,7 +3,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const P=require('../lib/paths.cjs');
 const S=require('../lib/states.cjs');
-const {openScene,loadState,gotoTab,shot,clipShot,unionRect,appMainSig,mainSig}=require('../lib/scene.cjs');
+const {openScene,loadState,gotoTab,shot,clipShot,unionRect,tailRect,appMainSig,mainSig}=require('../lib/scene.cjs');
 const {expect,record}=require('../lib/verify.cjs');
 const MAIN='#zone-near .space:has(.colwrap[data-space="メイン"])';
 const col=c=>`#zone-near .colwrap[data-space="メイン"][data-col="${c}"]`;
@@ -222,6 +222,12 @@ module.exports=async function(browser){
   // 列全体だと縦に長く「半」の印が小さくなるため、そのロットのマスだけに絞る
   const lot4Sel=`${halfCol} .cell[data-lot="4"]`;
   await clipShot(sc.page,'half-badge',await unionRect(sc.page,lot4Sel,4));
+  // P9 4.6 の拡大図：最下段（「半」の印）とその上1マスを、画像を引き伸ばさず
+  // deviceScaleFactor:4 で撮り直す。矩形は CSS px なので通常倍率の場面のものをそのまま使える
+  const halfZoomRect=await tailRect(sc.page,lot4Sel,2,4);
+  const scZoom=await openScene(browser,{state:S.withSettings(s2,{'palletApp.halfManual':'true'}),viewport:{width:1100,height:1200},tab:'配置編集',deviceScaleFactor:4});
+  await clipShot(scZoom.page,'half-badge-zoom',halfZoomRect);
+  await scZoom.context.close();
   const idxHalf=async()=>lot4.evaluateAll(es=>es.findIndex(e=>e.classList.contains('half')));
   const halfBefore=await idxHalf();
   await gotoTab(sc.page,'設定');

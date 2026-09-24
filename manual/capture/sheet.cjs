@@ -39,6 +39,24 @@ module.exports=async function(browser){
     return {x:a.left+scrollX-2,y:a.top+scrollY-2,width:a.width+4,height:sv.bottom-a.top+4};
   });
   await clipShot(sc.page,'sheet-half-column',r);
+  // P10 5.1 の拡大図：最下段付近（行番号⑥⑦と「半」の丸、列番号）だけを
+  // deviceScaleFactor:4 で撮り直す。r と同じ列（横位置）の、下から3行分（⑥⑦＋列番号行）に絞る
+  const rZoom=await sc.page.evaluate(r=>{
+    const cx0=r.x-scrollX, cx1=cx0+r.width;
+    const cells=[...document.querySelectorAll('#sheetView td.lab, #sheetView td.g, #sheetView td.colno')]
+      .filter(td=>{ const b=td.getBoundingClientRect(); const cx=(b.left+b.right)/2; return cx>=cx0-2 && cx<=cx1+2; });
+    const tops=[...new Set(cells.map(td=>Math.round(td.getBoundingClientRect().top)))].sort((a,b)=>a-b);
+    const lastTops=tops.slice(-3); // ⑥⑦の2行＋列番号行
+    const picked=cells.filter(td=>lastTops.includes(Math.round(td.getBoundingClientRect().top)));
+    const rs=picked.map(td=>td.getBoundingClientRect());
+    const x=Math.min(...rs.map(v=>v.left)), y=Math.min(...rs.map(v=>v.top));
+    const right=Math.max(...rs.map(v=>v.right)), bottom=Math.max(...rs.map(v=>v.bottom));
+    const pad=3;
+    return {x:x+scrollX-pad,y:y+scrollY-pad,width:(right-x)+pad*2,height:(bottom-y)+pad*2};
+  },r);
+  const scZoom=await openScene(browser,{state:s2,tab:'配置図',deviceScaleFactor:4});
+  await clipShot(scZoom.page,'sheet-half-column-zoom',rZoom);
+  await scZoom.context.close();
 
   // テキスト編集：仕掛品3 の2ロット（333-3334 7P、333-3333 8P 半）＝16枚分
   const slot=await sc.page.evaluate(()=>{
