@@ -1,6 +1,6 @@
-// 撮影。node capture.cjs [states|input|edit|sheet|all]
+// 撮影。node capture.cjs [states|input|edit|sheet|overview|all]
 const {launch}=require('./lib/scene.cjs');
-const ORDER=['states','input','edit','sheet'];
+const ORDER=['states','input','edit','sheet','overview'];
 (async()=>{
   const arg=process.argv[2]||'all';
   const names=arg==='all'?ORDER:[arg];

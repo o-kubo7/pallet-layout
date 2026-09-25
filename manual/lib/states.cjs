@@ -52,4 +52,15 @@ function stripManual(state){
   sch.shifts.am.manual=null;
   return {...state,'palletApp.schedule':JSON.stringify(sch)};
 }
-module.exports={SLIP_GROUPS,makeFinal,makePlanned,stripManual,withSettings};
+// 画面の見取り図（試作）用。s1 から先頭のFAX伝票と仮伝票だけを残し、入力画面を1ページに収める。
+// 途中の伝票を省くだけで、残す伝票の中身・順番・設定は変えない
+function overviewInput(state){
+  const sch=JSON.parse(state['palletApp.schedule']);
+  const am=sch.shifts.am;
+  const fax=am.slips.find(s=>s.status==='fax');
+  const prov=am.slips.find(s=>s.status==='provisional');
+  if(!fax||!prov) throw new Error('見取り図用の状態には、FAX伝票と仮伝票が1つずつ要ります');
+  am.slips=[fax,prov];
+  return {...state,'palletApp.schedule':JSON.stringify(sch)};
+}
+module.exports={SLIP_GROUPS,makeFinal,makePlanned,stripManual,withSettings,overviewInput};

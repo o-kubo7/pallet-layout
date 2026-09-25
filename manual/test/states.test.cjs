@@ -73,3 +73,15 @@ test('書き出しデータが想定と違えば止める',()=>{
   const bad={...src,'palletApp.schedule':JSON.stringify({version:1,shifts:{am:{slips:[{items:[]}]}}})};
   assert.throws(()=>S.makeFinal(bad),/10品目/);
 });
+
+test('overviewInput は先頭のFAX伝票と仮伝票だけを残し、中身を変えない',()=>{
+  const s1=S.makePlanned(src);
+  const st=S.overviewInput(s1);
+  const slips=sched(st).shifts.am.slips;
+  assert.deepEqual(slips.map(s=>s.status),['fax','provisional']);
+  const orig=sched(s1).shifts.am.slips;
+  assert.deepEqual(slips[0],orig[0]);
+  assert.deepEqual(slips[1],orig[4]);
+  assert.equal(st['palletApp.frac'],'true');
+  assert.equal(sched(s1).shifts.am.slips.length,5,'元の状態を変更しない');
+});
