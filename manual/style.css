@@ -31,6 +31,8 @@ figcaption,.caption{font-size:9pt;color:#536973;margin:4px 0;line-height:1.5}
 .tbl th{background:#edf3f3;color:#36565c;text-align:left;font-weight:600}
 .tbl td,.tbl th{border-bottom:1px solid #d3dedf;padding:6px 9px;vertical-align:top}
 .tbl td.r,.tbl th.r{text-align:right}
+.tbl.tight{margin:3px 0}
+.tbl.tight td,.tbl.tight th{padding:4px 9px}
 .tbl.compare{border-collapse:separate;border-spacing:0 6px;margin:9px 0}
 .tbl.compare th,.tbl.compare td{border-bottom:none;padding:8px 10px}
 .tbl.compare th{background:none;padding-bottom:4px}
@@ -60,6 +62,8 @@ aside.warn{background:#fdf6ec;border-left-color:#c98a2e}
 .check-section h2 small{float:right;font-weight:400;color:#65757c;font-size:9pt;padding-top:4px}
 .closing{font-size:15pt;color:#155c63;text-align:center;padding:12px 0}
 .closing small{font-size:10pt;color:#65757c}
+.closing.compact{font-size:11pt;padding:4px 0}
+.closing.compact small{font-size:8.5pt}
 .footer{position:absolute;bottom:10mm;left:16mm;right:16mm;border-top:1px solid #bdc9cc;padding-top:6px;display:flex;justify-content:space-between;font-size:8pt;color:#60717a}
 .webnav{max-width:210mm;margin:15px auto;font-size:10pt;display:flex;flex-wrap:wrap;gap:8px}
 .webnav a{color:#155c63;background:#fff;padding:5px 10px;border-radius:3px;text-decoration:none}
