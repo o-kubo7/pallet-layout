@@ -88,19 +88,19 @@ module.exports=async function(browser){
   let clip=await unionRect(sc.page,'.input-head, #slipList, .input-add-actions',6);
   const input=await measure(sc.page,clip,[
     {key:'A',label:'搬入日',sel:'#dateInput',side:'t'},
-    {key:'B',label:'あさ／ひる',sel:'.input-head [data-timing-switch]',pick:'union',side:'b'},
-    {key:'C',label:'入力をクリア',sel:'.input-head .clear-input',side:'l'},
+    {key:'B',label:'あさ／ひる',sel:'.input-head [data-timing-switch]',pick:'union',side:'t'},
+    {key:'C',label:'入力をクリア',sel:'.input-head .clear-input',side:'t'},
     {key:'D',label:'伝票の枚数',sel:'#slipCount',pick:'text',side:'r'},
     {key:'E',label:'伝票の入力欄',sel:`${S1} tr > :nth-child(-n+5)`,pick:'union',side:'t'},
     {key:'F',label:'パレット数',sel:`${S1} tr > :nth-child(6)`,pick:'union',side:'t'},
-    {key:'G',label:'×（行の削除）',sel:`${S1} tbody tr:first-child td:nth-child(7) button`,side:'b'},
+    {key:'G',label:'×（行の削除）',sel:`${S1} tbody tr:first-child td:nth-child(7) button`,side:'r'},
     {key:'H',label:'＋ 品目を追加',sel:`${S1} .btn-slip-action-add`,side:'r'},
     {key:'I',label:'伝票を削除',sel:`${S1} .slip-actions .btn-mini`,side:'l'},
     {key:'J',label:'FAX未着',sel:`${S2} .unreceived`,side:'r'},
     {key:'K',label:'FAX受領済みにする',sel:`${S2} [data-receive]`,side:'r'},
-    {key:'L',label:'＋ FAX伝票を追加',sel:'.input-add-actions .btn-slip-add:not(.btn-slip-add-provisional)',side:'l'},
+    {key:'L',label:'＋ FAX伝票を追加',sel:'.input-add-actions .btn-slip-add:not(.btn-slip-add-provisional)',side:'b'},
     {key:'M',label:'＋ 仮伝票を追加',sel:'.input-add-actions .btn-slip-add-provisional',side:'b'},
-    {key:'N',label:'▶ 自動配置を作成',sel:'#runBtnInline',side:'r'},
+    {key:'N',label:'▶ 自動配置を作成',sel:'#runBtnInline',side:'b'},
   ]);
   await viewShot(sc.page,'overview-input',clip);
   out.input={image:'overview-input.png',slipCount,clip,markers:input};
@@ -121,7 +121,7 @@ module.exports=async function(browser){
   clip=await unionRect(sc.page,'#editCard .edit-toolbar, #messages, #legend, #stashDock',4);
   const edit=await measure(sc.page,clip,[
     {key:'A',label:'あさ／ひる',sel:'#editCard .edit-toolbar [data-timing-switch]',pick:'union',side:'r'},
-    {key:'B',label:'配置不可エリアを設定',sel:'#blockedEditBtn',side:'l'},
+    {key:'B',label:'配置不可エリアを設定',sel:'#blockedEditBtn',side:'b'},
     {key:'C',label:'⚙ 表示設定',sel:'#cfgToggleBtn',side:'b'},
     {key:'D',label:'戻す・進むの帯',sel:'#toolFlag',side:'r'},
     {key:'E',label:'凡例',sel:'#legend > span',pick:'union',side:'r'},
@@ -153,8 +153,8 @@ module.exports=async function(browser){
   const sheet=await measure(sc.page,clip,[
     {key:'A',label:'あさ／ひる',sel:'#sheetCard .sheet-toolbar [data-timing-switch]',pick:'union',side:'t'},
     {key:'B',label:'表示倍率',sel:'#zoomCtl',side:'t'},
-    {key:'C',label:'✏ テキスト編集',sel:'#sheetEditBtn',side:'b'},
-    {key:'D',label:'🖨 印刷',sel:'#printBtn',side:'b'},
+    {key:'C',label:'✏ テキスト編集',sel:'#sheetEditBtn',side:'t'},
+    {key:'D',label:'🖨 印刷',sel:'#printBtn',side:'t'},
     {key:'E',label:'通知',sel:'#sheetMsg .msg',pick:'text',side:'r'},
     {key:'F',label:'日付・合計・あさ／ひる',sel:'#sheetView td.hd, #sheetView td.dow',pick:'union',side:'l'},
     {key:'G',label:'上段の表',sel:'#sheetView td[data-ek^="top|"]',pick:'union',side:'r'},
@@ -162,7 +162,7 @@ module.exports=async function(browser){
     {key:'I',label:'引き出し線',sel:'#sheetView svg.leaders path',side:'r'},
     {key:'J',label:'○（パレット）',sel:'#sheetView tr.grow td.g:not(.aisle) .mk',side:'l'},
     {key:'K',label:'「半」の丸',sel:'#sheetView tr.grow td.g .mk',hasText:'半',side:'r'},
-    {key:'L',label:'行番号',sel:'#sheetView tr.grow td.lab',pick:'firstcol',side:'t'},
+    {key:'L',label:'行番号',sel:'#sheetView tr.grow td.lab',pick:'firstcol',side:'b'},
     {key:'M',label:'列番号',sel:'#sheetView td.colno:not(.g)',nonEmpty:true,side:'b'},
     {key:'N',label:'灰色のマス',sel:'#sheetView tr.grow td.g.aisle',side:'l'},
     {key:'O',label:'灰色の数字の丸',sel:'#sheetView td.colno.aisle.g .mk',side:'b'},
