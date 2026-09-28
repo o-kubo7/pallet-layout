@@ -112,3 +112,20 @@ test("syncLegendSide は盤の表示が切り替わる所から呼ぶ", () => {
   assert.match(fnBody("showMapState"), /syncLegendSide\(\);\s*syncFlagRect\(\);/);
   assert.match(fnBody("run"), /syncLegendSide\(\)/);
 });
+
+test("帯は凡例の列を避け、退避スペースを避ける処理より前で左右を詰める", () => {
+  const body = fnBody("syncFlagRect");
+  const lgAt = body.indexOf('getElementById("legend")');
+  const dockAt = body.indexOf('if(dockPos!=="bottom")');
+  assert.notEqual(lgAt, -1, "syncFlagRect が #legend を測っていない");
+  assert.ok(lgAt < dockAt, "凡例を避ける処理は退避スペースの処理より前に置く");
+  // 列になっているとき（親が #editLayout）だけ避ける。スマホ幅・「上」では避けない
+  assert.match(body, /lg\.parentNode\.id==="editLayout"/);
+  // 非表示タブでは幅0になる（2026-08-23 の教訓）。そのときは避けない
+  assert.match(body, /lr\.width>0/);
+  assert.match(body, /legendPos==="right"/);
+});
+
+test("マスの大きさを変えたら帯を測り直す（盤と凡例の幅が変わるため）", () => {
+  assert.match(fnBody("setCellSize"), /syncFlagRect\(\)/);
+});

@@ -3352,6 +3352,9 @@ function setCellSize(px){
   document.querySelectorAll(".sizebtn[data-size]").forEach(b=>
     b.classList.toggle("on", parseInt(b.dataset.size)===px));
   saveData(STORE_KEY.cell, px);
+  // マスの大きさで盤と品目リストの列の幅が変わる。帯（fixed）の左端・幅を測り直さないと、
+  // 「大」→「中」で帯が品目リストに重なる（/dig で発見）
+  syncFlagRect();
 }
 
 /* ---------- ロットの手動移動（データ操作） ----------
@@ -4354,6 +4357,24 @@ function syncFlagRect(){
   const padL=parseFloat(cs.paddingLeft)||0;
   const padR=parseFloat(cs.paddingRight)||0;
   let left=cr.left+padL, width=cr.width-padL-padR;
+  // 品目リストを盤の横に列で出しているとき（PC 幅・表示設定が左/右）は、帯をその列に
+  // 重ねない。列も sticky でタブ列の直下に貼りつくので、上下では避けられない。
+  // 退避スペース（左上）を避ける下の処理は、ここで詰めた left を起点にさらに詰める。
+  // 非表示タブや盤が隠れているときは幅0になるので、そのときは何もしない。
+  const lg=document.getElementById("legend");
+  if(lg && lg.parentNode && lg.parentNode.id==="editLayout"){
+    const lr=lg.getBoundingClientRect();
+    if(lr.width>0){
+      const lgGap=16;
+      if(legendPos==="right"){
+        width=Math.min(width, lr.left-lgGap-left);
+      }else{
+        const newLeft=lr.right+lgGap;
+        width=Math.min(width,(left+width)-newLeft);
+        left=newLeft;
+      }
+    }
+  }
   // 退避スペース（#stashDock）は設定で「右上」「左上」を切り替えられる。
   // 帯（fixed）はスクロール後に #stashDock（sticky）と同じビューポート位置に
   // 貼りつくため、上下では避けられない（実測で確認：スクロール後は両者の
