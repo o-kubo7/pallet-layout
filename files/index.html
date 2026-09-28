@@ -2888,7 +2888,7 @@ function run(goMap,deferSave=false){
     // 盤を出し直すので ⚙ も出し直す。規則は「盤が出ているなら ⚙ も出す」
     document.getElementById("editCtl").style.display="flex";
     document.getElementById("legend").innerHTML="";
-    syncLegendSide();
+    syncLegendSide(); syncFlagRect();
     document.getElementById("zone-far").innerHTML="";
     document.getElementById("zone-near").innerHTML="";
     document.getElementById("zone-stash").innerHTML="";
@@ -4325,6 +4325,9 @@ window.addEventListener("resize",syncDockTop);
    呼ぶ。選択数の文言が 700px を境に「3P」と「3P 選択中」で入れ替わるため、
    描き直さないと境をまたいだときだけ古い文言が残る。 */
 window.addEventListener("resize", function(){
+  // 幅が 1280px をまたいだら凡例の置き場所も変わる。matchMedia の change だけに頼らず、
+  // 帯を測る前にここでもそろえる（状態が変わったときしか DOM は動かさない）
+  if(typeof syncLegendSide==="function") syncLegendSide();
   if(typeof syncFlagRect==="function") syncFlagRect();
   if(typeof updateFlag==="function") updateFlag();
 });

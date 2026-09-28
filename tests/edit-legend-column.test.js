@@ -193,3 +193,15 @@ test("退避スペースが下のときは、品目リストの列を優先し�
   assert.notEqual(callAt, -1);
   assert.ok(callAt < flag.indexOf("return"), "syncFlagRect の早期 return より前で呼ぶ");
 });
+
+test("画面サイズが変わったら、帯を測る前に凡例の置き場所をそろえる", () => {
+  const m = source.match(/window\.addEventListener\("resize", function\(\)\{([\s\S]*?)\n\}\);/);
+  assert.notEqual(m, null);
+  const lgAt = m[1].indexOf("syncLegendSide()");
+  assert.notEqual(lgAt, -1);
+  assert.ok(lgAt < m[1].indexOf("syncFlagRect()"));
+});
+
+test("品目が0件で凡例を空にしたときも、帯を測り直す", () => {
+  assert.match(fnBody("run"), /getElementById\("legend"\)\.innerHTML="";\s*syncLegendSide\(\); syncFlagRect\(\);/);
+});
