@@ -177,3 +177,19 @@ test("画面幅が 1280px をまたいだら凡例の置き場所を直す", () 
     /matchMedia\("\(min-width:1280px\)"\)\.addEventListener\("change"/
   );
 });
+
+test("退避スペースが下のときは、品目リストの列を優先して退避スペースの列側を削る", () => {
+  const body = fnBody("syncBottomDockSide");
+  assert.match(body, /dockPos==="bottom"/);
+  assert.match(body, /lg\.parentNode\.id==="editLayout"/);
+  assert.match(body, /legendPos==="right"/);
+  assert.match(body, /clientWidth-lr\.left\+gap/);
+  assert.match(body, /lr\.right\+gap/);
+  // 条件に合わないときは必ず外す（右上/左上の sticky に値が残らないように）
+  assert.match(body, /dock\.style\.left=left;\s*dock\.style\.right=right;/);
+  // 早期 return より前で呼ぶ
+  const flag = fnBody("syncFlagRect");
+  const callAt = flag.indexOf("syncBottomDockSide()");
+  assert.notEqual(callAt, -1);
+  assert.ok(callAt < flag.indexOf("return"), "syncFlagRect の早期 return より前で呼ぶ");
+});

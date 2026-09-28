@@ -4370,7 +4370,33 @@ window.addEventListener("scroll", function(){
   flagTopTick=true;
   requestAnimationFrame(function(){ flagTopTick=false; syncFlagTop(); });
 }, {passive:true});
+/* 退避スペースが「下」（画面下に fixed で全幅）で、品目リストを盤の横に列で出しているときは、
+   退避スペースの列側の端を削る。列は画面の下端近くまで伸びるので、全幅のままだと
+   最後の品目が退避スペースの裏に隠れる。リストを最優先し、列の高さは縮めない（ユーザー判断）。
+   それ以外のときはインラインの left/right を外す。右上/左上は sticky なので、
+   値が残ると横にも貼りついてしまう。 */
+function syncBottomDockSide(){
+  const dock=document.getElementById("stashDock"), lg=document.getElementById("legend");
+  if(!dock) return;
+  let left="", right="";
+  if(dockPos==="bottom" && lg && lg.parentNode && lg.parentNode.id==="editLayout"){
+    const lr=lg.getBoundingClientRect();
+    if(lr.width>0){
+      const gap=16; // 帯と品目リストの隙間と同じ
+      if(legendPos==="right"){
+        // fixed の right はスクロールバーを除いた幅が基準なので clientWidth で測る
+        right=Math.max(0, document.documentElement.clientWidth-lr.left+gap)+"px";
+      }else{
+        left=Math.max(0, lr.right+gap)+"px";
+      }
+    }
+  }
+  dock.style.left=left;
+  dock.style.right=right;
+}
 function syncFlagRect(){
+  // 退避スペース「下」の左右の端を先にそろえる（カード/ctl チェックより前に置き、隠れたときも値を外す）
+  syncBottomDockSide();
   const card=document.getElementById("editCard");
   const ctl=document.getElementById("editCtl");
   if(!card || !ctl) return;
@@ -4429,7 +4455,7 @@ function syncFlagRect(){
       }
     }
   }
-  // pos-bottom は画面下に fixed で全幅表示になるので、帯（画面上部）とは
+  // pos-bottom は画面下に fixed で出る（品目リストの列があるときはその横まで。syncBottomDockSide()）ので、帯（画面上部）とは
   // 縦方向でそもそも重ならない。左右の余白は不要（除外しない）。
   width=Math.max(width,0);
   document.documentElement.style.setProperty("--flagleft",left+"px");
