@@ -61,3 +61,54 @@ test("凡例1件の共通スタイル（どの画面幅でも効く）", () => {
   // .legend{display:flex} が UA の [hidden] に勝つので明示する
   assert.match(source, /\.legend\[hidden\]\{display:none\}/);
 });
+
+test("#editLayout が #mapBody を囲み、凡例は HTML 上は #mapBody の中に残す", () => {
+  const lay = source.indexOf('<div class="editlayout lg-left" id="editLayout">');
+  const mb = source.indexOf('<div id="mapBody">');
+  const flag = source.indexOf('<div class="toolflag" id="toolFlag">');
+  const lg = source.indexOf('<div id="legend" class="legend"></div>');
+  assert.notEqual(lay, -1);
+  assert.ok(lay < mb, "#editLayout は #mapBody より前で開く");
+  // スマホ幅の並びを変えないため、凡例は #mapBody の中（帯の後ろ）のまま
+  assert.ok(mb < flag && flag < lg);
+  assert.equal(source.split('id="legend"').length, 2, "#legend は1か所だけ");
+});
+
+test("1280px 以上で、左/右のときは凡例を縦1列の sticky な列にする", () => {
+  const css = mediaCss("@media (min-width:1280px)");
+  assert.match(css, /\.editlayout\.lg-left,\.editlayout\.lg-right\{[^}]*display:flex/);
+  assert.match(css, /\.editlayout\.lg-right>#legend\{[^}]*position:sticky/);
+  assert.match(css, /\.editlayout\.lg-right>#legend\{[^}]*top:var\(--docktop,56px\)/);
+  assert.match(css, /\.editlayout\.lg-right>#legend\{[^}]*flex-direction:column/);
+  assert.match(css, /\.editlayout\.lg-right>#legend\{[^}]*min-width:min-content/);
+  // 一番上の品目の「製」の印（上へ 8px はみ出す）が overflow で切れないように
+  assert.match(css, /\.editlayout\.lg-right>#legend\{[^}]*padding-top:7px/);
+  // 入りきらない品目だけ2行にする（ロット側が折り返す）
+  assert.match(css, /\.editlayout>#legend \.lg-body\{[^}]*flex-wrap:wrap/);
+  assert.match(css, /\.editlayout>#legend \.lg-body\{[^}]*overflow:hidden/);
+  // 品名は1行で切り詰める。nowrap では最小幅が効かないため line-clamp を使う
+  assert.match(css, /\.editlayout>#legend \.lg-name\{[^}]*-webkit-line-clamp:1/);
+  assert.match(css, /\.editlayout>#legend \.lg-name\.lg-long\{min-width:4em\}/);
+  // 2行目の先頭に来た「/」を入れ物の外へ押し出して隠す
+  assert.match(css, /\.editlayout>#legend \.lg-rest\{margin-left:-1em;white-space:nowrap\}/);
+  assert.match(css, /\.editlayout>#legend \.lg-sep\{display:inline-block;width:1em;margin:0;text-align:center\}/);
+  assert.match(css, /\.editlayout\.lg-right>#mapBody\{[^}]*min-width:0/);
+  assert.match(css, /#mapBody #stashBar\{contain:inline-size\}/);
+  assert.match(css, /\.wrap\.legend-side\{max-width:1552px\}/);
+});
+
+test("syncLegendSide が凡例の置き場所・hidden・ページ幅をそろえる", () => {
+  assert.match(source, /let legendPos="left";/);
+  const body = fnBody("syncLegendSide");
+  assert.match(body, /matchMedia\("\(min-width:1280px\)"\)/);
+  assert.match(body, /insertBefore\(lg, *mb\)/);
+  assert.match(body, /flag\.after\(lg\)/);
+  assert.match(body, /lg\.hidden *=/);
+  assert.match(body, /classList\.toggle\("legend-side"/);
+});
+
+test("syncLegendSide は盤の表示が切り替わる所から呼ぶ", () => {
+  assert.match(fnBody("switchTab"), /syncLegendSide\(\)/);
+  assert.match(fnBody("showMapState"), /syncLegendSide\(\);\s*syncFlagRect\(\);/);
+  assert.match(fnBody("run"), /syncLegendSide\(\)/);
+});

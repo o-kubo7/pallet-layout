@@ -425,6 +425,39 @@
   /* 下に置いたときだけ、バーのぶんの余白を作る */
   #mapBody.dock-bottom{padding-bottom:130px}
 
+  /* ---- 配置編集: 品目リストを盤の横に列で出す（PC 幅・表示設定が左/右のとき） ----
+     凡例を確かめるたびに上までスクロールする手間をなくす。#legend は syncLegendSide() が
+     #editLayout の直下（#mapBody の前）へ移す。盤の列は盤の中身ちょうどの幅にし、
+     余った幅を凡例の列へ回す。先に縮むのは凡例の列（flex-shrink を大きく）で、
+     入りきらない品目から2行になり、それでも長い品名は「…」で省略する。
+     境目 1280px は、1024px では盤が横スクロールになり品名が消えたため（設計書 4-3 の5）。 */
+  @media (min-width:1280px){
+    .editlayout.lg-left,.editlayout.lg-right{display:flex;gap:12px;align-items:flex-start}
+    .editlayout.lg-left>#legend,.editlayout.lg-right>#legend{flex:0 1000 auto;min-width:min-content;margin:0;padding-top:7px;
+      flex-direction:column;flex-wrap:nowrap;align-items:flex-start;
+      position:sticky;top:var(--docktop,56px);max-height:calc(100vh - var(--docktop,56px) - 16px);overflow-y:auto}
+    .editlayout.lg-left>#legend:empty,.editlayout.lg-right>#legend:empty{display:none}
+    .editlayout.lg-left>#legend>span,.editlayout.lg-right>#legend>span{max-width:100%}
+    /* 品名とロット側を折り返せる入れ物にする。1行に入らない品目だけロット側が2行目へ回る */
+    .editlayout>#legend .lg-body{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:calc(1em + 2px);row-gap:0;min-width:0;flex:0 1 auto;line-height:1.35;overflow:hidden}
+    /* 品名は1行で切り詰める。white-space:nowrap だと品名全体が最小幅になり列が縮まない
+       （試作で 513px まで広がった）ので、折り返し可能にしたうえで line-clamp で1行にする */
+    .editlayout>#legend .lg-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;overflow:hidden;word-break:break-all;flex:0 1 auto}
+    .editlayout>#legend .lg-name.lg-long{min-width:4em}
+    /* 「/」は 1em の箱に入れ、ロット側ごと 1em 左へずらす。1行のときは品名との間に収まり、
+       2行目の先頭に来たときは入れ物（overflow:hidden）の外へ出て見えなくなる */
+    .editlayout>#legend .lg-rest{margin-left:-1em;white-space:nowrap}
+    .editlayout>#legend .lg-sep{display:inline-block;width:1em;margin:0;text-align:center}
+    .editlayout.lg-left>#mapBody,.editlayout.lg-right>#mapBody{flex:0 1 auto;min-width:0}
+    /* 盤の下の文章は、折り返さない1行の長さを幅として要求する。そのままだと盤の列が
+       文章に合わせて広がり、右の空きが消えない（試作で 930px のはずが 1057px になった）。
+       幅の計算から外し、盤の幅で折り返させる */
+    #mapBody .note,#mapBody #summary,#mapBody .stashlead{contain:inline-size}
+    #mapBody #stashBar{contain:inline-size}
+    /* 凡例の列のぶんページを広げ、盤の幅を保つ */
+    .wrap.legend-side{max-width:1552px}
+  }
+
   .msg{padding:9px 12px;border-radius:8px;font-size:14px;margin-bottom:10px}
   .msg.ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
   .msg.warn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
@@ -887,6 +920,11 @@
       </div>
 
       <div id="messages"></div>
+      <!-- 品目リスト（#legend）と盤（#mapBody）の外枠。PC 幅（1280px 以上）で表示設定の
+           位置が左/右のときだけ、syncLegendSide() が #legend をここ（#mapBody の前）へ移し、
+           2列に並べる。それ以外のときは #legend を #mapBody の中の元の位置へ戻す
+           （HTML で外に出さないのは、スマホで凡例が退避スペースの横に並ぶ今の見た目を保つため）。 -->
+      <div class="editlayout lg-left" id="editLayout">
       <div id="mapBody">
         <!-- [試作] 退避スペース。既定は右上。#mapBody の中に置くので、
              上のタブやヘッダを覆わずに、盤のそばへ貼りつく。 -->
@@ -943,6 +981,7 @@
           <span>横にスクロールできます</span>
         </div>
         <div class="summary" id="summary"></div>
+      </div>
       </div>
     </div>
   </div>
@@ -1289,6 +1328,9 @@ const PALETTE=["#ffadb1","#71d69e","#ffdbcc","#47ffed","#ffaf7a","#c8efef",
   "#aed369","#cdb8ff","#dbefc8","#f4d7ee","#3dff64","#ffa3e8"];
 
 let SPACES = clone(DEFAULT_SPACES);
+// 配置編集の品目リストの位置（表示設定）。"left"|"top"|"right"。PC 幅（1280px 以上）だけ効く。
+// 初期化中の showMapState() → syncLegendSide() から読まれるので、let の宣言前アクセスで落ちないよう早い位置で宣言する
+let legendPos="left";
 let MASTER = [];
 let lastLots=null, lastColor=null, lastSp=null;
 let hasResult=false;
@@ -2823,6 +2865,7 @@ function run(goMap,deferSave=false){
     // 盤を出し直すので ⚙ も出し直す。規則は「盤が出ているなら ⚙ も出す」
     document.getElementById("editCtl").style.display="flex";
     document.getElementById("legend").innerHTML="";
+    syncLegendSide();
     document.getElementById("zone-far").innerHTML="";
     document.getElementById("zone-near").innerHTML="";
     document.getElementById("zone-stash").innerHTML="";
@@ -3225,6 +3268,8 @@ function switchTab(name){
   // 配置編集タブに来た直後は #editCard がいま初めて幅を持つ（他タブでは
   // display:none で幅0だったため）。選択の帯（position:fixed）の左端・幅・
   // 縦位置はここで実測し直さないと前回の値のまま古くなる。
+  // 配置編集タブの出入りでページ幅（.wrap.legend-side）が変わるので、帯を測る前にそろえる
+  syncLegendSide();
   if(name==="edit") syncFlagRect();
   // 選択は配置編集タブの中だけの状態。他のタブへ移ったら捨てる。
   // 残すと、戻ってきたとき「なぜか選ばれている」状態になる
@@ -3279,6 +3324,9 @@ function showMapState(){
   document.getElementById("editEmpty").style.display  = fresh?"none":"block";
   document.getElementById("sheetEmpty").style.display = fresh?"none":"block";
   document.getElementById("mapBody").style.display    = fresh?"block":"none";
+  // 盤の出し入れに凡例（盤の外にいることがある）とページ幅を合わせ、幅が変わった帯を測り直す。
+  // renderResult() は最後にここを通るので、凡例の幅が変わったときもここで追いつく
+  syncLegendSide(); syncFlagRect();
   // ⚙ は盤に付いている。盤が出ているときだけ出し、隠すときは中身も閉じる
   document.getElementById("editCtl").style.display    = fresh?"flex":"none";
   if(!fresh) closeEditCfg();
@@ -4366,6 +4414,24 @@ function syncFlagRect(){
   syncFlagTop();
   // スマホ幅も syncFlagTop() でタブ列の直下へ置く。編集ボタン行はスクロールで
   // 画面外に出るため、fixed の帯の縦位置の基準には使わない。
+}
+/* 品目リスト（#legend）の置き場所をそろえる。
+   PC 幅（1280px 以上）で位置が左/右のときは #editLayout の直下（#mapBody の前）へ移して列にし、
+   それ以外は #mapBody の中の元の位置（帯 #toolFlag の直後）へ戻す。
+   凡例が #mapBody の外にあると盤と一緒に隠れないので、盤を隠している間は hidden も付ける。
+   .wrap.legend-side（ページ幅の拡大）は、列が実際に見えているときだけ付ける。 */
+function syncLegendSide(){
+  const lg=document.getElementById("legend"), mb=document.getElementById("mapBody");
+  const lay=document.getElementById("editLayout"), flag=document.getElementById("toolFlag");
+  const tab=document.getElementById("tab-edit"), wrap=document.querySelector(".wrap");
+  if(!lg || !mb || !lay || !flag || !tab || !wrap) return;
+  const column = window.matchMedia("(min-width:1280px)").matches && legendPos!=="top";
+  if(column){ if(lg.parentNode!==lay) lay.insertBefore(lg, mb); }
+  else if(lg.previousElementSibling!==flag){ flag.after(lg); }
+  const boardShown = mb.style.display!=="none";
+  lg.hidden = !boardShown;
+  wrap.classList.toggle("legend-side",
+    column && boardShown && tab.style.display!=="none" && lg.children.length>0);
 }
 function setDockPos(v){
   dockPos=(v==="tl"||v==="bottom")?v:"tr";
