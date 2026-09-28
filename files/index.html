@@ -72,6 +72,16 @@
   /* ---- 配置図 ---- */
   .legend{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
   .legend span{display:inline-flex;align-items:center;gap:6px;font-size:16px;background:#f3f4f6;border-radius:6px;padding:5px 10px}
+  .legend[hidden]{display:none}
+  /* 1件の中の入れ物（品名・ロット側・「/」）。.legend span の背景・余白・inline-flex を
+     打ち消し、1行のときは今までどおり「品名 / ロット　パレット数」と流れるようにする */
+  .legend .lg-body,.legend .lg-name,.legend .lg-rest,.legend .lg-sep{display:inline;padding:0;background:none;border-radius:0}
+  .legend .lg-sep{margin:0 .3em}
+  .legend .lg-rest b{font-weight:800}
+  /* 製品の印。充填品との2種類しかないので、製品にだけ付ける。番号の枠の左上に重ね、
+     品名の文字にかぶらないようにする。位置は absolute なので1件の幅は変わらない */
+  .legend .lg-mk{position:absolute;top:-8px;left:-8px;width:17px;height:17px;display:flex;align-items:center;justify-content:center;border:1.5px solid #111;border-radius:3px;background:#fff;color:#111;font-size:11px;font-weight:800;font-style:normal;line-height:1}
+  .legend.no-mk .lg-mk{display:none}
   /* 凡例のマス。盤のマス（.cell）と同じ作りにして、番号を中に入れる。
      .swframe は盤の列（.col / .hrow）の外枠と同じ値で、
      「スペースに置かれたマス」と同じ見た目にするためのもの */
@@ -79,6 +89,7 @@
      .swframe だけでは padding と背景を奪われる。.legend を前に付けて勝たせる */
   .legend .swframe{display:inline-flex;flex:none;border:2px solid #111;padding:3px;
                    border-radius:4px;background:#fafafa}
+  .legend .swframe{position:relative}
   .swatch{width:26px;height:26px;border:0;border-radius:2px;flex:none;font-style:normal;
           display:inline-flex;align-items:center;justify-content:center;overflow:hidden;
           font-weight:800;font-size:15px;color:#1f2937;line-height:1}
@@ -2767,8 +2778,11 @@ function renderResult(lots, unknown, typeMix){
       : `<div class="msg ok">✅ すべてのパレットを配置しました。${tail}</div>`);
   }
 
+  // 1件は「番号の枠（製品は左上に「製」）＋ 品名 ＋ /ロット・パレット数」。
+  // 品名と残りを分けておくのは、PC 幅の列表示で、入りきらない品目だけ2行にし、
+  // 品名だけを省略するため（設計書 5-2）。[...l.name] は全角も1文字と数えるため
   document.getElementById("legend").innerHTML=lots.map(l=>
-    `<span><span class="swframe"><i class="swatch" style="background:${colorOf[l.id]}">${l.id+1}</i></span>${esc(l.name)} / ${esc(l.lot)||"—"}　${l.pallets}P${l.parts>1?`（${l.parts}件）`:""}</span>`).join("");
+    `<span><span class="swframe"><i class="swatch" style="background:${colorOf[l.id]}">${l.id+1}</i>${l.type==="製品"?'<i class="lg-mk">製</i>':""}</span><span class="lg-body"><span class="lg-name${[...l.name].length>4?" lg-long":""}">${esc(l.name)}</span><span class="lg-rest"><span class="lg-sep">/</span>${esc(l.lot)||"—"}　<b>${l.pallets}P</b>${l.parts>1?`（${l.parts}件）`:""}</span></span></span>`).join("");
 
   drawZone("zone-far", sp.filter(s=>s.zone==="far"), colorOf);
   drawZone("zone-near", sp.filter(s=>s.zone==="near"), colorOf);
