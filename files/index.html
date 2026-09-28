@@ -433,6 +433,9 @@
      境目 1280px は、1024px では盤が横スクロールになり品名が消えたため（設計書 4-3 の5）。 */
   @media (min-width:1280px){
     .editlayout.lg-left,.editlayout.lg-right{display:flex;gap:12px;align-items:flex-start}
+    /* 右は並び順だけを入れ替える（幅・sticky・省略は左と共通）。row-reverse では主軸の
+       始点が右になるので、flex-end で盤を左端へ寄せる */
+    .editlayout.lg-right{flex-direction:row-reverse;justify-content:flex-end}
     .editlayout.lg-left>#legend,.editlayout.lg-right>#legend{flex:0 1000 auto;min-width:min-content;margin:0;padding-top:7px;
       flex-direction:column;flex-wrap:nowrap;align-items:flex-start;
       position:sticky;top:var(--docktop,56px);max-height:calc(100vh - var(--docktop,56px) - 16px);overflow-y:auto}
@@ -456,6 +459,10 @@
     #mapBody #stashBar{contain:inline-size}
     /* 凡例の列のぶんページを広げ、盤の幅を保つ */
     .wrap.legend-side{max-width:1552px}
+  }
+  /* 品目リストの位置は PC 幅だけ効くので、それ未満では表示設定の行ごと隠す */
+  @media (max-width:1279px){
+    #legendCtl{display:none}
   }
 
   .msg{padding:9px 12px;border-radius:8px;font-size:14px;margin-bottom:10px}
@@ -909,6 +916,22 @@
           <button class="sizebtn" id="dockTlBtn" onclick="setDockPos('tl')">左上</button>
           <button class="sizebtn on" id="dockTrBtn" onclick="setDockPos('tr')">右上</button>
           <button class="sizebtn" id="dockBtBtn" onclick="setDockPos('bottom')">下</button>
+        </span>
+      </div>
+      <!-- 品目リストの位置。PC 幅（1280px 以上）だけ効くので、それ未満では行ごと隠す。
+           保存した値は残り、PC で開けば効く -->
+      <div class="sizectl" id="legendCtl">
+        <span class="grp"><span class="lbl">品目リストの位置</span>
+          <button class="sizebtn on" id="legendLBtn" onclick="setLegendPos('left')">左</button>
+          <button class="sizebtn" id="legendTBtn" onclick="setLegendPos('top')">上</button>
+          <button class="sizebtn" id="legendRBtn" onclick="setLegendPos('right')">右</button>
+        </span>
+      </div>
+      <!-- 品目リストの番号の左上に出す「製」の印。どの画面幅でも付くので、この行は常に出す -->
+      <div class="sizectl" id="markCtl">
+        <span class="grp"><span class="lbl">製品の印</span>
+          <button class="sizebtn on" id="markOnBtn" onclick="setLegendMark(true)">表示</button>
+          <button class="sizebtn" id="markOffBtn" onclick="setLegendMark(false)">非表示</button>
         </span>
       </div>
       <div class="sizectl" id="sizeCtl">
@@ -4454,6 +4477,30 @@ function syncLegendSide(){
   wrap.classList.toggle("legend-side",
     column && boardShown && tab.style.display!=="none" && lg.children.length>0);
 }
+/* 品目リストの位置を切り替える。左は盤の左、右は盤の右に縦1列、上は今までどおり盤の上に
+   横並び。退避スペースの位置（setDockPos）と同じく、選んだら覚えておく。 */
+function setLegendPos(v){
+  legendPos=(v==="top"||v==="right")?v:"left";
+  const lay=document.getElementById("editLayout");
+  if(lay){ ["left","top","right"].forEach(k=>lay.classList.toggle("lg-"+k, k===legendPos)); }
+  [["legendLBtn","left"],["legendTBtn","top"],["legendRBtn","right"]].forEach(function(x){
+    const b=document.getElementById(x[0]);
+    if(b) b.classList.toggle("on", legendPos===x[1]);
+  });
+  saveData("palletApp.legendPos", legendPos);
+  // 置き場所とページ幅が変わってから帯を測り直す（先に測ると古い位置を見てしまう）
+  syncLegendSide(); syncFlagRect();
+}
+/* 製品の「製」の印を出すか。印は absolute で幅を取らないので、帯の測り直しは要らない */
+function setLegendMark(on){
+  on=!!on;
+  const lg=document.getElementById("legend");
+  if(lg) lg.classList.toggle("no-mk", !on);
+  const onBtn=document.getElementById("markOnBtn"), offBtn=document.getElementById("markOffBtn");
+  if(onBtn) onBtn.classList.toggle("on", on);
+  if(offBtn) offBtn.classList.toggle("on", !on);
+  saveData("palletApp.legendMark", on);
+}
 function setDockPos(v){
   dockPos=(v==="tl"||v==="bottom")?v:"tr";
   const d=document.getElementById("stashDock"), m=document.getElementById("mapBody");
@@ -4950,6 +4997,12 @@ document.addEventListener("keydown",e=>{
 // なぞるは既定でオン。クラスは HTML に焼かず setTool() を通す（設計書 §4-1-1）
 (function initDockPrefs(){
   setDockPos(loadData("palletApp.stashPos") || "tr");
+  setLegendPos(loadData("palletApp.legendPos") || "left");
+  setLegendMark(loadData("palletApp.legendMark") !== false);
+  // 画面幅が 1280px をまたいだら、凡例を列にするか盤の中へ戻すかを決め直す
+  window.matchMedia("(min-width:1280px)").addEventListener("change", function(){
+    syncLegendSide(); syncFlagRect();
+  });
   setTool("sweep");
 })();
 

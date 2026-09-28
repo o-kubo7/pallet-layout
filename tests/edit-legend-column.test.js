@@ -129,3 +129,51 @@ test("帯は凡例の列を避け、退避スペースを避ける処理より�
 test("マスの大きさを変えたら帯を測り直す（盤と凡例の幅が変わるため）", () => {
   assert.match(fnBody("setCellSize"), /syncFlagRect\(\)/);
 });
+
+test("表示設定に品目リストの位置（左／上／右）を置き、選んだ値を保存する", () => {
+  const start = source.indexOf('<div class="sizectl" id="legendCtl">');
+  assert.notEqual(start, -1);
+  const html = source.slice(start, start + 600);
+  assert.match(html, /品目リストの位置/);
+  assert.match(html, /onclick="setLegendPos\('left'\)">左<\/button>/);
+  assert.match(html, /onclick="setLegendPos\('top'\)">上<\/button>/);
+  assert.match(html, /onclick="setLegendPos\('right'\)">右<\/button>/);
+  // 退避スペースの位置（#dockCtl）の次に並べる
+  assert.ok(source.indexOf('id="dockCtl"') < start);
+
+  const body = fnBody("setLegendPos");
+  assert.match(body, /saveData\("palletApp\.legendPos", *legendPos\)/);
+  assert.match(body, /syncLegendSide\(\);\s*syncFlagRect\(\);/);
+  assert.match(fnBody("initDockPrefs"), /setLegendPos\(loadData\("palletApp\.legendPos"\) *\|\| *"left"\)/);
+});
+
+test("表示設定に製品の印（表示／非表示）を置き、選んだ値を保存する", () => {
+  const start = source.indexOf('<div class="sizectl" id="markCtl">');
+  assert.notEqual(start, -1);
+  const html = source.slice(start, start + 500);
+  assert.match(html, /製品の印/);
+  assert.match(html, /onclick="setLegendMark\(true\)">表示<\/button>/);
+  assert.match(html, /onclick="setLegendMark\(false\)">非表示<\/button>/);
+
+  const body = fnBody("setLegendMark");
+  assert.match(body, /classList\.toggle\("no-mk", *!on\)/);
+  assert.match(body, /saveData\("palletApp\.legendMark", *on\)/);
+  // 未保存（null）のときは表示にする
+  assert.match(fnBody("initDockPrefs"), /setLegendMark\(loadData\("palletApp\.legendMark"\) *!== *false\)/);
+});
+
+test("右のときは並び順だけを入れ替え、1280px 未満では位置の行を出さない", () => {
+  const wide = mediaCss("@media (min-width:1280px)");
+  assert.match(wide, /\.editlayout\.lg-right\{flex-direction:row-reverse;justify-content:flex-end\}/);
+  const narrow = mediaCss("@media (max-width:1279px)");
+  assert.match(narrow, /#legendCtl\{display:none\}/);
+  // 製品の印はスマホにも付くので、その行は隠さない
+  assert.equal(narrow.includes("markCtl"), false);
+});
+
+test("画面幅が 1280px をまたいだら凡例の置き場所を直す", () => {
+  assert.match(
+    fnBody("initDockPrefs"),
+    /matchMedia\("\(min-width:1280px\)"\)\.addEventListener\("change"/
+  );
+});
