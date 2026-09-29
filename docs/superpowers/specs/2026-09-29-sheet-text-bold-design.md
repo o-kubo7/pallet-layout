@@ -135,7 +135,7 @@
 
 **要素**
 - `input`/`textarea` を、`<div contenteditable="plaintext-only">` に置き換える。
-- 1行の欄は `white-space:nowrap`、縦積みの欄は `white-space:pre`。
+- どちらの欄も `white-space:pre`（折り返さない点は `nowrap` と同じ。空白を潰さず、縦積みの欄の改行もそのまま出る）。
 - 既存の CSS（行の高さを変えない、`outline:none`、`font-size:max(13px,1em)`、`line-height:inherit`、中央寄せ）を、この `div` にも当てる。
 - 太さは欄のもの（`td.c-name` などの `--fw-*`）を受け継ぐ。`<b>` の部分は 700 になる。
 
