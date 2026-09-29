@@ -3792,6 +3792,81 @@ function normalizeMarkValue(raw){
   const lines=String(raw).split("\n").map(s=>s.trim()).filter(Boolean);
   return lines.join("\n");
 }
+/* ---------- 書き足しの太字 ----------
+   書き足しの値は、太字が無ければ文字列、あれば {text, bold:[[開始,終了),...]}。
+   位置は文字列の添字で数え、改行も1文字に数える */
+// 値を1文字ずつの太字の配列にする。壊れた範囲は無視する
+function markFlags(v){
+  const text = typeof v==="string" ? v
+    : (v && typeof v==="object" ? (typeof v.text==="string" ? v.text : "") : "");
+  const flags = new Array(text.length).fill(false);
+  const bold = v && typeof v==="object" && Array.isArray(v.bold) ? v.bold : [];
+  bold.forEach(r=>{
+    if(!Array.isArray(r)) return;
+    const s=r[0], e=r[1];
+    if(!Number.isInteger(s) || !Number.isInteger(e) || s<0 || e>text.length || s>=e) return;
+    for(let k=s;k<e;k++) flags[k]=true;
+  });
+  return {text, flags};
+}
+// 太字の配列から値に戻す。範囲は昇順で、隣り合うものは1つにまとめる
+function markFromFlags(text,flags){
+  const bold=[];
+  for(let i=0;i<text.length;i++){
+    if(!flags[i]) continue;
+    const last=bold[bold.length-1];
+    if(last && last[1]===i) last[1]=i+1;
+    else bold.push([i,i+1]);
+  }
+  return bold.length ? {text, bold} : text;
+}
+function markText(v){
+  return typeof v==="string" ? v : (v && typeof v.text==="string" ? v.text : "");
+}
+// normalizeMarkValue と同じ規則（行ごとに前後の空白を落とし、空行を捨てる）で
+// 文字をならし、落とした文字のぶん太字の位置を詰める
+function normalizeMark(raw){
+  if(raw==null) return "";
+  const src=markFlags(typeof raw==="object" ? raw : String(raw));
+  let text="", pos=0;
+  const flags=[];
+  src.text.split("\n").forEach(line=>{
+    const body=line.trim();
+    const lead=line.length-line.replace(/^\s+/,"").length;
+    if(body){
+      if(text){ text+="\n"; flags.push(false); }
+      text+=body;
+      for(let k=0;k<body.length;k++) flags.push(src.flags[pos+lead+k]);
+    }
+    pos+=line.length+1;
+  });
+  return markFromFlags(text, flags);
+}
+// 選んだ範囲がすべて太字なら外し、1文字でも普通の文字があれば全部を太字にする
+function toggleBold(v,start,end){
+  const m=markFlags(v);
+  const s=Math.max(0,Math.min(start,end)), e=Math.min(m.text.length,Math.max(start,end));
+  if(s<e){
+    let all=true;
+    for(let k=s;k<e;k++) if(!m.flags[k]){ all=false; break; }
+    for(let k=s;k<e;k++) m.flags[k]=!all;
+  }
+  return markFromFlags(m.text, m.flags);
+}
+// 太字の区間だけを <b> で包む。各区間は esc を通す。改行はそのまま残す
+function markHtml(v){
+  const m=markFlags(v);
+  let h="", i=0;
+  while(i<m.text.length){
+    const b=m.flags[i];
+    let j=i+1;
+    while(j<m.text.length && m.flags[j]===b) j++;
+    const t=esc(m.text.slice(i,j));
+    h+= b ? "<b>"+t+"</b>" : t;
+    i=j;
+  }
+  return h;
+}
 function inputFingerprint(){ return fingerprintFor(readSlips()); }
 function renderTimingSwitches(){
   document.querySelectorAll("[data-timing-switch]").forEach(host=>{
