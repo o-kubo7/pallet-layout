@@ -642,6 +642,11 @@
   .sheet td.slot.c-pal {font-size:var(--fs-pal); font-weight:var(--fw-pal)}
   /* 書き足しの一部の太字。欄の太字設定が ON の欄では見た目が変わらない（仕様） */
   .sheet .fit b{font-weight:700}
+  /* 書き足しの編集中だけ出す太字ボタン。位置は placeSheetBoldBtn() が決める */
+  .sheet .sheet-bold-btn{position:absolute;z-index:3;min-width:28px;height:24px;padding:0 6px;
+                         border:1px solid #374151;border-radius:4px;background:#fff;color:#111;
+                         font-family:inherit;font-size:14px;font-weight:700;line-height:22px;cursor:pointer}
+  .sheet td.editing-cell .cell-editor b{font-weight:700}
   /* 欄に入りきらない文字を横に縮めて1行に収める入れ物。
      transform-origin:left center の scaleX だけでよい。translateX で中央へ
      戻す補正を入れてはいけない（自然幅が欄を超えた時点でブラウザが左端基準に
@@ -813,6 +818,7 @@
        消えない。画面側では枠を出していないが、戻されたときのために断っておく。
        transform:none が残ると圧縮が外れて欄からあふれる */
     .sheet td.editing-cell input,.sheet td.editing-cell textarea,.sheet td.editing-cell .cell-editor{border:0 !important;font-size:inherit !important}
+    .sheet-bold-btn{display:none !important}
     .sheet td.editing-cell .fit{transform:revert !important}
     #sheetEditBar{display:none !important}
     /* ツールバーごと消す。.btn は display を指定しないので、名指ししないボタンは
@@ -6045,6 +6051,7 @@ function flushSheetEdit(){
   const {key, read, auto}=sheetEditing;
   sheetEditing=null;                 // 再入を止める
   closeSheetEditBar();
+  removeSheetBoldBtn();
   saveSheetMark(key, read(), auto);
   return true;
 }
@@ -6274,6 +6281,51 @@ function insertEditorNewline(root){
   root.innerHTML=markHtml(markFromFlags(text, flags));
   setEditorSelection(root, s+1, s+1);
 }
+// 開いている PC の編集欄で、選んだ範囲の太字を切り替える。
+// スマホの編集バー（input）では何もしない
+function applySheetBold(){
+  if(!sheetEditing || !sheetEditing.el || !sheetEditing.el.classList.contains("cell-editor")) return;
+  const el=sheetEditing.el;
+  const sel=editorSelection(el);
+  if(!sel) return;
+  const m=editorRaw(el);
+  const next=toggleBold(markFromFlags(m.text, m.flags), sel[0], sel[1]);
+  el.innerHTML=markHtml(next);
+  setEditorSelection(el, sel[0], sel[1]);
+}
+// 編集中の欄のすぐ上に B を浮かべる。.sheetbox の中に置くので、
+// 横スクロールや表示倍率が変わっても欄と一緒に動く。
+// 上に場所が無い（先頭の行）ときは欄の下に置く。
+// 配置図タブが表示されているとき（欄を開いた時点）にだけ測る
+function placeSheetBoldBtn(td){
+  removeSheetBoldBtn();
+  const box=td.closest(".sheetbox");
+  const sheet=box && box.closest(".sheet");
+  if(!box || !sheet) return;
+  const btn=document.createElement("button");
+  btn.type="button";
+  btn.id="sheetBoldBtn";
+  btn.className="sheet-bold-btn";
+  btn.textContent="B";
+  btn.title="選んだ文字を太字にする（Ctrl+B）";
+  btn.setAttribute("aria-label","太字");
+  // mousedown の既定動作を止めて、フォーカスと選択を編集欄に残す。
+  // 止めないと blur で確定が走る
+  btn.addEventListener("mousedown", ev=>ev.preventDefault());
+  btn.addEventListener("click", applySheetBold);
+  box.appendChild(btn);
+  const z=parseFloat(getComputedStyle(sheet).zoom)||1;
+  const b=box.getBoundingClientRect(), r=td.getBoundingClientRect();
+  const h=btn.getBoundingClientRect().height/z;
+  let top=(r.top-b.top)/z-h-2;
+  if(top<0) top=(r.bottom-b.top)/z+2;
+  btn.style.left=((r.left-b.left)/z)+"px";
+  btn.style.top=top+"px";
+}
+function removeSheetBoldBtn(){
+  const btn=document.getElementById("sheetBoldBtn");
+  if(btn) btn.remove();
+}
 // PC（601px 以上）。欄の中身を入力欄に差し替える。
 // 欄の実測幅は 95px しかないが、PC は Escape があり、表示倍率ボタンで
 // 拡大でき、マウスで横スクロールできるので実用になる
@@ -6298,6 +6350,7 @@ function openInlineEditor(td){
   sheetEditing={key, td, el, auto, read:()=>editorModel(el, multi)};
   el.focus();
   document.getSelection().selectAllChildren(el);
+  placeSheetBoldBtn(td);
 
   el.addEventListener("keydown", ev=>{
     if(ev.key==="Escape"){ ev.preventDefault(); cancelSheetEdit(); return; }
@@ -6307,6 +6360,10 @@ function openInlineEditor(td){
       ev.preventDefault();
       if(multi) insertEditorNewline(el);
       else      el.blur();
+    }
+    if((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase()==="b" && !ev.isComposing){
+      ev.preventDefault();
+      applySheetBold();
     }
   });
   el.addEventListener("blur", ()=>{ commitSheetEdit(); });
@@ -6390,6 +6447,7 @@ function cancelSheetEdit(){
   if(!sheetEditing) return;
   sheetEditing=null;
   closeSheetEditBar();
+  removeSheetBoldBtn();
   renderSheet();
 }
 function renderSheet(){

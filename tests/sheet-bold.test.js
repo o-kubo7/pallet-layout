@@ -236,3 +236,38 @@ test("編集欄の CSS を contenteditable にも当てる", () => {
   assert.match(source, /\.sheet td\.editing-cell input,\.sheet td\.editing-cell textarea,\.sheet td\.editing-cell \.cell-editor\{/);
   assert.match(source, /\.sheet td\.editing-cell \.cell-editor\{white-space:pre/);
 });
+
+test("B ボタンは mousedown で既定動作を止め、確定を走らせない", () => {
+  const fn = functionSource("placeSheetBoldBtn");
+  assert.match(fn, /addEventListener\("mousedown",\s*ev\s*=>\s*ev\.preventDefault\(\)\)/);
+  assert.match(fn, /addEventListener\("click",\s*applySheetBold\)/);
+  assert.match(fn, /\.sheetbox/);
+  // 表示倍率で割る（drawLeaders と同じ考え方）
+  assert.match(fn, /zoom/);
+});
+
+test("B ボタンと Ctrl+B は同じ処理を呼ぶ", () => {
+  const fn = functionSource("openInlineEditor");
+  assert.match(fn, /placeSheetBoldBtn\(td\)/);
+  assert.match(fn, /ev\.key\.toLowerCase\(\)==="b"/);
+  assert.match(fn, /applySheetBold\(\)/);
+});
+
+test("applySheetBold は toggleBold を通して組み直し、選択を戻す", () => {
+  const fn = functionSource("applySheetBold");
+  assert.match(fn, /editorSelection\(/);
+  assert.match(fn, /toggleBold\(/);
+  assert.match(fn, /setEditorSelection\(/);
+  assert.doesNotMatch(fn, /execCommand/);
+});
+
+test("欄を閉じるときに B ボタンも消す", () => {
+  assert.match(functionSource("flushSheetEdit"), /removeSheetBoldBtn\(\)/);
+  assert.match(functionSource("cancelSheetEdit"), /removeSheetBoldBtn\(\)/);
+});
+
+test("B ボタンは紙に出さない", () => {
+  const start = source.indexOf("@media print{");
+  const print = source.slice(start, source.indexOf("</style>", start));
+  assert.match(print, /\.sheet-bold-btn\{display:none !important\}/);
+});
