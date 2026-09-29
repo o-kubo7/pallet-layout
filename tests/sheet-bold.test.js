@@ -271,3 +271,37 @@ test("B ボタンは紙に出さない", () => {
   const print = source.slice(start, source.indexOf("</style>", start));
   assert.match(print, /\.sheet-bold-btn\{display:none !important\}/);
 });
+
+// 末尾の改行は Chrome が pre の中で描かないので、編集欄にだけ目印の BR を足す
+const tailBr = () => ({ nodeType: 1, nodeName: "BR", childNodes: [], dataset: { tail: "1" } });
+
+test("editorRaw は末尾の目印 BR を数えない", () => {
+  const editorRaw = load(["editorRaw"]);
+  const root = E("DIV", [T("AB\n"), tailBr()]);
+  assert.deepEqual(editorRaw(root), { text: "AB\n", flags: [false, false, false] });
+});
+
+test("editorPoint は末尾の目印 BR を数えず、位置にもしない", () => {
+  const editorPoint = load(["editorPoint"]);
+  const t = T("AB\n");
+  const root = E("DIV", [t, tailBr()]);
+  assert.deepEqual(editorPoint(root, 3), [t, 3]);
+  assert.deepEqual(editorPoint(root, 99), [root, 2]);
+});
+
+test("setEditorContent は末尾が改行のときだけ目印の BR を足す", () => {
+  const setEditorContent = load(["markFlags", "markFromFlags", "markText", "markHtml", "setEditorContent"], { esc });
+  const root = {};
+  setEditorContent(root, "AB");
+  assert.equal(root.innerHTML, "AB");
+  setEditorContent(root, { text: "A\n", bold: [[0, 1]] });
+  assert.equal(root.innerHTML, '<b>A</b>\n<br data-tail="1">');
+});
+
+test("編集欄の中身は setEditorContent で入れる", () => {
+  for (const name of ["openInlineEditor", "insertEditorNewline", "applySheetBold"]) {
+    const fn = functionSource(name);
+    assert.match(fn, /setEditorContent\(/, name);
+    assert.doesNotMatch(fn, /innerHTML=markHtml/, name);
+  }
+});

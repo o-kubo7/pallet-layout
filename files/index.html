@@ -6204,6 +6204,7 @@ function editorRaw(root){
         text+=c.nodeValue;
         for(let k=0;k<c.nodeValue.length;k++) flags.push(b);
       }else if(c.nodeName==="BR"){
+        if(c.dataset && c.dataset.tail) continue;
         text+="\n"; flags.push(b);
       }else if(c.nodeType===1){
         walk(c, b || c.nodeName==="B");
@@ -6237,6 +6238,7 @@ function editorPoint(root,pos){
         if(pos<=count+n){ found=[c,pos-count]; return; }
         count+=n;
       }else if(c.nodeName==="BR"){
+        if(c.dataset && c.dataset.tail) continue;
         if(pos===count){ found=[node,i]; return; }
         count++;
       }else if(c.nodeType===1){
@@ -6269,6 +6271,11 @@ function setEditorSelection(root,start,end){
   const sel=document.getSelection();
   sel.removeAllRanges(); sel.addRange(r);
 }
+// 編集欄の中身を入れる。末尾が改行のときは、Chrome が pre の末尾の改行を
+// 描かないので、目印の BR を1つ足して空の行を出す。目印は文字に数えない
+function setEditorContent(root,value){
+  root.innerHTML=markHtml(value) + (markText(value).endsWith("\n") ? '<br data-tail="1">' : "");
+}
 // 縦積みの欄の Enter。Chrome の既定の改行（div や br の挿入）は使わず、
 // 値に改行を1文字入れて組み直す
 function insertEditorNewline(root){
@@ -6278,7 +6285,7 @@ function insertEditorNewline(root){
   const s=Math.min(sel[0],sel[1]), e=Math.max(sel[0],sel[1]);
   const text=m.text.slice(0,s)+"\n"+m.text.slice(e);
   const flags=m.flags.slice(0,s).concat([false], m.flags.slice(e));
-  root.innerHTML=markHtml(markFromFlags(text, flags));
+  setEditorContent(root, markFromFlags(text, flags));
   setEditorSelection(root, s+1, s+1);
 }
 // 開いている PC の編集欄で、選んだ範囲の太字を切り替える。
@@ -6290,7 +6297,7 @@ function applySheetBold(){
   if(!sel) return;
   const m=editorRaw(el);
   const next=toggleBold(markFromFlags(m.text, m.flags), sel[0], sel[1]);
-  el.innerHTML=markHtml(next);
+  setEditorContent(el, next);
   setEditorSelection(el, sel[0], sel[1]);
 }
 // 編集中の欄のすぐ上に B を浮かべる。.sheetbox の中に置くので、
@@ -6343,7 +6350,7 @@ function openInlineEditor(td){
   el.className="cell-editor";
   // plaintext-only は Chrome の書式コマンドと、貼り付けの HTML を効かなくする
   el.setAttribute("contenteditable","plaintext-only");
-  el.innerHTML=markHtml(saved!=null ? saved : cur);
+  setEditorContent(el, saved!=null ? saved : cur);
   td.classList.add("editing-cell");
   td.innerHTML="";
   td.appendChild(el);
