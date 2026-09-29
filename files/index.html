@@ -760,11 +760,13 @@
        出さない方針にしたので、ブラウザ既定のフォーカスリングを outline:none で
        止める（止めないと Chrome が自前の枠を描く）。編集中であることは
        白い背景と文字カーソルで分かる */
-  .sheet td.editing-cell input,.sheet td.editing-cell textarea{
+  .sheet td.editing-cell input,.sheet td.editing-cell textarea,.sheet td.editing-cell .cell-editor{
     width:100%;box-sizing:border-box;border:0;outline:none;
     min-height:0;padding:0;margin:0;
     font-family:inherit;font-size:max(13px,1em);line-height:inherit;text-align:center;
     background:#fff;color:#000;resize:none}
+  /* PC の編集欄。pre は折り返さず、空白も潰さない。縦積みの欄の改行もそのまま出る */
+  .sheet td.editing-cell .cell-editor{white-space:pre;cursor:text}
 
   /* スマホの編集バー。.sheet の外なので zoom も scaleX も掛からない */
   /* flex-wrap で2段にする。1段だと見出し（約96px）と確定・取り消し（約148px）が
@@ -810,7 +812,7 @@
     /* セル内編集の入力欄。枠線は背景ではないのでブラウザの「背景を印刷しない」では
        消えない。画面側では枠を出していないが、戻されたときのために断っておく。
        transform:none が残ると圧縮が外れて欄からあふれる */
-    .sheet td.editing-cell input,.sheet td.editing-cell textarea{border:0 !important;font-size:inherit !important}
+    .sheet td.editing-cell input,.sheet td.editing-cell textarea,.sheet td.editing-cell .cell-editor{border:0 !important;font-size:inherit !important}
     .sheet td.editing-cell .fit{transform:revert !important}
     #sheetEditBar{display:none !important}
     /* ツールバーごと消す。.btn は display を指定しないので、名指ししないボタンは
@@ -6040,10 +6042,10 @@ function toggleSheetEditMode(){
 // 保存したら true
 function flushSheetEdit(){
   if(!sheetEditing) return false;
-  const {key, el, auto}=sheetEditing;
+  const {key, read, auto}=sheetEditing;
   sheetEditing=null;                 // 再入を止める
   closeSheetEditBar();
-  saveSheetMark(key, el.value, auto);
+  saveSheetMark(key, read(), auto);
   return true;
 }
 // 保存して描き直す。入力欄の blur やボタンから呼ぶ。
@@ -6093,7 +6095,7 @@ function clearAllMarks(){
   renderSheet();
 }
 // いま開いている編集の状態。1つだけ開く
-let sheetEditing=null;   // {key, td, el, auto}
+let sheetEditing=null;   // {key, td, el, auto, read}
 
 // click ではなく mousedown で開く。click を待つと、前の欄の blur →
 // commitSheetEdit() → renderSheet() で DOM が総入れ替えになり、
@@ -6182,6 +6184,96 @@ function saveSheetMark(key,raw,autoText){
   saveSchedule();
   return true;
 }
+/* ---------- PC の編集欄（contenteditable）----------
+   編集中は画面を正にする。太字の付け外しや改行は、画面を値に読み取り、
+   値を変えて、中身を組み直し、選択を文字位置で戻す */
+// 子孫を先頭からたどる。テキストは文字、BR は改行。祖先に B があれば太字
+function editorRaw(root){
+  let text="";
+  const flags=[];
+  const walk=(node,b)=>{
+    for(const c of node.childNodes){
+      if(c.nodeType===3){
+        text+=c.nodeValue;
+        for(let k=0;k<c.nodeValue.length;k++) flags.push(b);
+      }else if(c.nodeName==="BR"){
+        text+="\n"; flags.push(b);
+      }else if(c.nodeType===1){
+        walk(c, b || c.nodeName==="B");
+      }
+    }
+  };
+  walk(root,false);
+  return {text, flags};
+}
+// 確定する値。1行の欄では改行を取り除く（貼り付けで紛れ込んでも1行に収まる）
+function editorModel(root,multi){
+  const m=editorRaw(root);
+  if(multi) return markFromFlags(m.text, m.flags);
+  let text="";
+  const flags=[];
+  for(let i=0;i<m.text.length;i++){
+    if(m.text[i]==="\n") continue;
+    text+=m.text[i]; flags.push(m.flags[i]);
+  }
+  return markFromFlags(text, flags);
+}
+// 文字位置を [ノード, 位置] に変える。区間の境目は前の区間の末尾に置く
+function editorPoint(root,pos){
+  let count=0, found=null;
+  const walk=node=>{
+    const kids=Array.from(node.childNodes);
+    for(let i=0;i<kids.length && !found;i++){
+      const c=kids[i];
+      if(c.nodeType===3){
+        const n=c.nodeValue.length;
+        if(pos<=count+n){ found=[c,pos-count]; return; }
+        count+=n;
+      }else if(c.nodeName==="BR"){
+        if(pos===count){ found=[node,i]; return; }
+        count++;
+      }else if(c.nodeType===1){
+        walk(c);
+      }
+    }
+  };
+  walk(root);
+  return found || [root, root.childNodes.length];
+}
+// いまの選択を文字位置 [開始, 終了] で返す。欄の外なら null
+function editorSelection(root){
+  const sel=document.getSelection();
+  if(!sel || !sel.rangeCount) return null;
+  const r=sel.getRangeAt(0);
+  if(!root.contains(r.startContainer) || !root.contains(r.endContainer)) return null;
+  const off=(node,o)=>{
+    const x=document.createRange();
+    x.setStart(root,0); x.setEnd(node,o);
+    const d=document.createElement("div");
+    d.appendChild(x.cloneContents());
+    return editorRaw(d).text.length;
+  };
+  return [off(r.startContainer,r.startOffset), off(r.endContainer,r.endOffset)];
+}
+function setEditorSelection(root,start,end){
+  const a=editorPoint(root,start), b=editorPoint(root,end);
+  const r=document.createRange();
+  r.setStart(a[0],a[1]); r.setEnd(b[0],b[1]);
+  const sel=document.getSelection();
+  sel.removeAllRanges(); sel.addRange(r);
+}
+// 縦積みの欄の Enter。Chrome の既定の改行（div や br の挿入）は使わず、
+// 値に改行を1文字入れて組み直す
+function insertEditorNewline(root){
+  const sel=editorSelection(root);
+  if(!sel) return;
+  const m=editorRaw(root);
+  const s=Math.min(sel[0],sel[1]), e=Math.max(sel[0],sel[1]);
+  const text=m.text.slice(0,s)+"\n"+m.text.slice(e);
+  const flags=m.flags.slice(0,s).concat([false], m.flags.slice(e));
+  root.innerHTML=markHtml(markFromFlags(text, flags));
+  setEditorSelection(root, s+1, s+1);
+}
 // PC（601px 以上）。欄の中身を入力欄に差し替える。
 // 欄の実測幅は 95px しかないが、PC は Escape があり、表示倍率ボタンで
 // 拡大でき、マウスで横スクロールできるので実用になる
@@ -6193,22 +6285,29 @@ function openInlineEditor(td){
   const auto=td.dataset.auto||"";
   const cur=sheetCellText(td);
   const multi=cur.indexOf("\n")>=0 || !!td.querySelector(".fitcol");
-  const el=document.createElement(multi?"textarea":"input");
-  if(!multi) el.type="text";
-  el.value=cur;
-  if(multi) el.rows=Math.max(1,cur.split("\n").length);
+  // 画面の文字からは太字が取れないので、保存済みの書き足しから組み立てる
+  const saved=activeSheetMarks()[key];
+  const el=document.createElement("div");
+  el.className="cell-editor";
+  // plaintext-only は Chrome の書式コマンドと、貼り付けの HTML を効かなくする
+  el.setAttribute("contenteditable","plaintext-only");
+  el.innerHTML=markHtml(saved!=null ? saved : cur);
   td.classList.add("editing-cell");
   td.innerHTML="";
   td.appendChild(el);
-  sheetEditing={key, td, el, auto};
+  sheetEditing={key, td, el, auto, read:()=>editorModel(el, multi)};
   el.focus();
-  if(el.select) el.select();
+  document.getSelection().selectAllChildren(el);
 
   el.addEventListener("keydown", ev=>{
     if(ev.key==="Escape"){ ev.preventDefault(); cancelSheetEdit(); return; }
     // Android Chrome は IME の変換確定の Enter も keydown に届ける。
     // isComposing を見ないと、変換しただけで欄が閉じる
-    if(ev.key==="Enter" && !multi && ev.isComposing===false){ ev.preventDefault(); el.blur(); }
+    if(ev.key==="Enter" && ev.isComposing===false){
+      ev.preventDefault();
+      if(multi) insertEditorNewline(el);
+      else      el.blur();
+    }
   });
   el.addEventListener("blur", ()=>{ commitSheetEdit(); });
 }
@@ -6235,7 +6334,9 @@ function openBarEditor(td){
   // 「どの欄を直しているか」を出せない。セル内編集（PC）は入力欄の枠で足りる
   td.classList.add("editing-cell","bar-editing");
   bar.hidden=false;
-  sheetEditing={key, td, el, auto};
+  // バーでは太字を付けられない。文字が変わらなければ元の太字を残す
+  const orig=activeSheetMarks()[key];
+  sheetEditing={key, td, el, auto, read:()=>barEditValue(el.value, orig)};
   positionSheetEditBar();
   el.focus();
 

@@ -2996,7 +2996,7 @@ test("セル内編集の印も画面だけに出し、紙には出さない", ()
   // transform:none も残ると圧縮が外れて欄からあふれる。
   // 印刷時に editing-cell が残らないのは印刷の経路の実装頼みなので、CSS 側で断つ
   const print = printBlock();
-  assert.match(print, /\.sheet td\.editing-cell input,\.sheet td\.editing-cell textarea\{border:0 !important/);
+  assert.match(print, /\.sheet td\.editing-cell input,\.sheet td\.editing-cell textarea,\.sheet td\.editing-cell \.cell-editor\{border:0 !important/);
   assert.match(print, /\.sheet td\.editing-cell \.fit\{transform:revert !important\}/);
   assert.doesNotMatch(source, /td\.editing-cell[^{]*\{[^}]*print-color-adjust/);
 });

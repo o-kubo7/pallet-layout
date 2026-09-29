@@ -181,3 +181,58 @@ test("見出し欄は markHtml で組み立てる", () => {
 test("太字は 700 で描く", () => {
   assert.match(source, /\.sheet \.fit b\{font-weight:700\}/);
 });
+
+// editorRaw / editorPoint が見るのは childNodes・nodeType・nodeValue・nodeName だけ
+const T = s => ({ nodeType: 3, nodeName: "#text", nodeValue: s, childNodes: [] });
+const E = (name, kids) => ({ nodeType: 1, nodeName: name, childNodes: kids });
+
+test("editorRaw は <b> の中を太字、<br> を改行として読む", () => {
+  const editorRaw = load(["editorRaw"]);
+  const root = E("DIV", [T("AB"), E("B", [T("12"), E("SPAN", [T("3")])]), E("BR", []), T("C")]);
+  assert.deepEqual(editorRaw(root), {
+    text: "AB123\nC",
+    flags: [false, false, true, true, true, false, false],
+  });
+});
+
+test("editorModel は1行の欄では改行を取り除く", () => {
+  const editorModel = load(["editorRaw", "markFromFlags", "editorModel"]);
+  const root = E("DIV", [T("AB"), E("BR", []), E("B", [T("C")])]);
+  assert.deepEqual(editorModel(root, false), { text: "ABC", bold: [[2, 3]] });
+  assert.deepEqual(editorModel(root, true), { text: "AB\nC", bold: [[3, 4]] });
+});
+
+test("editorPoint は文字位置をノードと位置に変える", () => {
+  const editorPoint = load(["editorPoint"]);
+  const t1 = T("AB"), t2 = T("12"), br = E("BR", []), t3 = T("C");
+  const root = E("DIV", [t1, E("B", [t2]), br, t3]);
+  assert.deepEqual(editorPoint(root, 0), [t1, 0]);
+  // 区間の境目は前の区間の末尾に置く（太字の直後で打つと太字が続く）
+  assert.deepEqual(editorPoint(root, 2), [t1, 2]);
+  assert.deepEqual(editorPoint(root, 3), [t2, 1]);
+  assert.deepEqual(editorPoint(root, 4), [t2, 2]);
+  assert.deepEqual(editorPoint(root, 5), [t3, 0]);
+  assert.deepEqual(editorPoint(root, 99), [root, 4]);
+});
+
+test("PC の編集欄は plaintext-only の contenteditable にする", () => {
+  const fn = functionSource("openInlineEditor");
+  assert.match(fn, /contenteditable/);
+  assert.match(fn, /plaintext-only/);
+  assert.match(fn, /activeSheetMarks\(\)/);
+  assert.match(fn, /isComposing/);
+  assert.doesNotMatch(fn, /execCommand/);
+  assert.doesNotMatch(fn, /createElement\(multi\?"textarea":"input"\)/);
+});
+
+test("確定は sheetEditing.read() の値を保存する", () => {
+  const fn = functionSource("flushSheetEdit");
+  assert.match(fn, /read\(\)/);
+  assert.doesNotMatch(fn, /el\.value/);
+  assert.match(functionSource("openBarEditor"), /barEditValue\(/);
+});
+
+test("編集欄の CSS を contenteditable にも当てる", () => {
+  assert.match(source, /\.sheet td\.editing-cell input,\.sheet td\.editing-cell textarea,\.sheet td\.editing-cell \.cell-editor\{/);
+  assert.match(source, /\.sheet td\.editing-cell \.cell-editor\{white-space:pre/);
+});
