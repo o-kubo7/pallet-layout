@@ -1459,7 +1459,15 @@ function normalizeSheetEdits(raw){
   if(!sig) return {sig:"", marks:{}};
   const marks={};
   const m=src.marks && typeof src.marks==="object" && !Array.isArray(src.marks) ? src.marks : {};
-  Object.keys(m).forEach(k=>{ if(typeof m[k]==="string" && m[k]!=="") marks[k]=m[k]; });
+  Object.keys(m).forEach(k=>{
+    const v=m[k];
+    if(typeof v==="string"){ if(v!=="") marks[k]=v; return; }
+    // 太字付きの書き足し。文字が文字列でないもの、配列は捨てる。
+    // 太字の範囲だけ壊れているものは、太字を捨てて文字だけ残す
+    if(!v || typeof v!=="object" || Array.isArray(v) || typeof v.text!=="string") return;
+    const n=normalizeMark({text:v.text, bold:Array.isArray(v.bold)?v.bold:[]});
+    if(markText(n)!=="") marks[k]=n;
+  });
   return {sig, marks};
 }
 function emptySchedule(date){
@@ -3867,6 +3875,12 @@ function markHtml(v){
   }
   return h;
 }
+// スマホの編集バーの確定値。バーでは太字を付けられないので、
+// 文字が変わらなければ元の太字を残し、変わったら太字を全部外す
+function barEditValue(typed,orig){
+  if(orig && typeof orig==="object" && normalizeMarkValue(typed)===orig.text) return orig;
+  return typed;
+}
 function inputFingerprint(){ return fingerprintFor(readSlips()); }
 function renderTimingSwitches(){
   document.querySelectorAll("[data-timing-switch]").forEach(host=>{
@@ -6149,14 +6163,16 @@ function sheetCellText(td){
   const one=td.querySelector(".fit");
   return one?one.textContent:"";
 }
-// 書き足しを保存する。空文字か自動計算の値と同じならキーを消す
+// 書き足しを保存する。空文字か、太字が無く自動計算の値と同じならキーを消す
 // （これが「欄ごとの取り消し」になる。紙の上に×ボタンを増やさない）。
 // 印刷の経路から呼ばれるので confirm() を出さないこと
 function saveSheetMark(key,raw,autoText){
   const ed=activeShift().sheetEdits;
-  const value=normalizeMarkValue(raw);
+  const value=normalizeMark(raw);
+  const text=typeof value==="string" ? value : value.text;
   const auto=normalizeMarkValue(autoText);
-  if(value==="" || value===auto){
+  // 太字があれば、文字が自動計算の値と同じでも残す
+  if(text==="" || (typeof value==="string" && value===auto)){
     if(Object.prototype.hasOwnProperty.call(ed.marks,key)){ delete ed.marks[key]; saveSchedule(); }
     return false;
   }

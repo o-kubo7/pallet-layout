@@ -3027,14 +3027,18 @@ test("書き足しは空文字か自動計算値と同じならキーを消す",
   const norm = new Function(
     functionSource("normalizeMarkValue") + "; return normalizeMarkValue;"
   )();
+  const normalizeMark = new Function(
+    ["markFlags", "markFromFlags", "markText", "normalizeMark"].map(functionSource).join("\n")
+      + "; return normalizeMark;"
+  )();
   // ensureSheetEditSig は渡さない。saveSheetMark が呼び始めたら
   // ReferenceError で落ちてほしい（確定の経路に confirm を混ぜないための守り）
   const save = new Function(
-    "activeShift", "saveSchedule", "normalizeMarkValue",
+    "activeShift", "saveSchedule", "normalizeMarkValue", "normalizeMark",
     functionSource("saveSheetMark") + "; return saveSheetMark;"
   );
   const shift = { sheetEdits: { sig: "s1", marks: { "top|0|name": "既存" } } };
-  const run = save(() => shift, () => {}, norm);
+  const run = save(() => shift, () => {}, norm, normalizeMark);
 
   run("top|0|name", "", "自動値");
   assert.equal(shift.sheetEdits.marks["top|0|name"], undefined);

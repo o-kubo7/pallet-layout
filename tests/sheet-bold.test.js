@@ -88,3 +88,48 @@ test("markHtml は太字の区間だけを <b> で包み、各区間を esc す�
   assert.equal(html({ text: "AB<C", bold: [[2, 4]] }), "AB<b>&lt;C</b>");
   assert.equal(html({ text: "L1\nL2", bold: [[0, 1], [4, 5]] }), "<b>L</b>1\nL<b>2</b>");
 });
+
+test("normalizeSheetEdits は {text,bold} の形も読む", () => {
+  const normalizeSheetEdits = load([...MARK_CORE, "normalizeMark", "normalizeSheetEdits"]);
+  const out = normalizeSheetEdits({ sig: "s", marks: {
+    "top|0|name": "A",
+    "top|1|lot": { text: " ABC123", bold: [[4, 7]] },
+    "top|2|lot": { text: "ABC", bold: "壊れ" },
+    "top|3|lot": { text: 5, bold: [] },
+    "top|4|lot": { text: "   ", bold: [[0, 3]] },
+    "top|5|lot": [1, 2],
+  } });
+  assert.deepEqual(out, { sig: "s", marks: {
+    "top|0|name": "A",
+    "top|1|lot": { text: "ABC123", bold: [[3, 6]] },
+    "top|2|lot": "ABC",
+  } });
+});
+
+test("saveSheetMark は自動計算の値と同じ文字でも太字があれば残す", () => {
+  const normalizeMarkValue = load(["normalizeMarkValue"]);
+  const normalizeMark = load([...MARK_CORE, "normalizeMark"]);
+  const shift = { sheetEdits: { sig: "s", marks: {} } };
+  const save = load(["saveSheetMark"], {
+    activeShift: () => shift, saveSchedule: () => {}, normalizeMarkValue, normalizeMark,
+  });
+  assert.equal(save("top|0|lot", { text: "ABC123", bold: [[3, 6]] }, "ABC123"), true);
+  assert.deepEqual(shift.sheetEdits.marks["top|0|lot"], { text: "ABC123", bold: [[3, 6]] });
+  // 太字を全部外して自動計算の値に戻すと、キーが消える
+  assert.equal(save("top|0|lot", "ABC123", "ABC123"), false);
+  assert.equal(shift.sheetEdits.marks["top|0|lot"], undefined);
+  // 文字が空ならキーが消える（太字があっても）
+  shift.sheetEdits.marks["top|1|lot"] = "X";
+  assert.equal(save("top|1|lot", { text: "  ", bold: [[0, 2]] }, "ABC"), false);
+  assert.equal(shift.sheetEdits.marks["top|1|lot"], undefined);
+});
+
+test("barEditValue は文字が変わらなければ太字を残し、変われば外す", () => {
+  const normalizeMarkValue = load(["normalizeMarkValue"]);
+  const barEditValue = load(["barEditValue"], { normalizeMarkValue });
+  const orig = { text: "ABC123", bold: [[3, 6]] };
+  assert.equal(barEditValue(" ABC123 ", orig), orig);
+  assert.equal(barEditValue("ABC124", orig), "ABC124");
+  assert.equal(barEditValue("ABC", "ABC"), "ABC");
+  assert.equal(barEditValue("ABC", undefined), "ABC");
+});
