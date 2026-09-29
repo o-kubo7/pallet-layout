@@ -133,3 +133,51 @@ test("barEditValue は文字が変わらなければ太字を残し、変われ�
   assert.equal(barEditValue("ABC", "ABC"), "ABC");
   assert.equal(barEditValue("ABC", undefined), "ABC");
 });
+
+const renderSlots = () => new Function(
+  "esc", "palSlotTextOf", functionSource("slotCells") + "; return slotCells;"
+)(esc, () => "3P");
+const renderOverflow = () => new Function(
+  "esc", "palSlotTextOf", "slotAreaNote", functionSource("overflowTable") + "; return overflowTable;"
+)(esc, () => "", () => "");
+
+test("slotCells は太字の区間を <b> で包み、esc を通す", () => {
+  const html = renderSlots()([], 1, "lot", null, null, "top",
+    { "top|0|lot": { text: "AB<123", bold: [[3, 6]] } });
+  assert.match(html, /<span class="fit">AB&lt;<b>123<\/b><\/span>/);
+  assert.match(html, /edited/);
+  assert.doesNotMatch(html, /object Object/);
+});
+
+test("slotCells の縦積みの欄で、改行をまたいで太字の位置が合う", () => {
+  const html = renderSlots()([], 1, "lot", null, null, "top",
+    { "top|0|lot": { text: "L1\nL2", bold: [[4, 5]] } });
+  assert.match(html, /<span class="fitcol"><span class="fit">L1<\/span><span class="fit">L<b>2<\/b><\/span><\/span>/);
+});
+
+test("slotCells は文字列の書き足しを今までどおりに出す", () => {
+  const html = renderSlots()([], 1, "note", null, null, "top", { "top|0|note": "臨時" });
+  assert.match(html, /<span class="fit">臨時<\/span>/);
+  assert.doesNotMatch(html, /<b>/);
+});
+
+test("overflowTable と markHtml は slotCells と同じ中身を出す", () => {
+  const markHtml = load([...MARK_CORE, "markHtml"], { esc });
+  const v = { text: "AB<123", bold: [[3, 6]] };
+  const inner = h => (h.match(/<span class="fit">(.*?)<\/span><\/td>/) || [])[1];
+  const slot = renderSlots()([], 1, "lot", null, null, "top", { "top|0|lot": v });
+  const entry = { lot: { id: "X", name: "品", lot: "L" }, areas: [] };
+  const over = renderOverflow()([entry], { "over|0|lot": v });
+  assert.equal(inner(slot), markHtml(v));
+  assert.match(over, new RegExp("<span class=\"fit\">" + markHtml(v).replace(/[/]/g, "\\/") + "</span>"));
+});
+
+test("見出し欄は markHtml で組み立てる", () => {
+  const fn = functionSource("renderSheet");
+  assert.match(fn, /edited\s*\?\s*markHtml\(mv\)\s*:\s*esc\(g\.label\)/);
+  assert.doesNotMatch(fn, /esc\(label\)/);
+});
+
+test("太字は 700 で描く", () => {
+  assert.match(source, /\.sheet \.fit b\{font-weight:700\}/);
+});

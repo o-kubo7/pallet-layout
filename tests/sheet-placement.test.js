@@ -2413,7 +2413,7 @@ test("配置図の見出し行はグループごとのセルで、列数の合�
   assert.doesNotMatch(fn, /colspan="\$\{lay\.top\*2\}">軒下/);
   // 見出しは圧縮の対象に入れ、警告で種類が分かるように data-fit を付ける
   assert.match(fn, /data-fit="head"/);
-  assert.match(fn, /<span class="fit">\$\{esc\(label\)\}<\/span>/);
+  assert.match(fn, /<span class="fit">\$\{label\}<\/span>/);
 });
 
 test("グループの境目のセルは左辺を2pxにする", () => {

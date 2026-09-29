@@ -640,6 +640,8 @@
   .sheet td.slot.c-name{font-size:var(--fs-name);font-weight:var(--fw-name)}
   .sheet td.slot.c-lot {font-size:var(--fs-lot); font-weight:var(--fw-lot)}
   .sheet td.slot.c-pal {font-size:var(--fs-pal); font-weight:var(--fw-pal)}
+  /* 書き足しの一部の太字。欄の太字設定が ON の欄では見た目が変わらない（仕様） */
+  .sheet .fit b{font-weight:700}
   /* 欄に入りきらない文字を横に縮めて1行に収める入れ物。
      transform-origin:left center の scaleX だけでよい。translateX で中央へ
      戻す補正を入れてはいけない（自然幅が欄を超えた時点でブラウザが左端基準に
@@ -6346,10 +6348,10 @@ function renderSheet(){
           const ek=["top","g"+i,"head"].join("|");
           const mv=Object.prototype.hasOwnProperty.call(marks,ek)?marks[ek]:null;
           const edited=(mv!=null&&mv!=="");
-          const label=edited?mv:g.label;
+          const label=edited?markHtml(mv):esc(g.label);
           return `<td class="ttl bb2${i?" gsep":""}${edited?" edited":""}" data-fit="head"`
                + ` data-ek="${ek}" data-auto="${esc(g.label)}" colspan="${g.slots*2}">`
-               + `<span class="fit">${esc(label)}</span></td>`;
+               + `<span class="fit">${label}</span></td>`;
         }).join("")
       + `</tr>`;
 
@@ -6460,9 +6462,29 @@ function slotCells(entries,count,kind,extra,sepAt,tier,marks,itemSepAt){
   // ここで別の関数を呼ばないこと。テストが new Function(依存名..., src) で
   // 本体だけを評価するので、依存名に無い名前は ReferenceError になる
   const markSpan = v => {
-    const lines=String(v).split("\n");
-    return lines.length<=1 ? span(lines[0])
-      : `<span class="fitcol">${lines.map(span).join("")}</span>`;
+    const text = typeof v==="string" ? v : String(v.text);
+    const on = new Array(text.length).fill(false);
+    (typeof v==="string" ? [] : (v.bold || [])).forEach(r => {
+      for(let k=r[0]; k<r[1] && k<text.length; k++) on[k]=true;
+    });
+    let pos=0;
+    const line = s => {
+      let h="", i=0;
+      while(i<s.length){
+        const b=on[pos+i];
+        let j=i+1;
+        while(j<s.length && on[pos+j]===b) j++;
+        const t=esc(s.slice(i,j));
+        h += b ? "<b>"+t+"</b>" : t;
+        i=j;
+      }
+      pos += s.length+1;
+      return h;
+    };
+    const lines=text.split("\n").map(line);
+    const wrap = h => h ? `<span class="fit">${h}</span>` : "";
+    return lines.length<=1 ? wrap(lines[0])
+      : `<span class="fitcol">${lines.map(wrap).join("")}</span>`;
   };
   const mk = marks || {};
   for(let i=0;i<count;i++){
@@ -6526,9 +6548,29 @@ function overflowTable(entries,marks){
   // ここで別の関数を呼ばないこと。テストが new Function(依存名..., src) で
   // 本体だけを評価するので、依存名に無い名前は ReferenceError になる
   const markSpan = v => {
-    const lines=String(v).split("\n");
-    return lines.length<=1 ? span(lines[0])
-      : `<span class="fitcol">${lines.map(span).join("")}</span>`;
+    const text = typeof v==="string" ? v : String(v.text);
+    const on = new Array(text.length).fill(false);
+    (typeof v==="string" ? [] : (v.bold || [])).forEach(r => {
+      for(let k=r[0]; k<r[1] && k<text.length; k++) on[k]=true;
+    });
+    let pos=0;
+    const line = s => {
+      let h="", i=0;
+      while(i<s.length){
+        const b=on[pos+i];
+        let j=i+1;
+        while(j<s.length && on[pos+j]===b) j++;
+        const t=esc(s.slice(i,j));
+        h += b ? "<b>"+t+"</b>" : t;
+        i=j;
+      }
+      pos += s.length+1;
+      return h;
+    };
+    const lines=text.split("\n").map(line);
+    const wrap = h => h ? `<span class="fit">${h}</span>` : "";
+    return lines.length<=1 ? wrap(lines[0])
+      : `<span class="fitcol">${lines.map(wrap).join("")}</span>`;
   };
   // e は [entry, index] の対。index は entries の添字。ペア化で添字が失われるので対で持ち回る
   const cell=([e,index],kind)=>{
