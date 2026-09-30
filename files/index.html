@@ -6300,7 +6300,7 @@ function applySheetBold(){
   setEditorContent(el, next);
   setEditorSelection(el, sel[0], sel[1]);
 }
-// 編集中の欄のすぐ上に B を浮かべる。.sheetbox の中に置くので、
+// 編集中の欄のすぐ上の右端に B を浮かべる。.sheetbox の中に置くので、
 // 横スクロールや表示倍率が変わっても欄と一緒に動く。
 // 上に場所が無い（先頭の行）ときは欄の下に置く。
 // 配置図タブが表示されているとき（欄を開いた時点）にだけ測る
@@ -6323,10 +6323,12 @@ function placeSheetBoldBtn(td){
   box.appendChild(btn);
   const z=parseFloat(getComputedStyle(sheet).zoom)||1;
   const b=box.getBoundingClientRect(), r=td.getBoundingClientRect();
-  const h=btn.getBoundingClientRect().height/z;
+  const br=btn.getBoundingClientRect();
+  const h=br.height/z, w=br.width/z;
   let top=(r.top-b.top)/z-h-2;
   if(top<0) top=(r.bottom-b.top)/z+2;
-  btn.style.left=((r.left-b.left)/z)+"px";
+  // 右端を欄の右端にそろえる。左端だと上の欄の書き出しの文字に重なる
+  btn.style.left=((r.right-b.left)/z-w)+"px";
   btn.style.top=top+"px";
 }
 function removeSheetBoldBtn(){

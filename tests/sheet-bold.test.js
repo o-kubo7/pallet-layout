@@ -244,6 +244,8 @@ test("B ボタンは mousedown で既定動作を止め、確定を走らせな�
   assert.match(fn, /\.sheetbox/);
   // 表示倍率で割る（drawLeaders と同じ考え方）
   assert.match(fn, /zoom/);
+  // 右端を欄の右端にそろえる
+  assert.match(fn, /style\.left=\(\(r\.right-b\.left\)\/z-w\)/);
 });
 
 test("B ボタンと Ctrl+B は同じ処理を呼ぶ", () => {
