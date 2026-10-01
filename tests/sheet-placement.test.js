@@ -2413,7 +2413,7 @@ test("配置図の見出し行はグループごとのセルで、列数の合�
   assert.doesNotMatch(fn, /colspan="\$\{lay\.top\*2\}">軒下/);
   // 見出しは圧縮の対象に入れ、警告で種類が分かるように data-fit を付ける
   assert.match(fn, /data-fit="head"/);
-  assert.match(fn, /<span class="fit">\$\{esc\(label\)\}<\/span>/);
+  assert.match(fn, /<span class="fit">\$\{label\}<\/span>/);
 });
 
 test("グループの境目のセルは左辺を2pxにする", () => {
@@ -2996,7 +2996,7 @@ test("セル内編集の印も画面だけに出し、紙には出さない", ()
   // transform:none も残ると圧縮が外れて欄からあふれる。
   // 印刷時に editing-cell が残らないのは印刷の経路の実装頼みなので、CSS 側で断つ
   const print = printBlock();
-  assert.match(print, /\.sheet td\.editing-cell input,\.sheet td\.editing-cell textarea\{border:0 !important/);
+  assert.match(print, /\.sheet td\.editing-cell input,\.sheet td\.editing-cell textarea,\.sheet td\.editing-cell \.cell-editor\{border:0 !important/);
   assert.match(print, /\.sheet td\.editing-cell \.fit\{transform:revert !important\}/);
   assert.doesNotMatch(source, /td\.editing-cell[^{]*\{[^}]*print-color-adjust/);
 });
@@ -3027,14 +3027,18 @@ test("書き足しは空文字か自動計算値と同じならキーを消す",
   const norm = new Function(
     functionSource("normalizeMarkValue") + "; return normalizeMarkValue;"
   )();
+  const normalizeMark = new Function(
+    ["markFlags", "markFromFlags", "markText", "normalizeMark"].map(functionSource).join("\n")
+      + "; return normalizeMark;"
+  )();
   // ensureSheetEditSig は渡さない。saveSheetMark が呼び始めたら
   // ReferenceError で落ちてほしい（確定の経路に confirm を混ぜないための守り）
   const save = new Function(
-    "activeShift", "saveSchedule", "normalizeMarkValue",
+    "activeShift", "saveSchedule", "normalizeMarkValue", "normalizeMark",
     functionSource("saveSheetMark") + "; return saveSheetMark;"
   );
   const shift = { sheetEdits: { sig: "s1", marks: { "top|0|name": "既存" } } };
-  const run = save(() => shift, () => {}, norm);
+  const run = save(() => shift, () => {}, norm, normalizeMark);
 
   run("top|0|name", "", "自動値");
   assert.equal(shift.sheetEdits.marks["top|0|name"], undefined);
