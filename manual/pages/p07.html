@@ -1,17 +1,18 @@
-<!--page {"title":"4. 配置編集 <small>（2）配置を整える</small>","lead":"品目・ロットのまとまりを保ちながら、列の空きを使います。","tab":"配置編集"} -->
-<h2>4.3 自動配置から、手動で整える</h2>
-<div class="cols">
-<figure><img class="shot fit" src="assets/board-auto-out.png" alt="自動配置・倉庫外"><figcaption>自動配置の直後（倉庫外）</figcaption></figure>
-<figure><img class="shot fit" src="assets/board-manual-out.png" alt="手動で整えた配置・倉庫外"><figcaption>手動で整えた後（倉庫外・完成図の配置）</figcaption></figure>
-</div>
-<div class="cols">
-<figure><img class="shot fit" src="assets/board-auto-main.png" alt="自動配置・メイン"><figcaption>自動配置の直後（倉庫内メイン）</figcaption></figure>
-<figure><img class="shot fit" src="assets/board-manual-main.png" alt="手動で整えた配置・メイン"><figcaption>手動で整えた後（倉庫内メイン）</figcaption></figure>
-</div>
-<p>この例では、自動配置の結果を次のように整えました。</p>
+<!--page {"title":"3. 入力 <small>（1）</small>","lead":"FAXを1枚ずつ、伝票として入力します。","tab":"入力"} -->
+<h2>3.1 その日の入力を始める</h2>
+<figure><img class="shot" src="assets/input-head.png" alt="入力画面の上部"></figure>
 <div class="steps">
-<p><span class="num">①</span> 製品（製品1・製品2）を倉庫外の軒下①へ集めた。</p>
-<p><span class="num">②</span> 軒下①にあった充填品の仕掛品3 を、倉庫内のメインへ入れた（2.3 の「充填品を倉庫内へ」）。</p>
-<p><span class="num">③</span> 品目の境目の列では、仕掛品2 の2ロットを1列に混載して空きを使った。</p>
+<p><span class="num">①</span> 「あさ／ひる」を確認し、前回分が残っていれば「入力をクリア」を押します。<br>クリアされるのは選んでいる側だけです。</p>
+<p><span class="num">②</span> 搬入日を確認します。搬入日は朝・昼で共通です。<br>本書では 9月25日（金）の朝搬入分を例にします。</p>
 </div>
-<p class="muted">自動配置は出発点です。<br>最後は現場の置き方に合わせて整えます。</p>
+<h2>3.2 FAXを見て入力する</h2>
+<div class="cols" style="grid-template-columns:3fr 2fr">
+<div class="steps">
+<p><span class="num">③</span> 「＋ FAX伝票を追加」で、実物のFAX1枚につき1伝票を作ります。</p>
+<p><span class="num">④</span> 種別（製品／充填品）を選び、FAXの品名・ロット・個数と、予定表のSNP（1パレットに積む個数）を入力します。</p>
+<p><span class="num">⑤</span> 同じFAXに別の品目・ロットがあれば、伝票の中の「＋ 品目を追加」で行を増やします。<br>次のFAXは別の伝票にします。</p>
+</div>
+<figure><img class="shot" src="assets/input-actions.png" alt="伝票を追加するボタン"></figure>
+</div>
+<figure><img class="shot" src="assets/slip-fax1.png" alt="FAX①の伝票"><figcaption>FAX①（製品1）。1品目の伝票です。</figcaption></figure>
+<figure><img class="shot" src="assets/slip-fax3.png" alt="FAX③の伝票"><figcaption>FAX③（仕掛品1 の3ロット）。<br>1枚に複数のロットがあるときは行を増やします。</figcaption></figure>

@@ -1,25 +1,24 @@
-<!--page {"title":"5. 配置図 <small>（1）読む・整える</small>","lead":"紙に出す前に、画面で内容を確かめます。","tab":"配置図"} -->
-<h2>5.1 配置図を読む</h2>
-<p>搬入日・あさ／ひる・合計パレット数、品名・ロット・パレット数、置き場所（矢印の先）を確かめます。<br>画面で読みにくければ「表示倍率」を変えます。</p>
-<figure><img class="shot fit h35" src="assets/sheet-top.png" alt="上段の表"></figure>
+<!--page {"title":"4. 配置編集 <small>（1）選択と移動</small>","lead":"同じロットのパレットを選び、移動先の列へ動かします。","tab":"配置編集"} -->
+<h2>4.1 パレットを選ぶ</h2>
+<p><b>選択と移動はロットごとです。<br>違うロットを同時には選べません。</b>盤の1マスはパレット1枚分です。<br>マスの数字は、そのロットの通し番号です（入力の並び順で、凡例の番号と同じです）。</p>
+<table class="tbl"><thead><tr><th>したいこと</th><th>操作</th></tr></thead><tbody>
+<tr><td>1枚を選ぶ</td><td>クリック</td></tr>
+<tr><td>同じロットの複数枚を選ぶ</td><td>Shift＋クリック、または荷物のない位置からドラッグして囲む</td></tr>
+<tr><td>1枚を選択から外す</td><td>選んでいるパレットを Shift＋クリック</td></tr>
+<tr><td>すべて外す</td><td>荷物のない位置をクリック</td></tr>
+</tbody></table>
+<h2>4.2 移動先に入る枚数を選んでから移動する</h2>
+<p>移動先の列の空きを数え、<b>空きに入る枚数だけ</b>を選んでからドラッグします。選んだ枚数が空きより多い列には移動できません（何も起きません）。</p>
+<div class="cols3">
+<figure><img class="shot fit h35" src="assets/move-1-select.png" alt="選択"><figcaption><span class="num">①</span> 空きと同じ枚数を選ぶ</figcaption></figure>
+<figure><img class="shot fit h35" src="assets/move-2-drag.png" alt="ドラッグ"><figcaption><span class="num">②</span> 移動先の列へドラッグ</figcaption></figure>
+<figure><img class="shot fit h35" src="assets/move-3-after.png" alt="移動後"><figcaption><span class="num">③</span> 移動後は選択が外れる</figcaption></figure>
+</div>
+<p>残りを動かすときは、もう一度選び直します。</p>
+<h2>ロットが分かれるときは確認が出る</h2>
 <div class="cols">
-<figure class="zoom-row">
-<div class="hl-wrap tight"><img class="shot fit h40" src="assets/sheet-half-column.png" alt="半の印"><span class="hl-box" style="left:-3px;right:-3px;top:73.7%;height:23.6%;bottom:auto"></span></div>
-<svg class="zoom-arrow" width="26" height="18" viewBox="0 0 26 18"><path d="M1 9h19M14 2l10 7-10 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-<img class="shot zoom-hl fit h40" src="assets/sheet-half-column-zoom.png" alt="「半」の丸の拡大">
-</figure>
-<div>
-<p><b>「5P 半」</b>は、満載5枚と端数1枚です。<br>置き場所は6枚分です。</p>
-<p><b>メインのグリッドの「半」</b>は、端数のパレットを置くマスです（P9）。</p>
-<p><b>「各10P」「9P/7P」</b>は、同じ品目の複数ロットを1つの欄にまとめた表記です。<br>「各」はロットそれぞれの枚数です。<br>メインに置いた荷物はまとめません。</p>
-<p><b>見出しが「未定」の欄</b>は、退避スペースに残っている荷物です（P8）。</p>
+<div><p>移動でロットの置き場所が増えるときは、確認が出ます。まとまりを崩してよいかを確かめてから「OK」を押します。</p><p class="muted">確認を出さない設定もあります（P12）。</p></div>
+<div class="dialog-example" data-dialog="split"></div>
 </div>
-</div>
-<figure><img class="shot fit h10" src="assets/sheet-notice.png" alt="上段へ回した通知"><figcaption>下段の欄が足りないときは、上段の空き欄に回して、この通知が出ます。</figcaption></figure>
-<h2>5.2 必要なら表記を整える</h2>
-<p>「✏ テキスト編集」を押すと、欄の文字を書き足し・書き換えできます。<br>メイン以外のエリアでは、同じ品目の複数ロットが「8P 半/7P」のように1つの欄にまとめられます。<br>このとき注釈に合計を書き足すと、作業者が合計数を把握しやすくなります。<br>下の例では、仕掛品3 の2ロットを軒下①に置いたときの欄に「（合計16P）」を足しています（端数の1枚も1枚と数えます）。</p>
-<div class="cols">
-<figure class="cap-center"><img class="shot fit h20" src="assets/text-edit-before.png" alt="編集前"><figcaption>編集前</figcaption></figure>
-<figure class="cap-center"><img class="shot fit h20" src="assets/text-edit-after.png" alt="編集後"><figcaption>編集後</figcaption></figure>
-</div>
-<aside class="warn">これは表記だけの編集です。個数や配置を変えるときは、入力・配置編集で直します。<br>配置を変えると、書き足した文字は破棄されることがあります。表記は配置が決まってから整えます。</aside>
+<h2>戻す・進む</h2>
+<div class="inline-tool"><img class="shot" style="width:20%" src="assets/undo-toolbar.png" alt="戻す・進む"><p>盤の上の帯にある矢印で、直前の操作を戻す（<span class="arrot">↪</span>）・戻した操作を進める（<span class="arrot">↩</span>）ことができます。<br>設定で「戻す」「進む」の文字を付けられます（P12）。</p></div>

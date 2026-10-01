@@ -1,24 +1,19 @@
-<!--page {"title":"4. 配置編集 <small>（1）選択と移動</small>","lead":"同じロットのパレットを選び、移動先の列へ動かします。","tab":"配置編集"} -->
-<h2>4.1 パレットを選ぶ</h2>
-<p><b>選択と移動はロットごとです。<br>違うロットを同時には選べません。</b>盤の1マスはパレット1枚分です。<br>マスの数字は、そのロットの通し番号です（入力の並び順で、凡例の番号と同じです）。</p>
-<table class="tbl"><thead><tr><th>したいこと</th><th>操作</th></tr></thead><tbody>
-<tr><td>1枚を選ぶ</td><td>クリック</td></tr>
-<tr><td>同じロットの複数枚を選ぶ</td><td>Shift＋クリック、または荷物のない位置からドラッグして囲む</td></tr>
-<tr><td>1枚を選択から外す</td><td>選んでいるパレットを Shift＋クリック</td></tr>
-<tr><td>すべて外す</td><td>荷物のない位置をクリック</td></tr>
-</tbody></table>
-<h2>4.2 移動先に入る枚数を選んでから移動する</h2>
-<p>移動先の列の空きを数え、<b>空きに入る枚数だけ</b>を選んでからドラッグします。選んだ枚数が空きより多い列には移動できません（何も起きません）。</p>
-<div class="cols3">
-<figure><img class="shot fit h35" src="assets/move-1-select.png" alt="選択"><figcaption><span class="num">①</span> 空きと同じ枚数を選ぶ</figcaption></figure>
-<figure><img class="shot fit h35" src="assets/move-2-drag.png" alt="ドラッグ"><figcaption><span class="num">②</span> 移動先の列へドラッグ</figcaption></figure>
-<figure><img class="shot fit h35" src="assets/move-3-after.png" alt="移動後"><figcaption><span class="num">③</span> 移動後は選択が外れる</figcaption></figure>
+<!--page {"title":"4. 補足：従来の配置図の書き方","lead":"アプリを使う前の手順と、配置の考え方です。","nav":false} -->
+<h2>4.1 手書きの頃の手順</h2>
+<div class="steps">
+<p><span class="num">①</span> 発送伝票と予定表から、ロットのP数を計算する。<br>品目ごとにまとめる。<br>発送伝票が無いものは仮置き。</p>
+<p><span class="num">②</span> 品目ごとの合計P数を把握。</p>
+<p><span class="num">③</span> 品目ごとにまとまるようにスペースへの配置を考える。</p>
+<p><span class="num">④</span> 充填品を倉庫内に優先配置する。</p>
 </div>
-<p>残りを動かすときは、もう一度選び直します。</p>
-<h2>ロットが分かれるときは確認が出る</h2>
+<p>アプリは、この手順の①②を自動で行い、③④の出発点を作ります。</p>
+<h2>4.2 配置の考え方</h2>
+<h3>品目ごと、その中でロットごとにまとめる</h3>
+<p>作業者は品目・ロットごとに、パレットのバーコードと積載数を登録します。<br>事務方による入庫設定は品目ごとに完了するため、まず品目をまとめ、その中で同じロットを近づけます。</p>
 <div class="cols">
-<div><p>移動でロットの置き場所が増えるときは、確認が出ます。まとまりを崩してよいかを確かめてから「OK」を押します。</p><p class="muted">確認を出さない設定もあります（P12）。</p></div>
-<div class="dialog-example" data-dialog="split"></div>
+<figure><img class="shot fit h80" src="assets/sheet-item-group.png" alt="仕掛品1の3ロット"></figure>
+<div><p>左は完成した配置図の一部です。<br>仕掛品1 の3ロット（111-1112、111-1111、111-1113）を、メインの左側に並べています。</p><p>配置図の下段では、品目が変わる境目の縦線が太くなります。<br>同じ品目の中のロットの境目は細い線です。</p><p class="muted">1マスはパレット1枚分の場所です。<br>エリアの中では、列を単位に配置を考えます。</p></div>
 </div>
-<h2>戻す・進む</h2>
-<div class="inline-tool"><img class="shot" style="width:20%" src="assets/undo-toolbar.png" alt="戻す・進む"><p>盤の上の帯にある矢印で、直前の操作を戻す（<span class="arrot">↪</span>）・戻した操作を進める（<span class="arrot">↩</span>）ことができます。<br>設定で「戻す」「進む」の文字を付けられます（P12）。</p></div>
+<h3>充填品を優先して倉庫内へ置く</h3>
+<p>製品は入庫前に検査があることが多く、入庫設定が遅くなりがちです。<br>そのため、充填品を入庫口に近い倉庫内へ優先して配置します。</p>
+<p>パレット数の多い荷物を入口に近づけることを基本に、収まりとまとまりを見て調整します。<br>すべての品目が合計枚数の順に自動で並ぶわけではありません。</p>
