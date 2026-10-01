@@ -1,67 +1,104 @@
 [
   {
     "page": 1,
-    "spaceToFooter": 15,
-    "images": true
+    "spaceToFooter": 37,
+    "images": true,
+    "tagsOut": []
   },
   {
     "page": 2,
-    "spaceToFooter": 28,
-    "images": true
+    "spaceToFooter": 232,
+    "images": true,
+    "tagsOut": []
   },
   {
     "page": 3,
-    "spaceToFooter": 18,
-    "images": true
+    "spaceToFooter": 6,
+    "images": true,
+    "tagsOut": []
   },
   {
     "page": 4,
-    "spaceToFooter": 13,
-    "images": true
+    "spaceToFooter": 8,
+    "images": true,
+    "tagsOut": []
   },
   {
     "page": 5,
-    "spaceToFooter": 0,
-    "images": true
+    "spaceToFooter": 9,
+    "images": true,
+    "tagsOut": []
   },
   {
     "page": 6,
-    "spaceToFooter": 4,
-    "images": true
+    "spaceToFooter": 106,
+    "images": true,
+    "tagsOut": []
   },
   {
     "page": 7,
-    "spaceToFooter": 244,
-    "images": true
+    "spaceToFooter": 18,
+    "images": true,
+    "tagsOut": []
   },
   {
     "page": 8,
-    "spaceToFooter": 164,
-    "images": true
+    "spaceToFooter": 13,
+    "images": true,
+    "tagsOut": []
   },
   {
     "page": 9,
-    "spaceToFooter": 86,
-    "images": true
+    "spaceToFooter": 0,
+    "images": true,
+    "tagsOut": []
   },
   {
     "page": 10,
-    "spaceToFooter": 17,
-    "images": true
+    "spaceToFooter": 4,
+    "images": true,
+    "tagsOut": []
   },
   {
     "page": 11,
-    "spaceToFooter": 66,
-    "images": true
+    "spaceToFooter": 244,
+    "images": true,
+    "tagsOut": []
   },
   {
     "page": 12,
-    "spaceToFooter": 3,
-    "images": true
+    "spaceToFooter": 164,
+    "images": true,
+    "tagsOut": []
   },
   {
     "page": 13,
+    "spaceToFooter": 86,
+    "images": true,
+    "tagsOut": []
+  },
+  {
+    "page": 14,
+    "spaceToFooter": 17,
+    "images": true,
+    "tagsOut": []
+  },
+  {
+    "page": 15,
+    "spaceToFooter": 66,
+    "images": true,
+    "tagsOut": []
+  },
+  {
+    "page": 16,
+    "spaceToFooter": 3,
+    "images": true,
+    "tagsOut": []
+  },
+  {
+    "page": 17,
     "spaceToFooter": 6,
-    "images": true
+    "images": true,
+    "tagsOut": []
   }
 ]
