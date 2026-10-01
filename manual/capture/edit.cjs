@@ -1,4 +1,4 @@
-// P6〜P9 の撮影。すべて s2（手動配置）から始め、場面ごとに開き直す
+// P10〜P13 の撮影。すべて s2（手動配置）から始め、場面ごとに開き直す
 const fs=require('node:fs');
 const path=require('node:path');
 const P=require('../lib/paths.cjs');
@@ -7,7 +7,7 @@ const {openScene,loadState,gotoTab,shot,clipShot,unionRect,tailRect,appMainSig,m
 const {expect,record}=require('../lib/verify.cjs');
 const MAIN='#zone-near .space:has(.colwrap[data-space="メイン"])';
 const col=c=>`#zone-near .colwrap[data-space="メイン"][data-col="${c}"]`;
-// P7 4.3 の盤の図: 軒下②・出庫口横・軒下①（倉庫外）と、メイン（倉庫内）を別々に切り詰めて撮る。
+// P11 6.3 の盤の図: 軒下②・出庫口横・軒下①（倉庫外）と、メイン（倉庫内）を別々に切り詰めて撮る。
 // 1枚に収めると2列並びでも文字が小さいため、倉庫外／メインの2段・自動/手動の2列で計4枚にする
 // （5棟壁際・PC横・EV横・退避は含めない）。
 const BOARD_OUT_SEL=[
@@ -34,7 +34,7 @@ module.exports=async function(browser){
   const src=JSON.parse(fs.readFileSync(path.join(P.STATE,'source-export.json'),'utf8'));
   const am=JSON.parse(src['palletApp.schedule']).shifts.am;
 
-  // ---- P6 移動（3コマ）：隣の列へ。空きより多いと移動できない → 空きと同じ枚数で移動 ----
+  // ---- P10 移動（3コマ）：隣の列へ。空きより多いと移動できない → 空きと同じ枚数で移動 ----
   // 分割の確認は隣の列への移動では出ない（隣接は1か所と数える）。確認は次の場面で別に記録する
   let sc=await openScene(browser,{state:s2,viewport:{width:1100,height:1200},tab:'配置編集'});
   const plan=await sc.page.evaluate(()=>{
@@ -100,7 +100,7 @@ module.exports=async function(browser){
   await shot(sc.page,'undo-toolbar','#toolFlag');
   await sc.context.close();
 
-  // ---- P6 分割の確認：離れた列へ1枚動かし、confirm の文言だけを記録する（撮影しない） ----
+  // ---- P10 分割の確認：離れた列へ1枚動かし、confirm の文言だけを記録する（撮影しない） ----
   sc=await openScene(browser,{state:s2,viewport:{width:1100,height:1200},tab:'配置編集'});
   const far=await sc.page.evaluate(()=>{
     const sp=lastSp.find(s=>s.name==='メイン');
@@ -129,7 +129,7 @@ module.exports=async function(browser){
   out.splitMove=far;
   await sc.context.close();
 
-  // ---- P7 4.3 自動配置と手動配置の盤 ----
+  // ---- P11 6.3 自動配置と手動配置の盤 ----
   // 1枚（倉庫外＋壁＋メイン）だと2列並びでも文字が小さいため、倉庫外（軒下②・出庫口横・軒下①）と
   // メインを別々の画像に分ける。自動／手動の同じ段は同じ矩形で撮る（片方で求めた矩形を使い回す）。
   sc=await openScene(browser,{state:S.stripManual(s2),viewport:{width:1100,height:1200},tab:'配置編集'});
@@ -145,7 +145,7 @@ module.exports=async function(browser){
   await clipShot(sc.page,'board-manual-main',boardMainRect);
   await sc.context.close();
 
-  // ---- P8 4.4 退避：仕掛品3 333-3334（id 8）を丸ごと退避 → 配置図に見出し「未定」の欄 ----
+  // ---- P12 6.4 退避：仕掛品3 333-3334（id 8）を丸ごと退避 → 配置図に見出し「未定」の欄 ----
   sc=await openScene(browser,{state:s2,viewport:{width:1100,height:1200},tab:'配置編集'});
   const lot8=sc.page.locator('#zone-near .cell[data-lot="8"]');
   const n8=await lot8.count();
@@ -190,7 +190,7 @@ module.exports=async function(browser){
   out.stash.sheetHead='未定';
   await sc.context.close();
 
-  // ---- P8 4.5 配置不可：メインの1列を配置不可にして自動配置を実行 ----
+  // ---- P12 6.5 配置不可：メインの1列を配置不可にして自動配置を実行 ----
   sc=await openScene(browser,{state:s2,viewport:{width:1100,height:1200},tab:'配置編集'});
   await sc.page.locator('#blockedEditBtn').click();
   const bc=sc.page.locator(`${col(1)} .cell`);
@@ -199,7 +199,7 @@ module.exports=async function(browser){
   await shot(sc.page,'blocked-main',MAIN);
   // 帯全体（#blockedEditActions）は幅いっぱいに伸びて文字が小さくなる。
   // ヒント文（#blockedEditHelp）は flex:1 で幅いっぱいに伸びる要素のため、
-  // 含めると矩形も伸びてしまう。ボタン2つだけに切り詰める（P3 の input-actions と同じやり方）。
+  // 含めると矩形も伸びてしまう。ボタン2つだけに切り詰める（P7 の input-actions と同じやり方）。
   await clipShot(sc.page,'blocked-actions',await unionRect(sc.page,'#blockedEditActions button',6));
   await sc.page.locator('#blockedRunBtn').click();
   await sc.page.waitForTimeout(800);
@@ -214,7 +214,7 @@ module.exports=async function(browser){
   out.blockedRun=blockedRun;
   await sc.context.close();
 
-  // ---- P9 「半」：初期位置の印 → 設定 ON → 半を設定 → 半を自動に戻す ----
+  // ---- P13 「半」：初期位置の印 → 設定 ON → 半を設定 → 半を自動に戻す ----
   sc=await openScene(browser,{state:S.withSettings(s2,{'palletApp.halfManual':'true'}),viewport:{width:1100,height:1200},tab:'配置編集'});
   const halfCol=`#zone-near .colwrap[data-space="メイン"]:has(.cell.half[data-lot="4"])`;
   expect(await sc.page.locator(halfCol).count()===1,'111-1113 の「半」の列が1つではない');
@@ -222,7 +222,7 @@ module.exports=async function(browser){
   // 列全体だと縦に長く「半」の印が小さくなるため、そのロットのマスだけに絞る
   const lot4Sel=`${halfCol} .cell[data-lot="4"]`;
   await clipShot(sc.page,'half-badge',await unionRect(sc.page,lot4Sel,4));
-  // P9 4.6 の拡大図：最下段（「半」の印）とその上1マスを、画像を引き伸ばさず
+  // P13 6.6 の拡大図：最下段（「半」の印）とその上1マスを、画像を引き伸ばさず
   // deviceScaleFactor:4 で撮り直す。矩形は CSS px なので通常倍率の場面のものをそのまま使える
   const halfZoomRect=await tailRect(sc.page,lot4Sel,2,4);
   const scZoom=await openScene(browser,{state:S.withSettings(s2,{'palletApp.halfManual':'true'}),viewport:{width:1100,height:1200},tab:'配置編集',deviceScaleFactor:4});

@@ -1,6 +1,6 @@
 // 画面の見取り図（試作）の撮影。入力・配置編集・配置図の3画面を撮り、
 // 札（A、B、C…）を付ける要素の位置を、画像に対する % で verification.json の overview に残す。
-// 札の位置は組版（draft-overview.cjs）がここから差し込む。手で座標を書かない。
+// 札の位置は組版（build.cjs が lib/build-lib.cjs の injectMarkers 経由で）ここから差し込む。手で座標を書かない。
 const path=require('node:path');
 const P=require('../lib/paths.cjs');
 const {openScene,loadState,unionRect}=require('../lib/scene.cjs');
