@@ -121,7 +121,7 @@ module.exports=async function(browser){
   await scEd.page.locator('#sheetEditBtn').click();
   const note=scEd.page.locator(`#sheetView td[data-ek="top|${slot}|note"]`);
   await note.click();
-  const editor=note.locator('textarea,input');
+  const editor=note.locator('textarea,input,.cell-editor');
   await editor.fill('（合計16P）');
   await editor.press('Tab');
   await scEd.page.locator('#sheetEditBtn').click();
