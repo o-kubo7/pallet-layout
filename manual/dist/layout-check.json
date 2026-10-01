@@ -1,13 +1,13 @@
 [
   {
     "page": 1,
-    "spaceToFooter": 37,
+    "spaceToFooter": 85,
     "images": true,
     "tagsOut": []
   },
   {
     "page": 2,
-    "spaceToFooter": 232,
+    "spaceToFooter": 178,
     "images": true,
     "tagsOut": []
   },
@@ -79,24 +79,30 @@
   },
   {
     "page": 14,
-    "spaceToFooter": 17,
+    "spaceToFooter": 361,
     "images": true,
     "tagsOut": []
   },
   {
     "page": 15,
-    "spaceToFooter": 66,
+    "spaceToFooter": 196,
     "images": true,
     "tagsOut": []
   },
   {
     "page": 16,
-    "spaceToFooter": 3,
+    "spaceToFooter": 66,
     "images": true,
     "tagsOut": []
   },
   {
     "page": 17,
+    "spaceToFooter": 3,
+    "images": true,
+    "tagsOut": []
+  },
+  {
+    "page": 18,
     "spaceToFooter": 6,
     "images": true,
     "tagsOut": []

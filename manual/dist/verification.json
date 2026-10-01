@@ -79,6 +79,13 @@
       "note": "（合計16P）",
       "pallets": "8P 半/7P"
     },
+    "bold": {
+      "key": "bottom|0|lot",
+      "lot": "111-1112",
+      "boldChar": "2",
+      "editorText": "111-1112",
+      "lastCharOfEditor": true
+    },
     "print": {
       "width": 1600,
       "height": 1131
