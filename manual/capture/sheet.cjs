@@ -1,4 +1,4 @@
-// P14〜P16 の撮影。s2 の配置図と設定タブ
+// P14〜P17 の撮影。s2 の配置図と設定タブ
 const fs=require('node:fs');
 const path=require('node:path');
 const {execFileSync}=require('node:child_process');
@@ -130,6 +130,48 @@ module.exports=async function(browser){
   expect(noteText.includes('（合計16P）'),'注釈に書き足せていない',noteText);
   await clipShot(scEd.page,'text-edit-after',await unionRect(scEd.page,fields,4));
   out.textEdit={slot,tier:'top',note:'（合計16P）',pallets:palText};
+
+  // 太字：仕掛品1 の 111-1112 の欄で、ロットの末尾1文字「2」だけを太字にする
+  const boldEk=await scEd.page.evaluate(()=>{
+    const tds=[...document.querySelectorAll('#sheetView td[data-ek$="|lot"]')];
+    const td=tds.find(t=>t.innerText.includes('111-1112'));
+    return td?td.getAttribute('data-ek'):null;
+  });
+  expect(boldEk,'仕掛品1 の 111-1112 の欄が見つからない（BLOCKED）');
+  const boldSel=`#sheetView td[data-ek="${boldEk}"]`;
+  await scEd.page.locator('#sheetEditBtn').click();
+  await scEd.page.locator(boldSel).click();
+  const boldEditor=scEd.page.locator('.cell-editor');
+  await boldEditor.waitFor({state:'visible'});
+  const sel=await scEd.page.evaluate(()=>{
+    const ed=document.querySelector('.cell-editor');
+    const w=document.createTreeWalker(ed,NodeFilter.SHOW_TEXT);
+    let n,hit=null;
+    while((n=w.nextNode())){
+      const i=n.data.lastIndexOf('111-1112');
+      if(i>=0) hit={n,i};
+    }
+    if(!hit) return {ok:false,text:ed.textContent};
+    const pos=hit.i+'111-1112'.length-1;
+    const r=document.createRange();
+    r.setStart(hit.n,pos); r.setEnd(hit.n,pos+1);
+    const s=window.getSelection();
+    s.removeAllRanges(); s.addRange(r);
+    return {ok:true,text:ed.textContent,picked:s.toString(),exactEnd:hit.n.data.length===pos+1};
+  });
+  expect(sel.ok && sel.picked==='2','編集欄で 2 を選べていない',sel);
+  await scEd.page.locator('#sheetBoldBtn').click();
+  // clipShot は撮る前に activeElement を blur する（編集が確定して B が消える）ため使えない。
+  // 編集中のまま撮るので page.screenshot を直接使う
+  await scEd.page.waitForTimeout(150);
+  await scEd.page.screenshot({path:path.join(P.ASSETS,'bold-editing.png'),clip:await unionRect(scEd.page,`${boldSel}, #sheetBoldBtn`,4),fullPage:true});
+  await scEd.page.keyboard.press('Tab');
+  await scEd.page.locator('#sheetEditBtn').click();
+  await scEd.page.waitForTimeout(300);
+  const boldHtml=await scEd.page.locator(boldSel).innerHTML();
+  expect(boldHtml.includes('<b>2</b>'),'太字が付いていない',boldHtml);
+  await clipShot(scEd.page,'bold-after',await unionRect(scEd.page,boldSel,4));
+  out.bold={key:boldEk,lot:'111-1112',boldChar:'2',editorText:sel.text,lastCharOfEditor:sel.exactEnd};
   await scEd.context.close();
 
   // 印刷イメージ（A4横）：アプリの印刷用CSSで PDF にし、1ページ目を PNG にする
