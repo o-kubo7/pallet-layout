@@ -8,8 +8,7 @@
     "capture": "node capture.cjs",
     "build": "node build.cjs",
     "render": "node render.cjs",
-    "all": "npm run states && npm run capture && npm run build && npm run render",
-    "draft": "node draft-overview.cjs"
+    "all": "npm run states && npm run capture && npm run build && npm run render"
   },
   "devDependencies": {
     "playwright-core": "^1.63.0"
