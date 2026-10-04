@@ -85,3 +85,26 @@ test('overviewInput は先頭のFAX伝票と仮伝票だけを残し、中身を
   assert.equal(st['palletApp.frac'],'true');
   assert.equal(sched(s1).shifts.am.slips.length,5,'元の状態を変更しない');
 });
+
+test('renameSpaces は入れ子の JSON 文字列中の旧エリア名だけを新名にする',()=>{
+  const st={'palletApp.schedule':JSON.stringify({fp:'a|軒下①|b|軒下②|c',sp:[{name:'軒下②'},{name:'軒下①'},{name:'出庫口横'}]}),x:'軒下①'};
+  const out=S.renameSpaces(st);
+  assert.equal(out['palletApp.schedule'],JSON.stringify({fp:'a|軒下|b|軒下奥|c',sp:[{name:'軒下奥'},{name:'軒下'},{name:'出庫口横'}]}));
+  assert.equal(out.x,'軒下');
+});
+
+test('renameSpaces は元のオブジェクトを変えない',()=>{
+  const st={a:'軒下①',b:'軒下②'};
+  S.renameSpaces(st);
+  assert.deepEqual(st,{a:'軒下①',b:'軒下②'});
+});
+
+test('renameSpaces は palletApp.spaces があると例外',()=>{
+  assert.throws(()=>S.renameSpaces({'palletApp.spaces':'[]'}),/palletApp\.spaces/);
+});
+
+test('source-export.json を renameSpaces に通すと旧エリア名が残らない',()=>{
+  const out=S.renameSpaces(src);
+  assert.ok(JSON.stringify(src).includes('軒下①'),'元ファイルは旧名のまま');
+  assert.ok(!/軒下[①②]/.test(JSON.stringify(out)));
+});

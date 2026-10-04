@@ -63,4 +63,17 @@ function overviewInput(state){
   am.slips=[fax,prov];
   return {...state,'palletApp.schedule':JSON.stringify(sch)};
 }
-module.exports={SLIP_GROUPS,makeFinal,makePlanned,stripManual,withSettings,overviewInput};
+// アプリのエリア名変更（軒下①→軒下、軒下②→軒下奥）に合わせ、状態の文字列を置き換える。
+// 指紋（manual.fp など）にも名前が入るので、単純置換で手動配置の復元も保てる
+const SPACE_RENAMES=[['軒下②','軒下奥'],['軒下①','軒下']];
+function renameSpaces(state){
+  if(Object.prototype.hasOwnProperty.call(state,'palletApp.spaces')){
+    throw new Error('palletApp.spaces があります。保存版の扱いを決めてから使ってください');
+  }
+  const out={};
+  for(const [k,v] of Object.entries(state)){
+    out[k]=typeof v==='string'?SPACE_RENAMES.reduce((t,[a,b])=>t.split(a).join(b),v):v;
+  }
+  return out;
+}
+module.exports={renameSpaces,SPACE_RENAMES,SLIP_GROUPS,makeFinal,makePlanned,stripManual,withSettings,overviewInput};

@@ -5,9 +5,9 @@ const {execFileSync}=require('node:child_process');
 const P=require('../lib/paths.cjs');
 const {openScene,loadState,gotoTab,clipShot,unionRect}=require('../lib/scene.cjs');
 const {expect,record}=require('../lib/verify.cjs');
-// 倉庫外（軒下①）の列。#zone-far 側は #zone-near と同じ colwrap の作りなので
+// 倉庫外（軒下）の列。#zone-far 側は #zone-near と同じ colwrap の作りなので
 // data-space・data-col で選べる（capture/edit.cjs の col() と同じやり方）
-const FAR_COL=c=>`#zone-far .colwrap[data-space="軒下①"][data-col="${c}"]`;
+const FAR_COL=c=>`#zone-far .colwrap[data-space="軒下"][data-col="${c}"]`;
 async function selectCells(page,locator,n){
   await locator.nth(0).click();
   for(let i=1;i<n;i++) await locator.nth(i).click({modifiers:['Shift']});
@@ -36,7 +36,7 @@ module.exports=async function(browser){
     return {x:tr.left+scrollX-pad,y:er.top+scrollY-pad,width:(tr.right-tr.left)+pad*2,height:(er.bottom-er.top)+pad*2};
   });
   await clipShot(sc.page,'sheet-notice',noticeRect);
-  // 上段（日付の表を除く、軒下①・PC横の表）
+  // 上段（日付の表を除く、軒下・PC横の表）
   await clipShot(sc.page,'sheet-top',await unionRect(sc.page,'#sheetView td[data-ek^="top|"]',3));
   // 111-1113（7P 半）の欄と、その下のメイン列（「半」の印）
   const r=await sc.page.evaluate(()=>{
@@ -66,18 +66,18 @@ module.exports=async function(browser){
   await scZoom.context.close();
 
   // テキスト編集：s2 とは別に開き、配置編集で 仕掛品3 の2ロット
-  // （333-3334 7枚＝data-lot=8、333-3333 9枚＝data-lot=7）を、倉庫外の軒下①の
-  // 空きへすべて移す。s2 の軒下①は、他ロットが一部入っている列（0・1）を避けて、
+  // （333-3334 7枚＝data-lot=8、333-3333 9枚＝data-lot=7）を、倉庫外の軒下の
+  // 空きへすべて移す。s2 の軒下は、他ロットが一部入っている列（0・1）を避けて、
   // 空の列だけ（列2＝空き2、列3＝空き2、列4＝空き11）を使う（ちょうど16枚分）。
-  // 2ロットとも軒下①だけに乗ると、mergeEntries() が1つの欄にまとめる（files/index.html）。
+  // 2ロットとも軒下だけに乗ると、mergeEntries() が1つの欄にまとめる（files/index.html）。
   let scEd=await openScene(browser,{state:s2,viewport:{width:1100,height:1200},tab:'配置編集'});
   const farFree=await scEd.page.evaluate(()=>{
-    const sp=lastSp.find(s=>s.name==='軒下①');
+    const sp=lastSp.find(s=>s.name==='軒下');
     return sp.cols.map((c,i)=>({i,free:columnFreeCount(c,c.blockedRows),empty:c.fills.length===0}));
   });
   const emptyCols=farFree.filter(c=>c.empty).sort((a,b)=>b.free-a.free);
   expect(emptyCols.length>=3 && emptyCols.slice(0,3).reduce((n,c)=>n+c.free,0)>=16,
-    '軒下① の空きが16枚に届かない（BLOCKED）',farFree);
+    '軒下 の空きが16枚に届かない（BLOCKED）',farFree);
   const [c11,c3,c2]=emptyCols;
 
   const lot8cells=scEd.page.locator('#zone-near .cell[data-lot="8"]');

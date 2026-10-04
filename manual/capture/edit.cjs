@@ -7,13 +7,13 @@ const {openScene,loadState,gotoTab,shot,clipShot,unionRect,tailRect,appMainSig,m
 const {expect,record}=require('../lib/verify.cjs');
 const MAIN='#zone-near .space:has(.colwrap[data-space="メイン"])';
 const col=c=>`#zone-near .colwrap[data-space="メイン"][data-col="${c}"]`;
-// P11 6.3 の盤の図: 軒下②・出庫口横・軒下①（倉庫外）と、メイン（倉庫内）を別々に切り詰めて撮る。
+// P11 6.3 の盤の図: 軒下奥・出庫口横・軒下（倉庫外）と、メイン（倉庫内）を別々に切り詰めて撮る。
 // 1枚に収めると2列並びでも文字が小さいため、倉庫外／メインの2段・自動/手動の2列で計4枚にする
 // （5棟壁際・PC横・EV横・退避は含めない）。
 const BOARD_OUT_SEL=[
-  '#zone-far .space:has(.colwrap[data-space="軒下②"])',
+  '#zone-far .space:has(.colwrap[data-space="軒下奥"])',
   '#zone-far .space:has(.colwrap[data-space="出庫口横"])',
-  '#zone-far .space:has(.colwrap[data-space="軒下①"])',
+  '#zone-far .space:has(.colwrap[data-space="軒下"])',
 ].join(',');
 const BOARD_MAIN_SEL=MAIN;
 
@@ -130,7 +130,7 @@ module.exports=async function(browser){
   await sc.context.close();
 
   // ---- P11 6.3 自動配置と手動配置の盤 ----
-  // 1枚（倉庫外＋壁＋メイン）だと2列並びでも文字が小さいため、倉庫外（軒下②・出庫口横・軒下①）と
+  // 1枚（倉庫外＋壁＋メイン）だと2列並びでも文字が小さいため、倉庫外（軒下奥・出庫口横・軒下）と
   // メインを別々の画像に分ける。自動／手動の同じ段は同じ矩形で撮る（片方で求めた矩形を使い回す）。
   sc=await openScene(browser,{state:S.stripManual(s2),viewport:{width:1100,height:1200},tab:'配置編集'});
   out.autoMatchesResult=JSON.stringify(await appMainSig(sc.page))===JSON.stringify(mainSig(am.result.sp));
