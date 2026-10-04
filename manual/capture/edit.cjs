@@ -202,6 +202,12 @@ module.exports=async function(browser){
   // 含めると矩形も伸びてしまう。ボタン2つだけに切り詰める（P7 の input-actions と同じやり方）。
   await clipShot(sc.page,'blocked-actions',await unionRect(sc.page,'#blockedEditActions button',6));
   await sc.page.locator('#blockedRunBtn').click();
+  // v80 では「自動配置を実行」も runFromButton を通る。s2 には手動調整があるため、
+  // 手動調整の残し方を選ぶ確認画面（#carryDlg）が開き、答えるまで実行されない。
+  await sc.page.waitForTimeout(400);
+  const dlgShown=await sc.page.evaluate(()=>!document.getElementById('carryDlg').hidden);
+  expect(dlgShown,'手動調整の残し方の確認画面が出ていない（BLOCKED）',dlgShown);
+  await sc.page.locator('#carryDlg button').filter({hasText:/^変更分だけ自動配置/}).click();
   await sc.page.waitForTimeout(800);
   // blocked-after.png はどのページでも使わないため撮らない。
   // 代わりに、配置不可にしたマスを避けて自動配置が成功したことだけを確かめる
@@ -211,6 +217,13 @@ module.exports=async function(browser){
     return {hasResult:true,blockedColFilled:col.fills.length>0};
   });
   expect(blockedRun.hasResult && !blockedRun.blockedColFilled,'配置不可のマスを避けた自動配置が実行できていない',blockedRun);
+  // 配置不可の列には s2 で荷が入っていたため、手動調整を引き継げず作り直しになる（P13 の本文の根拠）
+  const carryNote=await sc.page.evaluate(()=>
+    [...document.querySelectorAll('#messages .msg')].map(e=>e.innerText.trim())
+      .find(t=>t.includes('手動調整を引き継げないため、すべて自動配置し直しました'))||null);
+  expect(!!carryNote,'配置不可のマスと重なる手動調整が、作り直しになっていない',
+    await sc.page.evaluate(()=>[...document.querySelectorAll('#messages .msg')].map(e=>e.innerText.trim())));
+  blockedRun.carryNote=carryNote;
   out.blockedRun=blockedRun;
   await sc.context.close();
 
