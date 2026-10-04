@@ -1,4 +1,4 @@
-// P1・P2 と P7〜P9 の撮影。s2 から完成図、s1 から入力の場面を撮る
+// P1・P2 と P7〜P10 の撮影。s2 から完成図と3択の確認画面（P10）、s1 から入力の場面を撮る
 const {openScene,loadState,gotoTab,shot,clipShot,unionRect,inputInfo}=require('../lib/scene.cjs');
 const {expect,record}=require('../lib/verify.cjs');
 
@@ -86,6 +86,30 @@ module.exports=async function(browser){
   expect(confirmed.slipCount==='FAX伝票 5枚 ／ 仮 0件','受領後の伝票枚数',confirmed.slipCount);
   out.confirmed={total:confirmed.total,slipCount:confirmed.slipCount};
   await shot(sc.page,'input-head-confirmed','.input-head');
+  await sc.context.close();
+
+  // P10: s2（手動配置あり）で伝票の数量を1P分だけ増やし、再度の自動配置で出る3択の確認画面を撮る
+  sc=await openScene(browser,{state:loadState('s2-final.json'),tab:'入力'});
+  const lastSlip=sc.page.locator('#slipList .slip').last();
+  const carryQty=lastSlip.locator('tbody tr').last().locator('input').nth(3);
+  await carryQty.fill('29000'); // 444-4444（仕掛品4・SNP 2,000）27000 -> 29000 で +1P
+  await carryQty.press('Tab');
+  await sc.page.locator('#runBtnInline').click();
+  await sc.page.waitForTimeout(400);
+  const dlgShown=await sc.page.evaluate(()=>!document.getElementById('carryDlg').hidden);
+  expect(dlgShown,'手動調整の残し方の確認画面が出ていない（BLOCKED）',dlgShown);
+  await clipShot(sc.page,'carry-dialog',await unionRect(sc.page,'.carry-box',4));
+  await sc.page.locator('#carryDlg button').filter({hasText:/^変更分だけ自動配置/}).click();
+  await sc.page.waitForTimeout(800);
+  // 注意: s2 のマスタは見本用なので、未登録品目の確認(confirm)も出て場面の既定動作で承諾される。
+  // そのため #messages には「✅ 「設定」タブに登録しました」の行も増える。混ぜないよう該当行だけ抜き出す。
+  const carryNote=await sc.page.evaluate(()=>
+    [...document.querySelectorAll('#messages .msg')].map(e=>e.innerText.trim())
+      .find(t=>t.includes('手動調整を残して、変更分だけ反映しました'))||null);
+  expect(!!carryNote,'変更分だけの反映になっていない',carryNote);
+  const keptM=/そのまま (\d+)件/.exec(carryNote);
+  expect(!!keptM&&Number(keptM[1])>=1,'「そのまま」の件数が1以上ではない',carryNote);
+  out.carry={note:carryNote,kept:Number(keptM[1])};
   await sc.context.close();
 
   record('input',out);
