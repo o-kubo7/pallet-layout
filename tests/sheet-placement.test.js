@@ -545,12 +545,12 @@ test("両端詰めはメインだけに適用する", () => {
   const {cellLayoutOptions}=makeLayoutFunctions();
   assert.deepEqual(cellLayoutOptions({name:"メイン"},{h:8}), {fromEnd:false,splitEnds:true});
   assert.deepEqual(cellLayoutOptions({name:"PC横"},{h:8}), {fromEnd:false,splitEnds:false});
-  assert.deepEqual(cellLayoutOptions({name:"軒下①"},{h:11,row:2}), {fromEnd:true,splitEnds:false});
+  assert.deepEqual(cellLayoutOptions({name:"軒下"},{h:11,row:2}), {fromEnd:true,splitEnds:false});
 });
 
-test("軒下①は上段3マスだけ左詰めにする", () => {
+test("軒下は上段3マスだけ左詰めにする", () => {
   const {spaceCells}=makeLayoutFunctions();
-  const space={name:"軒下①",cols:[
+  const space={name:"軒下",cols:[
     {h:3,row:0,off:9,fills:[{id:1,count:1}]},
     {h:11,row:2,off:0,fills:[{id:2,count:7}]},
     {h:11,row:3,off:0,fills:[{id:3,count:7}]},
@@ -565,9 +565,9 @@ test("軒下①は上段3マスだけ左詰めにする", () => {
   assert.deepEqual(cells[4],[null,5]);
 });
 
-test("軒下①の2ロット列は両端に分けず右から連続して詰める", () => {
+test("軒下の2ロット列は両端に分けず右から連続して詰める", () => {
   const {spaceCells}=makeLayoutFunctions();
-  const [cells]=spaceCells({name:"軒下①",cols:[
+  const [cells]=spaceCells({name:"軒下",cols:[
     {h:8,row:4,off:0,fills:[{id:5,count:2},{id:8,count:2}]}
   ]});
   assert.deepEqual(cells.map(c=>c.id), [null,null,null,null,8,8,5,5]);
@@ -1166,7 +1166,7 @@ test("配置表からあふれた先頭2項目をあふれブロックへ記載�
     functionSource("arrangeOverflowSlots") +
     functionSource("sheetPlacement") + "; return sheetPlacement;"
   );
-  const top = Array.from({ length: 7 }, (_, index) => ({ lot: { id: index + 1 }, areas: ["軒下①"] }));
+  const top = Array.from({ length: 7 }, (_, index) => ({ lot: { id: index + 1 }, areas: ["軒下"] }));
   const bottom = Array.from({ length: 8 }, (_, index) => ({ lot: { id: index + 101 }, areas: ["メイン"] }));
   const computeSheetPlacement = placement(
     tier => tier === "top" ? top : bottom,
@@ -1188,7 +1188,7 @@ test("5項目以上のあふれでは4枠目をまとめ欄にする", () => {
     functionSource("arrangeOverflowSlots") +
     functionSource("sheetPlacement") + "; return sheetPlacement;"
   );
-  const top = Array.from({ length: 10 }, (_, index) => ({ lot: { id: index + 1 }, areas: ["軒下①"] }));
+  const top = Array.from({ length: 10 }, (_, index) => ({ lot: { id: index + 1 }, areas: ["軒下"] }));
   const bottom = Array.from({ length: 8 }, (_, index) => ({ lot: { id: index + 101 }, areas: ["メイン"] }));
   const computeSheetPlacement = placement(
     tier => tier === "top" ? top : bottom,
@@ -1212,19 +1212,19 @@ test("追記欄の段と段の間に6pxの隙間を入れる", () => {
     "esc", "palSlotTextOf", "slotAreaNote",
     functionSource("overflowTable") + "; return overflowTable;"
   );
-  const entry = (name, lot) => ({ lot: { name, lot }, areas: ["軒下①"] });
+  const entry = (name, lot) => ({ lot: { name, lot }, areas: ["軒下"] });
   // 追記欄は1行に2欄ずつ並ぶので、隙間が入るのは3件目以降＝2段目ができる日
   const html = renderOverflow(
     value => String(value),
     () => "6P",
-    () => "※軒下①"
+    () => "※軒下"
   )([entry("品目1", "L-1"), entry("品目2", "L-2"), entry("品目3", "L-3")]);
   assert.match(html, /class="overflow-gap"/);
   // 1段だけの日は隙間が要らない
   const oneRow = renderOverflow(
     value => String(value),
     () => "6P",
-    () => "※軒下①"
+    () => "※軒下"
   )([entry("品目1", "L-1"), entry("品目2", "L-2")]);
   assert.doesNotMatch(oneRow, /class="overflow-gap"/);
 });
@@ -1734,8 +1734,8 @@ test("緊急用マスは列の下端1マスだけを認める", () => {
   assert.equal(validSpaces(make([6, 7])), false);   // 2 マスは認めない
 });
 
-test("配置マスを更新したので保存バージョンを上げる", () => {
-  assert.match(source, /const SPACES_SAVE_VERSION = 4;/);
+test("エリア名を変えたので保存バージョンを上げる", () => {
+  assert.match(source, /const SPACES_SAVE_VERSION = 5;/);
 });
 
 test("版が変わったら配置不可セルも一緒に解除する", () => {
@@ -1933,7 +1933,7 @@ test("上段からの救済は基準エリア以外より後ろに置く", () =>
     "sheetAreas",
     functionSource("arrangeBottomSlots") + "; return arrangeBottomSlots;"
   )(() => ["メイン", "PC横", "EV横"]);
-  const rescued = { lot: { id: "R1" }, areas: ["軒下①"], fromTop: true };
+  const rescued = { lot: { id: "R1" }, areas: ["軒下"], fromTop: true };
   const result = arrange(
     [{ lot: { id: "M1" }, areas: ["メイン"] }, { lot: { id: "M2" }, areas: ["メイン"] },
      rescued,
@@ -1955,7 +1955,7 @@ function buildPlacementForTier(topSlots, bottomSlots, stashed) {
     () => ({ top: 6, bottom: 9 }),
     areas => "※" + areas.join("・"),
     false,
-    tier => tier === "bottom" ? ["メイン", "PC横", "EV横"] : ["軒下①"]
+    tier => tier === "bottom" ? ["メイン", "PC横", "EV横"] : ["軒下"]
   );
 }
 
@@ -1978,14 +1978,14 @@ function buildActualPlacement(topSlots, bottomSlots, stashed) {
     choose,
     areas => "※" + areas.join("・"),
     false,
-    tier => tier === "bottom" ? ["メイン", "PC横", "EV横"] : ["軒下①"],
+    tier => tier === "bottom" ? ["メイン", "PC横", "EV横"] : ["軒下"],
     layouts
   );
 }
 
 test("配置図は上下段を使い切ってから次の様式へ拡張する", () => {
   const top = count => Array.from({ length: count }, (_, index) =>
-    ({ lot: { id: "T" + (index + 1) }, areas: ["軒下①"] }));
+    ({ lot: { id: "T" + (index + 1) }, areas: ["軒下"] }));
   const main = count => Array.from({ length: count }, (_, index) =>
     ({ lot: { id: "M" + (index + 1) }, areas: ["メイン"] }));
   const other = ids => ids.map(id => ({
@@ -2012,7 +2012,7 @@ test("配置図は上下段を使い切ってから次の様式へ拡張する",
 });
 
 test("上段固有欄・メイン超過・複数エリア・まとめ欄の境界を守る", () => {
-  const top = Array.from({ length: 7 }, (_, index) => ({ lot: { id: "T" + (index + 1) }, areas: ["軒下①"] }));
+  const top = Array.from({ length: 7 }, (_, index) => ({ lot: { id: "T" + (index + 1) }, areas: ["軒下"] }));
   const main = count => Array.from({ length: count }, (_, index) => ({ lot: { id: "M" + (index + 1) }, areas: ["メイン"] }));
   const rescued = buildActualPlacement(top, main(7))();
   assert.equal(rescued.lay.bottom, 9);
@@ -2034,7 +2034,7 @@ test("上段固有欄・メイン超過・複数エリア・まとめ欄の境�
 });
 
 test("wide の追記欄は実在エリアを退避より先に載せる", () => {
-  const top = Array.from({ length: 6 }, (_, index) => ({ lot: { id: "T" + (index + 1) }, areas: ["軒下①"] }));
+  const top = Array.from({ length: 6 }, (_, index) => ({ lot: { id: "T" + (index + 1) }, areas: ["軒下"] }));
   const main = Array.from({ length: 9 }, (_, index) => ({ lot: { id: "M" + (index + 1) }, areas: ["メイン"] }));
   const stash = ["S1", "S2"].map(id => ({ lot: { id }, areas: ["退避"], note: "※未定", stash: true }));
   const result = buildActualPlacement(top, main.concat([{ lot: { id: "P1" }, areas: ["PC横"] }]), stash)();
@@ -2052,7 +2052,7 @@ test("wide の追記欄は実在エリアを退避より先に載せる", () => 
 test("下段のこぼれのうち基準エリア以外は上段の空き欄へ回る", () => {
   const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
   const placement = buildPlacementForTier(
-    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" }],
+    [{ lot: { id: "T1" }, areas: ["軒下"], note: "※軒下" }],
     [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
      { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "P2" }, areas: ["PC横"] },
      { lot: { id: "P3" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }]
@@ -2066,7 +2066,7 @@ test("下段のこぼれのうち基準エリア以外は上段の空き欄へ�
 test("基準エリアのこぼれは上段へ回さず追記欄へ行く", () => {
   const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
   const placement = buildPlacementForTier(
-    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" }],
+    [{ lot: { id: "T1" }, areas: ["軒下"], note: "※軒下" }],
     [main(1), main(2), main(3), main(4), main(5), main(6), main(7), main(8), main(9), main(10),
      { lot: { id: "P1" }, areas: ["PC横"] }]
   );
@@ -2079,7 +2079,7 @@ test("基準エリアのこぼれは上段へ回さず追記欄へ行く", () =>
 test("下段があふれた日は上段から下段への救済が起きない", () => {
   const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
   const placement = buildPlacementForTier(
-    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" }],
+    [{ lot: { id: "T1" }, areas: ["軒下"], note: "※軒下" }],
     [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
      { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "P2" }, areas: ["PC横"] },
      { lot: { id: "P3" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }]
@@ -2110,8 +2110,8 @@ test("退避が先に上段の欄を取り、残った空きにだけ下段の�
   const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
   const stash = n => ({ lot: { id: "S" + n }, areas: ["退避"], note: "※未定", stash: true });
   const placement = buildPlacementForTier(
-    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" },
-     { lot: { id: "T2" }, areas: ["軒下①"], note: "※軒下①" }],
+    [{ lot: { id: "T1" }, areas: ["軒下"], note: "※軒下" },
+     { lot: { id: "T2" }, areas: ["軒下"], note: "※軒下" }],
     [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
      { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "P2" }, areas: ["PC横"] },
      { lot: { id: "P3" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }],
@@ -2129,8 +2129,8 @@ test("退避が上段の空きを使い切る日は下段のこぼれが回ら�
   const main = n => ({ lot: { id: "M" + n }, areas: ["メイン"] });
   const stash = n => ({ lot: { id: "S" + n }, areas: ["退避"], note: "※未定", stash: true });
   const placement = buildPlacementForTier(
-    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" },
-     { lot: { id: "T2" }, areas: ["軒下①"], note: "※軒下①" }],
+    [{ lot: { id: "T1" }, areas: ["軒下"], note: "※軒下" },
+     { lot: { id: "T2" }, areas: ["軒下"], note: "※軒下" }],
     [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
      { lot: { id: "P1" }, areas: ["PC横"] }, { lot: { id: "P2" }, areas: ["PC横"] },
      { lot: { id: "P3" }, areas: ["PC横"] }, { lot: { id: "E1" }, areas: ["EV横"] }],
@@ -2148,7 +2148,7 @@ test("上段があふれる日は退避が下段へ救済され、下段から�
   // 退避は arrangeBottomSlots() の救済対象にはなるが、下段のこぼれを上段へ回す経路の
   // 対象外（!e.stash）。この2つを取り違えないよう、上段があふれる側も固定する
   const stash = n => ({ lot: { id: "S" + n }, areas: ["退避"], note: "※未定", stash: true });
-  const top = n => ({ lot: { id: "T" + n }, areas: ["軒下①"], note: "※軒下①" });
+  const top = n => ({ lot: { id: "T" + n }, areas: ["軒下"], note: "※軒下" });
   const placement = buildPlacementForTier(
     [top(1), top(2), top(3), top(4), top(5), top(6)],
     [{ lot: { id: "M1" }, areas: ["メイン"] }],
@@ -2184,7 +2184,7 @@ test("まとめ欄が上段へ回っても movedBottom はその欄をそのま�
     members: [{ lot: { id: "P1" } }, { lot: { id: "P2" } }]
   };
   const placement = buildPlacementForTier(
-    [{ lot: { id: "T1" }, areas: ["軒下①"], note: "※軒下①" }],
+    [{ lot: { id: "T1" }, areas: ["軒下"], note: "※軒下" }],
     [main(1), main(2), main(3), main(4), main(5), main(6), main(7),
      main(8), main(9), merged]
   );
@@ -2207,10 +2207,10 @@ test("上段の注釈は、2つ以上のエリアにまたがる欄にだけ出�
   const topSlotNote = new Function(
     functionSource("topSlotNote") + "; return topSlotNote;"
   )();
-  assert.equal(topSlotNote({ areas: ["軒下①"] }), "");
-  assert.equal(topSlotNote({ areas: ["軒下①", "出庫口横"] }), "※出庫口横");
+  assert.equal(topSlotNote({ areas: ["軒下"] }), "");
+  assert.equal(topSlotNote({ areas: ["軒下", "出庫口横"] }), "※出庫口横");
   assert.equal(
-    topSlotNote({ areas: ["軒下①", "出庫口横", "5棟壁際"] }),
+    topSlotNote({ areas: ["軒下", "出庫口横", "5棟壁際"] }),
     "※出庫口横・5棟壁際"
   );
   // 退避は見出しが「未定」になるので欄の注釈は要らない
@@ -2227,10 +2227,10 @@ test("上段の見出しは、先頭エリアだけの日と空の日は従来�
   const at = name => ({ areas: [name] });
 
   // 日常。現場が毎日見る紙の見た目を変えない
-  assert.deepEqual(topHeadGroups([at("軒下①"), at("軒下①")], 4, "軒下①"),
+  assert.deepEqual(topHeadGroups([at("軒下"), at("軒下")], 4, "軒下"),
     [{ label: "軒下", slots: 4 }]);
   // 上段に荷物が無い日
-  assert.deepEqual(topHeadGroups([], 4, "軒下①"),
+  assert.deepEqual(topHeadGroups([], 4, "軒下"),
     [{ label: "軒下", slots: 4 }]);
 });
 
@@ -2241,13 +2241,13 @@ test("上段の見出しは、先頭エリア以外だけの日にそのエリ�
   )();
   const at = name => ({ areas: [name] });
 
-  assert.deepEqual(topHeadGroups([at("出庫口横")], 4, "軒下①"),
+  assert.deepEqual(topHeadGroups([at("出庫口横")], 4, "軒下"),
     [{ label: "出庫口横", slots: 4 }]);
   // 退避は「退避」ではなく「未定」。現場にとって退避は場所の名前ではない
-  assert.deepEqual(topHeadGroups([{ areas: ["退避"], stash: true }], 4, "軒下①"),
+  assert.deepEqual(topHeadGroups([{ areas: ["退避"], stash: true }], 4, "軒下"),
     [{ label: "未定", slots: 4 }]);
   // 下段から上段へ回した欄
-  assert.deepEqual(topHeadGroups([at("PC横")], 4, "軒下①"),
+  assert.deepEqual(topHeadGroups([at("PC横")], 4, "軒下"),
     [{ label: "PC横", slots: 4 }]);
 });
 
@@ -2258,15 +2258,15 @@ test("上段の見出しはエリアごとに分かれ、欄数の合計は必�
   const at = name => ({ areas: [name] });
   const sum = gs => gs.reduce((a, g) => a + g.slots, 0);
 
-  const two = topHeadGroups([at("軒下①"), at("軒下①"), at("軒下②")], 4, "軒下①");
-  assert.deepEqual(two.map(g => g.label), ["軒下①", "軒下②"]);
+  const two = topHeadGroups([at("軒下"), at("軒下"), at("軒下奥")], 4, "軒下");
+  assert.deepEqual(two.map(g => g.label), ["軒下", "軒下奥"]);
   // 余った1欄は末尾のグループに足す
   assert.deepEqual(two.map(g => g.slots), [2, 2]);
   assert.equal(sum(two), 4);
 
   const stash = topHeadGroups(
-    [at("軒下①"), { areas: ["退避"], stash: true }], 4, "軒下①");
-  assert.deepEqual(stash.map(g => g.label), ["軒下①", "未定"]);
+    [at("軒下"), { areas: ["退避"], stash: true }], 4, "軒下");
+  assert.deepEqual(stash.map(g => g.label), ["軒下", "未定"]);
   assert.equal(sum(stash), 4);
 });
 
@@ -2278,14 +2278,14 @@ test("上段の見出しは、またがる欄のエリアもラベルに並べ�
 
   // またがる欄しか2つ目のエリアを使っていない日。グループは1つだがラベルは割れる
   assert.deepEqual(
-    topHeadGroups([{ areas: ["軒下①", "軒下②"] }], 4, "軒下①"),
-    [{ label: "軒下①・軒下②", slots: 4 }]
+    topHeadGroups([{ areas: ["軒下", "軒下奥"] }], 4, "軒下"),
+    [{ label: "軒下・軒下奥", slots: 4 }]
   );
   // 3エリア以上は先頭2つ＋「 ほか」で打ち切る。1欄ぶんの幅では折り返して
   // 見出し行が約18px伸びるため（設計書 §5-3 の実測）
   assert.deepEqual(
-    topHeadGroups([{ areas: ["軒下①", "出庫口横", "5棟壁際"] }], 4, "軒下①"),
-    [{ label: "軒下①・出庫口横 ほか", slots: 4 }]
+    topHeadGroups([{ areas: ["軒下", "出庫口横", "5棟壁際"] }], 4, "軒下"),
+    [{ label: "軒下・出庫口横 ほか", slots: 4 }]
   );
 });
 
@@ -2299,18 +2299,18 @@ test("上段の見出しは、紙に出ない欄を数えない", () => {
   const sum = gs => gs.reduce((a, g) => a + g.slots, 0);
 
   const over = topHeadGroups(
-    [at("軒下①"), at("軒下①"), at("軒下②"), at("軒下②"),
-     at("出庫口横"), at("5棟壁際")], 4, "軒下①");
+    [at("軒下"), at("軒下"), at("軒下奥"), at("軒下奥"),
+     at("出庫口横"), at("5棟壁際")], 4, "軒下");
   assert.equal(sum(over), 4);
   // 5件目以降（出庫口横・5棟壁際）は紙に出ないので見出しにも出さない
-  assert.deepEqual(over.map(g => g.label), ["軒下①", "軒下②"]);
+  assert.deepEqual(over.map(g => g.label), ["軒下", "軒下奥"]);
 
   // wide（上段6欄）でも合計が一致する
-  const wide = topHeadGroups([at("軒下①"), at("軒下②")], 6, "軒下①");
+  const wide = topHeadGroups([at("軒下"), at("軒下奥")], 6, "軒下");
   assert.equal(sum(wide), 6);
 
   // areas が空の欄が混ざっても落ちない
-  const broken = topHeadGroups([{ areas: [] }, at("軒下②")], 4, "軒下①");
+  const broken = topHeadGroups([{ areas: [] }, at("軒下奥")], 4, "軒下");
   assert.equal(sum(broken), 4);
 });
 
@@ -2400,11 +2400,11 @@ test("配置図の見出し行はグループごとのセルで、列数の合�
   const cols = groups => 5 + 1 + groups.reduce((a, g) => a + g.slots * 2, 0);
 
   // normal: 14 列
-  assert.equal(cols(topHeadGroups([at("軒下①")], 4, "軒下①")), 14);
-  assert.equal(cols(topHeadGroups([at("軒下①"), at("軒下②")], 4, "軒下①")), 14);
-  assert.equal(cols(topHeadGroups([], 4, "軒下①")), 14);
+  assert.equal(cols(topHeadGroups([at("軒下")], 4, "軒下")), 14);
+  assert.equal(cols(topHeadGroups([at("軒下"), at("軒下奥")], 4, "軒下")), 14);
+  assert.equal(cols(topHeadGroups([], 4, "軒下")), 14);
   // wide: 18 列
-  assert.equal(cols(topHeadGroups([at("軒下①"), at("軒下②"), at("PC横")], 6, "軒下①")), 18);
+  assert.equal(cols(topHeadGroups([at("軒下"), at("軒下奥"), at("PC横")], 6, "軒下")), 18);
 
   // renderSheet が topHeadGroups を通し、colspan をグループの欄数から作っていること
   const fn = functionSource("renderSheet");
@@ -2446,8 +2446,8 @@ test("上段の注釈行は残し、またがる欄にだけ注釈を出す", ()
   const note = e => ({ ...e, note: new Function(
     functionSource("topSlotNote") + "; return topSlotNote;")()(e) });
   const html = render(
-    [note({ lot: { name: "A" }, areas: ["軒下①"] }),
-     note({ lot: { name: "B" }, areas: ["軒下①", "出庫口横"] })],
+    [note({ lot: { name: "A" }, areas: ["軒下"] }),
+     note({ lot: { name: "B" }, areas: ["軒下", "出庫口横"] })],
     2, "note");
   const cells = html.match(/<td class="[^"]*snote[^"]*"[^>]*>([\s\S]*?)<\/td>/g) || [];
   assert.equal(cells.length, 2);
@@ -2565,8 +2565,8 @@ test("書き足しの署名は材料が1つ変われば変わる", () => {
   const base = {
     fp: '{"items":[{"itemId":"i1"}]}',
     lots: [{ id: "l1", pallets: 3 }],
-    sp: [{ name: "軒下①", cells: ["l1"] }],
-    spacesText: "軒下① | far | v | 1 | 3,3 | top",
+    sp: [{ name: "軒下", cells: ["l1"] }],
+    spacesText: "軒下 | far | v | 1 | 3,3 | top",
     mergeLots: true,
     fracMode: false,
     layName: "normal",
@@ -2576,7 +2576,7 @@ test("書き足しの署名は材料が1つ変われば変わる", () => {
   assert.equal(sigFrom({ ...base }), sig);
   assert.notEqual(sigFrom({ ...base, fp: '{"items":[{"itemId":"i2"}]}' }), sig);
   assert.notEqual(sigFrom({ ...base, lots: [{ id: "l1", pallets: 4 }] }), sig);
-  assert.notEqual(sigFrom({ ...base, sp: [{ name: "軒下①", cells: ["l2"] }] }), sig);
+  assert.notEqual(sigFrom({ ...base, sp: [{ name: "軒下", cells: ["l2"] }] }), sig);
   assert.notEqual(sigFrom({ ...base, mergeLots: false }), sig);
   assert.notEqual(sigFrom({ ...base, fracMode: true }), sig);
   assert.notEqual(sigFrom({ ...base, layName: "wide" }), sig);
@@ -2594,10 +2594,10 @@ test("書き足しの署名は掲載先が変われば変わる", () => {
 
   const base = {
     fp: "fp", lots: [], sp: [],
-    spacesText: "軒下① | far | v | 1 | 3,3 | bottom",
+    spacesText: "軒下 | far | v | 1 | 3,3 | bottom",
     mergeLots: true, fracMode: false, layName: "normal",
   };
-  const moved = { ...base, spacesText: "軒下① | far | v | 1 | 3,3 | top" };
+  const moved = { ...base, spacesText: "軒下 | far | v | 1 | 3,3 | top" };
   assert.notEqual(sigFrom(moved), sigFrom(base));
 });
 
