@@ -15,8 +15,8 @@
       "fpMatchesS2": true
     },
     "app": {
-      "cacheVersion": "v78",
-      "commit": "879d35b"
+      "cacheVersion": "v80",
+      "commit": "2567444"
     }
   },
   "input": {
@@ -35,6 +35,10 @@
     "confirmed": {
       "total": 100,
       "slipCount": "FAX伝票 5枚 ／ 仮 0件"
+    },
+    "carry": {
+      "note": "✅ 手動調整を残して、変更分だけ反映しました（そのまま 9件・増えた 1件）。増えた分 1P を空きへ配置しました。",
+      "kept": 9
     }
   },
   "edit": {
@@ -63,7 +67,8 @@
     },
     "blockedRun": {
       "hasResult": true,
-      "blockedColFilled": false
+      "blockedColFilled": false,
+      "carryNote": "⚠ 倉庫の設定や配置不可のマスが変わっていて手動調整を引き継げないため、すべて自動配置し直しました。"
     },
     "half": {
       "before": 7,

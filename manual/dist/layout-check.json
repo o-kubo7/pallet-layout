@@ -13,7 +13,7 @@
   },
   {
     "page": 3,
-    "spaceToFooter": 6,
+    "spaceToFooter": 4,
     "images": true,
     "tagsOut": []
   },
@@ -55,54 +55,60 @@
   },
   {
     "page": 10,
-    "spaceToFooter": 4,
+    "spaceToFooter": 186,
     "images": true,
     "tagsOut": []
   },
   {
     "page": 11,
-    "spaceToFooter": 244,
+    "spaceToFooter": 4,
     "images": true,
     "tagsOut": []
   },
   {
     "page": 12,
-    "spaceToFooter": 164,
+    "spaceToFooter": 244,
     "images": true,
     "tagsOut": []
   },
   {
     "page": 13,
-    "spaceToFooter": 86,
+    "spaceToFooter": 158,
     "images": true,
     "tagsOut": []
   },
   {
     "page": 14,
-    "spaceToFooter": 361,
+    "spaceToFooter": 86,
     "images": true,
     "tagsOut": []
   },
   {
     "page": 15,
-    "spaceToFooter": 196,
+    "spaceToFooter": 361,
     "images": true,
     "tagsOut": []
   },
   {
     "page": 16,
-    "spaceToFooter": 66,
+    "spaceToFooter": 196,
     "images": true,
     "tagsOut": []
   },
   {
     "page": 17,
-    "spaceToFooter": 3,
+    "spaceToFooter": 66,
     "images": true,
     "tagsOut": []
   },
   {
     "page": 18,
+    "spaceToFooter": 3,
+    "images": true,
+    "tagsOut": []
+  },
+  {
+    "page": 19,
     "spaceToFooter": 6,
     "images": true,
     "tagsOut": []
