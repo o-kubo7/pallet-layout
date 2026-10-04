@@ -1,29 +1,15 @@
-<!--page {"title":"6. 配置編集 <small>（4）「半」の位置</small>","lead":"端数のパレットを置く場所を、配置図で示します。","tab":"配置編集"} -->
-<h2>6.6 「半」はロットの下側に付く</h2>
+<!--page {"title":"6. 配置編集 <small>（3）退避と配置不可</small>","lead":"一時的な置き場と、使えない場所の扱いです。","tab":"配置編集"} -->
+<h2>6.4 退避スペースを使う</h2>
 <div class="cols">
-<figure class="zoom-row">
-<div class="hl-wrap tight"><img class="shot fit h40" src="assets/half-badge.png" alt="半の印"><span class="hl-box" style="left:-3px;right:-3px;top:87.5%"></span></div>
-<svg class="zoom-arrow" width="26" height="18" viewBox="0 0 26 18"><path d="M1 9h19M14 2l10 7-10 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-<img class="shot zoom-hl fit h40" src="assets/half-badge-zoom.png" alt="「半」の印の拡大">
-</figure>
-<div><p>端数のあるロットは、メインの盤でロットのまとまりの<b>下側</b>のマスに「半」の印が付きます。<br>配置図のメインのグリッドでも同じ位置に「半」が出ます。</p>
-<p>メイン以外のエリアでは、配置図の表の「○P 半」の表記で示します。</p></div>
+<figure><img class="shot fit" src="assets/stash-floor.png" alt="退避スペース"><figcaption>例：仕掛品3（333-3334）の7枚を丸ごと退避した場面</figcaption></figure>
+<div><p>組み替えの途中で、ロット全体を選んで退避スペースへ移せます。<br>自動配置で置き場が無い荷物も、退避スペースに入ります。</p>
+<p>退避に残った荷物は、配置図の上段に、見出しが「未定」の欄として載ります。<br>当日は入庫できる荷物から入庫し、空きができたら現場の判断で置きます。</p>
+<figure><img class="shot fit h30" src="assets/sheet-stash-slot.png" alt="未定の欄"></figure></div>
 </div>
-<h2>6.7 「半」の位置を指定する</h2>
-<p>現物の置き方に合わせて、「半」を付けるマスを変えられます。</p>
-<div class="steps">
-<p><span class="num">①</span> 「設定」→「表示設定」で「配置編集で『半』の位置を手動で設定する」をオンにします（初期値はオフ）。</p>
+<h2>6.5 使えない場所を避ける</h2>
+<div class="cols">
+<div><p>「配置不可エリアを設定」を押し、使えないマスをクリック（またはなぞって）指定します。<br>「自動配置を実行」で、そのマスを避けて配置し直します。</p>
+<p class="muted">必須の操作ではありません。手動で配置を整えてもかまいません。<br>手動の調整があるときは、残し方を選ぶ確認画面が出ます（P10）。<br>配置不可のマスに荷物が置いてあると引き継げず、すべて自動配置し直すので、結果を確認します。</p>
+<figure class="fig-tight"><img class="shot fit h12" src="assets/blocked-actions.png" alt="配置不可の操作"></figure></div>
+<figure><img class="shot fit" src="assets/blocked-main.png" alt="配置不可にしたマス"><figcaption>例：メインの1列を配置不可にした場面</figcaption></figure>
 </div>
-<figure class="fig-tight"><img class="shot fit" style="max-width:55%" src="assets/setting-placement.png" alt="配置のしかたの設定"></figure>
-<div class="steps">
-<p><span class="num">②</span> 配置編集で、メインの「半」を付けたいマスを1つだけ選びます。</p>
-<p><span class="num">③</span> 帯に出る「半を設定」を押します。「半」がそのマスへ移ります。</p>
-</div>
-<div class="frame cols3">
-<figure><img class="shot fit h40" src="assets/half-before.png" alt="指定前"><figcaption><span class="num">②</span> 一番上のマスを選ぶ</figcaption></figure>
-<figure><img class="shot fit h40" src="assets/half-button.png" alt="半を設定"><figcaption><span class="num">③</span> 「半を設定」</figcaption></figure>
-<figure><img class="shot fit h40" src="assets/half-after.png" alt="指定後"><figcaption><span class="num">④</span> 「半」が上へ移った</figcaption></figure>
-</div>
-<aside><b>指定を取り消すとき・消えるとき</b>
-<figure class="fig-tight" style="margin:6px 0"><img class="shot fit h12" style="margin:0" src="assets/half-auto-button.png" alt="半を自動に戻す"></figure>
-指定した「半」のマスを選ぶと「半を自動に戻す」になり、押すとそのロットの指定が消えます。<br>そのロットを移動したとき、自動配置を作り直したときも、指定は消えて下側に戻ります。「半を設定」は戻す・進むの対象です。</aside>

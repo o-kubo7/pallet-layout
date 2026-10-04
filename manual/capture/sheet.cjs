@@ -1,4 +1,4 @@
-// P14〜P17 の撮影。s2 の配置図と設定タブ
+// P15〜P18 の撮影。s2 の配置図と設定タブ
 const fs=require('node:fs');
 const path=require('node:path');
 const {execFileSync}=require('node:child_process');
@@ -46,7 +46,7 @@ module.exports=async function(browser){
     return {x:a.left+scrollX-2,y:a.top+scrollY-2,width:a.width+4,height:sv.bottom-a.top+4};
   });
   await clipShot(sc.page,'sheet-half-column',r);
-  // P14 7.1 の拡大図：最下段付近（行番号⑥⑦と「半」の丸、列番号）だけを
+  // P15 7.1 の拡大図：最下段付近（行番号⑥⑦と「半」の丸、列番号）だけを
   // deviceScaleFactor:4 で撮り直す。r と同じ列（横位置）の、下から3行分（⑥⑦＋列番号行）に絞る
   const rZoom=await sc.page.evaluate(r=>{
     const cx0=r.x-scrollX, cx1=cx0+r.width;
