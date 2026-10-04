@@ -54,6 +54,16 @@
   .btn-slip-add{background:#eff6ff;color:#1d4ed8;border:1px solid #2563eb;padding:9px 14px}
   .btn-slip-add-provisional{background:#fff7ed;color:#9a3412;border-color:#f97316}
   .btn-on{background:#fde68a;color:#7c2d12}
+  .carry-dlg{position:fixed;inset:0;z-index:60;background:rgba(17,24,39,.45);
+             display:flex;align-items:center;justify-content:center;padding:16px}
+  .carry-dlg[hidden]{display:none}
+  .carry-box{background:#fff;border-radius:12px;padding:16px;width:100%;max-width:420px;
+             display:flex;flex-direction:column;gap:8px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .carry-title{font-weight:700;font-size:16px}
+  .carry-text{font-size:14px;color:#374151;margin-bottom:4px}
+  .carry-box .btn{text-align:left}
+  .carry-box .btn small{display:block;font-weight:400;font-size:12px;opacity:.85}
+  .carry-box .carry-cancel{text-align:center}
   .btn-mini{background:#fee2e2;color:#b91c1c;border-radius:8px;padding:8px 12px;font-size:14px;
             cursor:pointer;border:1px solid #fca5a5;min-height:40px;min-width:44px}
   .item-delete{width:24px;min-width:24px;height:24px;min-height:24px;padding:0;border:0;border-radius:6px;
@@ -131,7 +141,7 @@
   /* 位置指定モード：列が row / off を持つエリア。1マス幅のトラックを並べた grid で、
      列は grid-column: off+1 / span h に置く。同じ off の列が必ず縦に揃う。
      flex とマージンで組むと .hrow の枠と gap が先行列の本数だけ積み上がり、
-     同じ off の列が13pxずれた（軒下①のマス22とマス20）。
+     同じ off の列が13pxずれた（軒下のマス22とマス20）。
      列の実幅はトラックより約8px広く右へはみ出すが、空きマス1つ（32px）より
      小さいので隣とはぶつからない。
      flip のエリアは列位置を JS で反転して入れるので、CSS 側の反転は要らない。
@@ -1211,6 +1221,18 @@
   <button class="btn btn-primary" onclick="runFromButton()">▶ 自動配置を作成</button>
 </div>
 
+<!-- 手動調整があるときの「▶ 自動配置を作成」の確認（openCarryDialog） -->
+<div id="carryDlg" class="carry-dlg" hidden role="dialog" aria-modal="true" aria-labelledby="carryDlgTitle">
+  <div class="carry-box">
+    <div class="carry-title" id="carryDlgTitle">手動で調整した配置があります</div>
+    <div class="carry-text">伝票の変更をどう反映しますか？</div>
+    <button class="btn btn-primary" onclick="closeCarryDialog('place')">変更分だけ自動配置<small>手で置いた荷物はそのまま。増えた分は空きへ</small></button>
+    <button class="btn btn-ghost" onclick="closeCarryDialog('stash')">変更分を退避スペースへ<small>手で置いた荷物はそのまま。増えた分は手で運ぶ</small></button>
+    <button class="btn btn-ghost" onclick="closeCarryDialog('full')">すべて自動配置し直す<small>手動調整は破棄されます</small></button>
+    <button class="btn btn-ghost carry-cancel" onclick="closeCarryDialog(null)">キャンセル</button>
+  </div>
+</div>
+
 <!-- 品名の候補。開いている入力欄に合わせて位置を決めるので body 直下に1つだけ置く -->
 <div id="acList" class="ac-list" hidden></div>
 
@@ -1240,14 +1262,14 @@ const DEFAULT_SPACES = [
      {h:9, up:1, aisleRows:[8]},
      {h:8, aisleRows:[7]},
      {h:5,aisle:true}]},
-  // 軒下①：現場で振った番号がそのまま配置順。列はどれも柱をまたがない
-  {name:"軒下①", zone:"far", orient:"h", block:99, sheet:"top", cols:[
+  // 軒下：現場で振った番号がそのまま配置順。列はどれも柱をまたがない
+  {name:"軒下", zone:"far", orient:"h", block:99, sheet:"top", cols:[
      {h:8,  row:4, off:0},    // 1-8
      {h:11, row:3, off:0},    // 9-19
      {h:2,  row:4, off:9},    // 20-21（1-8 との間に柱 1 マス）
      {h:3,  row:0, off:9},    // 22-24
      {h:11, row:2, off:0}]},  // 25-35　※ row1 は通路の空き行
-  {name:"軒下②", zone:"far", orient:"h", block:99, sheet:"top", cols:[{h:4},{h:4}]},
+  {name:"軒下奥", zone:"far", orient:"h", block:99, sheet:"top", cols:[{h:4},{h:4}]},
   // PC横：1-4 と 5-12 の間の row1 が通路。右起点。
   // 2026-09-15 の現場確認で、5-12 の左に 1 マス空けて 2 マス置けることが分かった
   {name:"PC横", zone:"near", orient:"h", block:99, sheet:"bottom", cols:[
@@ -1274,9 +1296,9 @@ const DEFAULT_SPACES = [
 ];
 // 運用上ひとつづきに使うエリア。①が埋まったら②へ、と列を連結して連続窓を探す。
 // 設定でスペース名を変えるとこの連結は外れ、別エリア扱いになる。
-const AREA_GROUPS = [["軒下①","軒下②"]];
+const AREA_GROUPS = [["軒下","軒下奥"]];
 // 実際の倉庫の位置関係（ブロック図の並び）。列・行はフロア図のマス目
-//   倉庫外: 5棟壁際＝右上 ／ 下の行は左から 軒下②・出庫口横・軒下①
+//   倉庫外: 5棟壁際＝右上 ／ 下の行は左から 軒下奥・出庫口横・軒下
 //   倉庫内: メイン＝右上 ／ PC横＝左下 ／ EV横＝右下
 // 倉庫外と倉庫内は別コンテナ（#zone-far / #zone-near）に描くので c/r が重なってよい。
 // flip＝実際の図と同じく右寄せにする。位置指定モードのエリアでは
@@ -1284,7 +1306,7 @@ const AREA_GROUPS = [["軒下①","軒下②"]];
 // PC横は実際の図と同じく右寄せ。EV横は実測どおり左起点。
 const FLOOR_POS = {
   "5棟壁際":{c:3,r:1},
-  "軒下②":{c:1,r:2}, "出庫口横":{c:2,r:2}, "軒下①":{c:3,r:2},
+  "軒下奥":{c:1,r:2}, "出庫口横":{c:2,r:2}, "軒下":{c:3,r:2},
   "メイン":{c:2,r:1}, "PC横":{c:1,r:2,flip:true}, "EV横":{c:2,r:2},
 };
 // 「配置図の表」での欄の割り当て。エリア名は SPACES の sheet 属性から引く。
@@ -1366,6 +1388,7 @@ let SPACES = clone(DEFAULT_SPACES);
 let legendPos="left";
 let MASTER = [];
 let lastLots=null, lastColor=null, lastSp=null;
+let lastCarry=null;   // 直前の run() が変更分だけ扱ったときの結果（carryNoteHtml 用）
 let hasResult=false;
 let fracMode=false;   // true なら「満載数P 半」表記
 let sheetEditSilent=false;
@@ -1386,7 +1409,7 @@ let spacesWereReset=false;
 const STORE_KEY={master:"palletApp.master", lots:"palletApp.lots", cell:"palletApp.cell", frac:"palletApp.frac", head:"palletApp.head", zoom:"palletApp.zoom", arrow:"palletApp.arrow", corner:"palletApp.corner", manual:"palletApp.manual", spaces:"palletApp.spaces", spacesResetPending:"palletApp.spacesResetPending", display:"palletApp.display", merge:"palletApp.merge", mix:"palletApp.mix", splitConfirm:"palletApp.splitConfirm", halfManual:"palletApp.halfManual", undoLabel:"palletApp.undoLabel", schedule:"palletApp.schedule", sheetEditSilent:"palletApp.sheetEditSilent", sampleBtns:"palletApp.sampleBtns"};
 // DEFAULT_SPACES をコード側で変えたらこの番号を上げる。
 // 古い保存はバージョン不一致で捨てられ、更新した既定値が既存の端末にも届く。
-const SPACES_SAVE_VERSION = 4;   // 現場の実測で置き場が増えたので上げる
+const SPACES_SAVE_VERSION = 5;   // 軒下①→軒下、軒下②→軒下奥 に改名したので上げる
 // 列の高さ・列数・エリア数の上限。drawZone() は col.h 個の div を innerHTML で
 // 組み立てるので、上限のない値（打ち間違いの桁違い等）はタブを固まらせる。
 // 例外にならないので bootDraw() の try/catch では捕まえられない。
@@ -1510,6 +1533,9 @@ function validSnapshotLots(lots){
     ids.add(lot.id);
     if(!["type","name","lot","code"].every(key=>typeof lot[key]==="string")) return false;
     if(lot.sourceKey!==undefined && typeof lot.sourceKey!=="string") return false;
+    // itemIds は後から足した項目。古い保存データには無いので、あるときだけ確かめる
+    if(lot.itemIds!==undefined &&
+       !(Array.isArray(lot.itemIds) && lot.itemIds.every(id=>typeof id==="string"))) return false;
     return ["qty","snp","pallets","parts","half","rem"].every(key=>
       Number.isSafeInteger(lot[key]) && lot[key]>=0
     ) && lot.snp>0 && lot.parts>0;
@@ -2185,12 +2211,15 @@ function readLots(){
     const key = v.lot ? (v.name+"\u0000"+v.lot) : ("__item\u0000"+v.itemId);
     if(byKey[key]!=null){
       const g=lots[byKey[key]];
-      g.qty+=v.qty; g.pallets+=pallets; g.parts++; g.half+=half;
+      g.qty+=v.qty; g.pallets+=pallets; g.parts++; g.half+=half; g.itemIds.push(v.itemId);
       if(g.type!==v.type && !typeMix.includes(g.code)) typeMix.push(g.code);
     }else{
       byKey[key]=lots.length;
       lots.push({ id:lots.length, type:v.type, name:v.name, lot:v.lot, qty:v.qty, snp:v.snp,
                   code:v.lot||v.name||("行"+(i+1)), sourceKey:key,
+                  // 元の品目行のID。FAX伝票でロット番号を直しても同じ荷物と分かるように持つ
+                  // （変更分だけ配置し直すときの引き当て。matchLots）
+                  itemIds:[v.itemId],
                   pallets:pallets, parts:1, half:half });
     }
   });
@@ -2650,7 +2679,7 @@ function snapshotFitsBlocked(sp,blocked){
 /* 優先順に「どの列を対象に、通路を使うか」の候補を並べる。
    各エリアを (通路なし)→(通路あり) の順で並べることで、
    「メインを使い切ったら軒下より先にメインの通路を使う」が成立する。
-   AREA_GROUPS のエリアは列を連結して1つの候補にする（軒下①が埋まったら②へ）。 */
+   AREA_GROUPS のエリアは列を連結して1つの候補にする（軒下が埋まったら軒下奥へ）。 */
 function areaCandidates(sp){
   // 掲載先が「掲載しない」のエリアは配置図の表に欄が無い。
   // 荷物を置くと「倉庫にはあるのに紙のどこにも無い」ロットになるので、配置の対象から外す。
@@ -2734,8 +2763,10 @@ function fillMix(lot, cols, rem){
   return rem;
 }
 
-function place(lots,allowMix,blocked){
-  const sp=buildWork(blocked);
+// baseSp を渡すと、その盤（荷物が既に載っている）の空きに置く。
+// 変更分だけ配置し直すとき（carryOver）に使う。渡さなければ空の盤から作る
+function place(lots,allowMix,blocked,baseSp){
+  const sp=baseSp||buildWork(blocked);
   const cands=areaCandidates(sp);
   // 充填品を先に処理してメインを確保させる。同じ品名・SNPの異ロットは連続して
   // 処理するので隣接した列を取りやすい。グループ間は最初の入力順を保ち、
@@ -2767,6 +2798,197 @@ function place(lots,allowMix,blocked){
     }
   }
   return sp;
+}
+
+/* ---------- 変更分だけ配置し直す ----------
+   手動調整のあとに伝票を直したとき（仮伝票→FAX伝票など）、手で置いた荷物を
+   そのまま残し、変わった荷物だけを扱う。
+   設計書: docs/superpowers/specs/2026-10-03-carry-manual-layout-design.md */
+
+// 前の配置の荷物と今の荷物を引き当てる。戻り値は Map(今のロットID → 前のロット)。
+// 1) 元の品目行のID（itemIds）が1つでも重なれば同じ荷物。ロット番号を直しても外れない
+// 2) 無ければ 品名＋ロット（lotKey）。itemIds を持たない古い保存データ用
+// 種別（充填品／製品）が変わった荷物は置き場所の区分が変わるので、引き当てない。
+// 前のロットは2回使わない
+function matchLots(oldLots, lots){
+  const used=new Set(), pair=new Map(), done=new Set();
+  const take=(lot,o)=>{
+    used.add(o.id); done.add(lot.id);
+    if(o.type===lot.type) pair.set(lot.id,o);
+  };
+  lots.forEach(lot=>{
+    const ids=Array.isArray(lot.itemIds)?lot.itemIds:[];
+    const o=oldLots.find(x=>!used.has(x.id) && Array.isArray(x.itemIds) &&
+                             x.itemIds.some(id=>ids.includes(id)));
+    if(o) take(lot,o);
+  });
+  lots.forEach(lot=>{
+    if(done.has(lot.id)) return;
+    const o=oldLots.find(x=>!used.has(x.id) && lotKey(x)===lotKey(lot));
+    if(o) take(lot,o);
+  });
+  return pair;
+}
+// 自動配置が列を埋める順番（areaCandidates と同じエリア順。エリアの中は
+// 通常の列→通路の列）。退避は含めない。減った分はこの逆順で空ける
+function placementColumns(sp){
+  const work=sp.filter(s=>s.zone!=="stash");
+  const byName={}; work.forEach(s=>byName[s.name]=s);
+  const done=new Set(), out=[];
+  work.forEach(s=>{
+    if(done.has(s.name)) return;
+    const g=AREA_GROUPS.find(x=>x.includes(s.name));
+    const members=g ? g.map(n=>byName[n]).filter(Boolean) : [s];
+    members.forEach(m=>done.add(m.name));
+    const cols=[];
+    members.forEach(m=>m.cols.forEach(c=>cols.push(c)));
+    cols.filter(c=>!c.aisle).forEach(c=>out.push(c));
+    cols.filter(c=>c.aisle).forEach(c=>out.push(c));
+  });
+  return out;
+}
+/* 前の配置（oldSp / oldLots）を、今の荷物（lots）のIDに付け替えて work に写す。
+   work は buildWork() で作った空の盤。破壊的に書き換える。
+   - 引き当たらなかった前の荷物（削除・種別変更）は写さない＝そのマスが空く
+   - パレット数が減った荷物は、退避→倉庫の「最後に積んだ所」の順に減らす
+   - 増えた分・新しい荷物の分は extra に返す（置くのは呼び出し側）
+   退避スペースの中身は列ごと写さず、枚数を stash に返す（積み直しは putToStash） */
+function carryCells(oldSp, oldLots, lots, work){
+  const pair=matchLots(oldLots, lots);
+  const idOf=new Map();
+  pair.forEach((o,newId)=>idOf.set(o.id,newId));
+  const held={}, stash={};
+  const hold=(id,n)=>{ held[id]=(held[id]||0)+n; };
+  oldSp.forEach(os=>{
+    if(os.zone==="stash"){
+      os.cols.forEach(c=>c.fills.forEach(f=>{
+        if(!idOf.has(f.id)) return;
+        const id=idOf.get(f.id);
+        stash[id]=(stash[id]||0)+f.count; hold(id,f.count);
+      }));
+      return;
+    }
+    const ws=work.find(s=>s.name===os.name); if(!ws) return;
+    os.cols.forEach((oc,ci)=>{
+      const wc=ws.cols[ci]; if(!wc) return;
+      wc.fills=oc.fills.filter(f=>idOf.has(f.id)).map(f=>{
+        const g=Object.assign({},f,{id:idOf.get(f.id)});
+        hold(g.id,g.count);
+        return g;
+      });
+      // 「半」の手動指定もロットIDで持っているので付け替える
+      if(oc.halfMarks && typeof oc.halfMarks==="object"){
+        const hm={};
+        Object.keys(oc.halfMarks).forEach(k=>{
+          const id=idOf.get(Number(k));
+          if(id!=null) hm[String(id)]=clone(oc.halfMarks[k]);
+        });
+        if(Object.keys(hm).length) wc.halfMarks=hm;
+      }
+    });
+  });
+  const order=placementColumns(work).reverse();
+  const extra={};
+  const summary={kept:0, trimmed:0, grown:0, added:0, removed:oldLots.length-pair.size};
+  lots.forEach(lot=>{
+    if(!pair.has(lot.id)){ extra[lot.id]=lot.pallets; summary.added++; return; }
+    const diff=lot.pallets-(held[lot.id]||0);
+    if(diff>0){ extra[lot.id]=diff; summary.grown++; return; }
+    if(diff===0){ summary.kept++; return; }
+    summary.trimmed++;
+    let cut=-diff;
+    // 退避にある分は置き場所が決まっていないので、先に減らす
+    const s=Math.min(cut, stash[lot.id]||0);
+    stash[lot.id]=(stash[lot.id]||0)-s; cut-=s;
+    for(const col of order){
+      if(cut<=0) break;
+      let touched=false;
+      for(let i=col.fills.length-1; i>=0 && cut>0; i--){
+        const f=col.fills[i];
+        if(f.id!==lot.id) continue;
+        const t=Math.min(cut,f.count);
+        f.count-=t; cut-=t; touched=true;
+      }
+      // 減らした列の「半」の手動指定は、どのマスに付いていたか分からなくなるので消す
+      if(touched && col.halfMarks){
+        delete col.halfMarks[String(lot.id)];
+        if(!Object.keys(col.halfMarks).length) delete col.halfMarks;
+      }
+    }
+  });
+  normalizeFills(work);
+  return {stash, extra, summary};
+}
+// 増えた分を、そのロットだけが入っている列の空きに足す（かたまりを崩さない）。
+// 自動配置の候補（areaCandidates）の列だけを見るので、掲載しないエリアや退避には足さない。
+// 戻り値は足しきれなかった枚数
+function topUpLot(sp, lotId, need){
+  const seen=new Set();
+  for(const c of areaCandidates(sp)){
+    for(const col of c.cols){
+      if(need<=0) return 0;
+      if(seen.has(col)) continue;
+      seen.add(col);
+      if(col.aisle || !col.fills.length || !col.fills.every(f=>f.id===lotId)) continue;
+      const put=Math.min(need, autoFreeCount(col,col.blockedRows));
+      if(put<=0) continue;
+      col.fills[col.fills.length-1].count+=put;
+      need-=put;
+    }
+  }
+  return need;
+}
+// 指紋のうちスペース設定の部分だけを比べる。倉庫の形が変わっていたら引き継げない
+function sameSpacesFp(a, b){
+  try{ return JSON.parse(a).spaces===JSON.parse(b).spaces; }
+  catch(e){ return false; }
+}
+/* 保存した手動調整を引き継いで盤を作る。mode は "place"（変更分を空きへ自動配置。
+   入りきらない分は lot.rem に残し、run() が退避へ回す）か "stash"（変更分を全部退避へ）。
+   引き継げないとき（手動調整が無い・スペース設定が変わった・配置不可のマスと重なる）は null。
+   lots の rem を書き換え、lastLots を lots にする（putToStash の上限が lastLots を見るため） */
+function carryOver(lots, mode, allowMix){
+  const shift=activeShift(), old=shift.manual;
+  if(!old || !Array.isArray(old.sp) || !Array.isArray(old.lots)) return null;
+  if(!sameSpacesFp(old.fp, inputFingerprint())) return null;
+  const work=buildWork(shift.blocked);
+  const {stash, extra, summary}=carryCells(old.sp, old.lots, lots, work);
+  if(!snapshotFitsBlocked(work, shift.blocked)) return null;
+  lastLots=lots;
+  summary.placed=0; summary.stashed=0;
+  const rest=[], toStash={};
+  lots.forEach(lot=>{
+    lot.rem=0;
+    let need=extra[lot.id]||0;
+    if(need<=0) return;
+    if(mode==="stash"){ toStash[lot.id]=need; summary.stashed+=need; return; }
+    need=topUpLot(work, lot.id, need);
+    if(need>0) rest.push(Object.assign({}, lot, {pallets:need}));
+  });
+  if(rest.length){
+    place(rest, allowMix, shift.blocked, work);
+    rest.forEach(r=>{ const lot=lots.find(l=>l.id===r.id); if(lot) lot.rem=r.rem; });
+  }
+  lots.forEach(lot=>{
+    if(mode==="place") summary.placed+=(extra[lot.id]||0)-lot.rem;
+    const n=(stash[lot.id]||0)+(toStash[lot.id]||0);
+    if(n>0) putToStash(work, lot.id, n);
+  });
+  return {sp:work, summary};
+}
+// 引き継いだ結果の知らせ。run() のあとに #messages へ足す
+function carryNoteHtml(summary, mode){
+  if(!summary) return "";
+  const parts=[];
+  if(summary.kept) parts.push(`そのまま ${summary.kept}件`);
+  if(summary.trimmed) parts.push(`減らした ${summary.trimmed}件`);
+  if(summary.grown) parts.push(`増えた ${summary.grown}件`);
+  if(summary.added) parts.push(`新しい荷物 ${summary.added}件`);
+  if(summary.removed) parts.push(`消した荷物 ${summary.removed}件`);
+  const how = mode==="stash"
+    ? (summary.stashed ? `増えた分 ${summary.stashed}P を退避スペースへ移しました。` : "")
+    : (summary.placed ? `増えた分 ${summary.placed}P を空きへ配置しました。` : "");
+  return `<div class="msg ok">✅ 手動調整を残して、変更分だけ反映しました（${parts.join("・")||"変更なし"}）。${how}</div>`;
 }
 
 /* ---------- 実行 ---------- */
@@ -2893,7 +3115,10 @@ function redraw(){
   renderResult(lastLots, unknown, typeMix);
 }
 
-function run(goMap,deferSave=false){
+// carryMode に "place" / "stash" を渡すと、保存した手動調整を残して変更分だけ扱う（carryOver）。
+// 引き継げなければ今までどおり作り直す。結果は lastCarry に残す（runFromButton が知らせに使う）
+function run(goMap,deferSave=false,carryMode=null){
+  lastCarry=null;
   const {lots, unknown, typeMix}=readLots();
   if(lots.length===0 && unknown.length===0){ alert("荷物を1件以上入力してください。"); return; }
 
@@ -2920,13 +3145,21 @@ function run(goMap,deferSave=false){
   // 「▶ 自動配置を作成」で倉庫へ戻ってしまうと、退避そのものが用を成さない。
   // ロットIDは入力行の順番で変わるので、readLots() と同じ 品名＋ロット で引き当てる。
   // 入力変更で表示用globalsが空でも、現在時間帯の保存配置から退避を引き継ぐ。
-  const savedPlacement=activeShift().manual || activeShift().result;
-  const keepStash=stashCounts(savedPlacement?savedPlacement.sp:null, savedPlacement?savedPlacement.lots:null);
-  lots.forEach(l=>{
-    const n=keepStash[lotKey(l)]||0;
-    if(n>0){ l.stashed=Math.min(n,l.pallets); l.pallets-=l.stashed; }
-  });
-  lastSp=place(lots,allowMix,activeShift().blocked); lastLots=lots; hasResult=true;
+  // 変更分だけ扱うときは、退避の引き継ぎも carryOver() の中で済ませる
+  const carried=carryMode ? carryOver(lots,carryMode,allowMix) : null;
+  if(carried){
+    lastSp=carried.sp; lastLots=lots; hasResult=true;
+    lastCarry={mode:carryMode, summary:carried.summary};
+  }else{
+    if(carryMode) lastCarry={mode:carryMode, failed:true};
+    const savedPlacement=activeShift().manual || activeShift().result;
+    const keepStash=stashCounts(savedPlacement?savedPlacement.sp:null, savedPlacement?savedPlacement.lots:null);
+    lots.forEach(l=>{
+      const n=keepStash[lotKey(l)]||0;
+      if(n>0){ l.stashed=Math.min(n,l.pallets); l.pallets-=l.stashed; }
+    });
+    lastSp=place(lots,allowMix,activeShift().blocked); lastLots=lots; hasResult=true;
+  }
   clearHistory();          // 配置を作り直したので、前の履歴は使えない
   // 倉庫へ置く分だけを place() に渡したので、退避分をここで積み戻し、
   // 合計表示のためにパレット数も元に戻す。
@@ -2948,7 +3181,9 @@ function run(goMap,deferSave=false){
   lastFp=inputFingerprint();
   activeShift().slips=readSlips();
   activeShift().result={fp:lastFp,lots:clone(lastLots),sp:snapshotSpaces(lastSp)};
-  activeShift().manual=null;
+  // 引き継いだ盤は手で置いた位置を含むので、手動調整として残す。
+  // 残さないと、次に伝票を直したとき引き継ぐ元が無くなる
+  activeShift().manual=carried ? {fp:lastFp,lots:clone(lastLots),sp:snapshotSpaces(lastSp)} : null;
   activeShift().resultFingerprint=lastFp;
   if(!deferSave) saveSchedule();
 
@@ -3060,7 +3295,7 @@ function cellsOf(col,blockedRows,options){
 }
 function cellLayoutOptions(space,col){
   const main=space && space.name==="メイン";
-  const nokishita=space && space.name==="軒下①";
+  const nokishita=space && space.name==="軒下";
   const topThree=nokishita && col && col.row===0 && col.h===3;
   return {fromEnd:nokishita&&!topThree, splitEnds:main};
 }
@@ -3413,7 +3648,7 @@ function selCounts(cells){
 }
 
 // 運用上ひとつづきに使うエリア（AREA_GROUPS）は、分割の判定でも1つの束として扱う。
-// 束にしないと 軒下①から軒下② への移動が毎回「2か所に分かれます」になる。
+// 束にしないと 軒下から軒下奥 への移動が毎回「2か所に分かれます」になる。
 function areaKeyOf(name){
   const g=AREA_GROUPS.find(x=>x.includes(name));
   return g?g.join("+"):name;
@@ -4025,8 +4260,15 @@ function runFromButton(options={}){
   const validation=validateSlips();
   if(validation.badRows.length || validation.emptySlips.length){ showLotErrors(validation); return; }
 
-  if(hasManual() && !confirm("手動調整を破棄して自動配置し直します。よろしいですか？")) return;
-
+  // 手動調整があるときは、残し方を選んでもらう（変更分だけ配置／変更分を退避／作り直す）
+  if(hasManual()){
+    openCarryDialog(mode=>{ if(mode) runWithChoice(goMap, mode==="full" ? null : mode); });
+    return;
+  }
+  runWithChoice(goMap, null);
+}
+// runFromButton() の続き。carryMode は run() にそのまま渡す
+function runWithChoice(goMap, carryMode){
   // 未登録の品目は、何を入れるか見せてから登録する。
   // 打ち間違いをそのままマスタへ入れると、以後その品名のSNP欄がプルダウンに化ける
   const add=unknownItems();
@@ -4040,9 +4282,14 @@ function runFromButton(options={}){
     }
   }
 
-  run(goMap);
+  run(goMap, false, carryMode);
 
   // run() の中の renderResult() が #messages を上書きするので、そのあとに足す。
+  if(lastCarry){
+    document.getElementById("messages").innerHTML += lastCarry.failed
+      ? `<div class="msg warn">⚠ 倉庫の設定や配置不可のマスが変わっていて手動調整を引き継げないため、すべて自動配置し直しました。</div>`
+      : carryNoteHtml(lastCarry.summary, lastCarry.mode);
+  }
   // ロットを動かすと redraw() → renderResult() でこの行は消えるが、
   // 登録そのものは設定タブに残るので実害は無い
   if(added.length){
@@ -4051,6 +4298,26 @@ function runFromButton(options={}){
       `<div class="msg ok">✅ 「設定」タブに登録しました：${names}</div>`;
   }
 }
+
+/* 手動調整の残し方を選ぶ画面。done(mode) の mode は "place" / "stash" / "full"、
+   キャンセルは null。confirm() では3択にできないので画面内に出す */
+let carryDialogDone=null;
+function openCarryDialog(done){
+  carryDialogDone=done;
+  const d=document.getElementById("carryDlg");
+  d.hidden=false;
+  const first=d.querySelector("button");
+  if(first) first.focus();
+}
+function closeCarryDialog(mode){
+  const d=document.getElementById("carryDlg");
+  d.hidden=true;
+  const done=carryDialogDone; carryDialogDone=null;
+  if(done) done(mode||null);
+}
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape" && carryDialogDone) closeCarryDialog(null);
+});
 
 function wrapAt(x,y){
   const el=document.elementFromPoint(x,y);
@@ -5528,7 +5795,7 @@ function applySheetZoom(){
 window.addEventListener("resize", ()=>{ if(sheetZoom==="auto") applySheetZoom(); });
 
 // ロットの最後のマスがあるエリア名。分割配置は lastSp の並び順
-// （メイン→軒下①→軒下②→PC横→EV横→出庫口横→5棟壁際）に
+// （メイン→軒下→軒下奥→PC横→EV横→出庫口横→5棟壁際）に
 // 詰めていくので、そのロットのマスを持つ最後のスペースが末尾になる。
 function tailAreaOf(id){
   let last=null;
@@ -5628,9 +5895,9 @@ function sheetSlots(tier){
    欄数超過の警告と、救済の告知の両方がここを通る。 */
 function lotsIn(slots){ return slots.reduce((a,g)=>a+(g.members?g.members.length:1),0); }
 /* 欄の注釈を、置き場所のエリア名だけから作る。
-   sheetEntries() は段ごとの基準エリア（上段なら軒下①）を注釈から省くが、
+   sheetEntries() は段ごとの基準エリア（上段なら軒下）を注釈から省くが、
    下段へ回した欄では注釈が唯一の場所情報になるので、基準を省かずに作り直す。
-   混載が1列に複数ロットを詰めるため、注釈が空の軒下①の欄が回ることは実際に起こる。
+   混載が1列に複数ロットを詰めるため、注釈が空の軒下の欄が回ることは実際に起こる。
    areas が空になることは sheetEntries() の作り上ありえない（欄は必ず1つ以上のエリアに置かれる）。
    空文字を返す分岐は保険で、ここが空のまま回ると注釈のない欄が紙に出る。 */
 function slotAreaNote(areas){ return (areas && areas.length) ? "※"+areas.join("・") : ""; }
@@ -5674,8 +5941,8 @@ function topHeadGroups(entries, count, baseArea){
   // 日常の大半はここに落ちるので、現場が毎日見る紙の見た目を変えない。
   // 逆にこの条件を「グループが1つ」だけに緩めると、出庫口横だけ・退避だけの日にも
   // 「軒下」と出て置き場所が紙から消える（設計書 §3-3）。
-  // さらに names.length===1 も必須にする。設計書 §3-3 の表は「軒下①・②に
-  // またがる欄だけ」の日の見出しを「軒下①・軒下②」と決めていて、またがる欄の
+  // さらに names.length===1 も必須にする。設計書 §3-3 の表は「軒下・軒下奥に
+  // またがる欄だけ」の日の見出しを「軒下・軒下奥」と決めていて、またがる欄の
   // エリアは見出しからも読めることを求めている。§3-3 の文章の条件だけでは
   // この表と食い違うので、表（とそれに合わせたテスト）に従って条件を足した。
   if(!groups.length || (groups.length===1 && baseArea && groups[0].key===baseArea && groups[0].names.length===1)){

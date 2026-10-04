@@ -64,7 +64,7 @@ function buildSheetPlacementRuntime(scenario) {
   return runtime(
     tier => (tier === "top" ? scenario.slots.top : scenario.slots.bottom).map(entry),
     () => scenario.slots.stash.map(entry),
-    tier => tier === "bottom" ? [scenario.baseArea, "PC横", "EV横"] : ["軒下①", "軒下②"],
+    tier => tier === "bottom" ? [scenario.baseArea, "PC横", "EV横"] : ["軒下", "軒下奥"],
     areas => `※${areas.join("・")}`,
     false
   );

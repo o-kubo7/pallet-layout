@@ -91,7 +91,7 @@ test("自動: half>=2 は下から順に付け、足りなければ前の列へ�
 test("自動: 末尾エリアがメイン以外なら、手動指定が無い限りメインに付けない", () => {
   const { halfCells } = halfFns();
   const sp = main([{ h: 4, fills: [{ id: 0, count: 2 }] }]);
-  assert.deepEqual(keys(halfCells(sp, [{ id: 0, half: 1 }], { manualOn: true, areaOf: () => "軒下①" })), []);
+  assert.deepEqual(keys(halfCells(sp, [{ id: 0, half: 1 }], { manualOn: true, areaOf: () => "軒下" })), []);
 });
 
 test("手動: 指定位置に付け、manual:true を返す", () => {
@@ -105,7 +105,7 @@ test("手動: 指定位置に付け、manual:true を返す", () => {
 test("手動: 末尾エリアがメイン以外でも、手動指定があればメインに付ける", () => {
   const { halfCells } = halfFns();
   const sp = main([{ h: 4, fills: [{ id: 0, count: 2 }], halfMarks: { "0": [{ k: 0, seq: 1 }] } }]);
-  assert.deepEqual(keys(halfCells(sp, [{ id: 0, half: 1 }], { manualOn: true, areaOf: () => "軒下①" })), ["0_1"]);
+  assert.deepEqual(keys(halfCells(sp, [{ id: 0, half: 1 }], { manualOn: true, areaOf: () => "軒下" })), ["0_1"]);
 });
 
 test("手動: 一部だけ指定したら残りは自動で埋める", () => {
@@ -194,7 +194,7 @@ test("dropHalfMarks: 指定した列の、そのロットの指定だけを消�
     { h: 4, fills: [], halfMarks: { "0": [{ k: 1, seq: 3 }] } },
     { h: 4, fills: [], halfMarks: { "0": [{ k: 2, seq: 4 }] } },
   ])];
-  dropHalfMarks(spaces, 0, [MAIN + "|0", MAIN + "|1", "軒下①|0"]);
+  dropHalfMarks(spaces, 0, [MAIN + "|0", MAIN + "|1", "軒下|0"]);
   assert.deepEqual(spaces[0].cols[0].halfMarks, { "1": [{ k: 0, seq: 2 }] });
   assert.equal(spaces[0].cols[1].halfMarks, undefined);
   assert.deepEqual(spaces[0].cols[2].halfMarks, { "0": [{ k: 2, seq: 4 }] });
@@ -207,11 +207,11 @@ test("halfAreaOf: 設定ONでメインに有効な手動指定があればメイ
       .map(functionSource).join("\n") + "; return halfAreaOf;"
   )([
     { name: "メイン", cols: [{ h: 4, fills: [{ id: 0, count: 2 }], halfMarks: { "0": [{ k: 0, seq: 1 }] } }] },
-    { name: "軒下①", cols: [{ h: 4, fills: [{ id: 0, count: 1 }] }] },
-  ], enabled, () => "軒下①");
+    { name: "軒下", cols: [{ h: 4, fills: [{ id: 0, count: 1 }] }] },
+  ], enabled, () => "軒下");
   assert.equal(make(true)(0), "メイン");
-  assert.equal(make(false)(0), "軒下①");
-  assert.equal(make(true)(9), "軒下①");
+  assert.equal(make(false)(0), "軒下");
+  assert.equal(make(true)(9), "軒下");
 });
 
 test("表の「P 半」は halfAreaOf で決める", () => {
@@ -323,7 +323,7 @@ const oneCol = () => [{ name: "メイン", cols: [{ h: 7, fills: [{ id: 0, count
 test("半ボタン: 設定OFF・複数選択・メイン外・half=0・古い配置では出さない", () => {
   assert.equal(loadHalfBtn({ spaces: oneCol(), lots: [{ id: 0, half: 1 }], cells: ["メイン|0|2"], enabled: false }).halfBtnState(), null);
   assert.equal(loadHalfBtn({ spaces: oneCol(), lots: [{ id: 0, half: 1 }], cells: ["メイン|0|1", "メイン|0|2"] }).halfBtnState(), null);
-  assert.equal(loadHalfBtn({ spaces: [{ name: "軒下①", cols: [{ h: 7, fills: [{ id: 0, count: 5 }] }] }], lots: [{ id: 0, half: 1 }], cells: ["軒下①|0|2"] }).halfBtnState(), null);
+  assert.equal(loadHalfBtn({ spaces: [{ name: "軒下", cols: [{ h: 7, fills: [{ id: 0, count: 5 }] }] }], lots: [{ id: 0, half: 1 }], cells: ["軒下|0|2"] }).halfBtnState(), null);
   assert.equal(loadHalfBtn({ spaces: oneCol(), lots: [{ id: 0, half: 0 }], cells: ["メイン|0|2"] }).halfBtnState(), null);
   assert.equal(loadHalfBtn({ spaces: oneCol(), lots: [{ id: 0, half: 1 }], cells: ["メイン|0|2"], fresh: false }).halfBtnState(), null);
 });
