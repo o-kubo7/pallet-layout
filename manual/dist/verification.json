@@ -94,7 +94,11 @@
     "print": {
       "width": 1600,
       "height": 1131
-    }
+    },
+    "topHeads": [
+      "軒下",
+      "軒下奥"
+    ]
   },
   "overview": {
     "input": {

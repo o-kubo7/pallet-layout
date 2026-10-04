@@ -5,6 +5,7 @@ const {execFileSync}=require('node:child_process');
 const P=require('../lib/paths.cjs');
 const {openScene,loadState,gotoTab,clipShot,unionRect}=require('../lib/scene.cjs');
 const {expect,record}=require('../lib/verify.cjs');
+const S=require('../lib/states.cjs');
 // 倉庫外（軒下）の列。#zone-far 側は #zone-near と同じ colwrap の作りなので
 // data-space・data-col で選べる（capture/edit.cjs の col() と同じやり方）
 const FAR_COL=c=>`#zone-far .colwrap[data-space="軒下"][data-col="${c}"]`;
@@ -189,6 +190,19 @@ module.exports=async function(browser){
   expect(warn===0,'配置図に警告が出ている（1ページに収まらない可能性）');
   fs.rmSync(tmpPdf);
   await sc.context.close();
+
+  // 配置図の上段の見出し（軒下・軒下奥）に新しいエリア名が出ることを確かめる（撮影はしない）。
+  // sheet-top.png の「軒下」は荷物が先頭エリアだけの日の固定ラベル（topHeadGroups）で、
+  // 軒下奥の名前が出ることの証明にならない。s2 の手動調整を外して自動配置し直すと
+  // 製品1 8P が軒下奥に入るので、見出しにまたがるエリア名が出る。
+  // 見出しは td.ttl[data-ek="top|g<グループ番号>|head"]（files/index.html の行1。
+  // 欄のキー top|<位置>|name などとは別の形）。innerText で表示文字を読む
+  const scHead=await openScene(browser,{state:S.stripManual(s2),tab:'配置図'});
+  out.topHeads=await scHead.page.evaluate(()=>
+    [...document.querySelectorAll('#sheetView td[data-ek^="top|g"][data-ek$="|head"]')].map(td=>td.innerText.trim()));
+  expect(out.topHeads.some(t=>t.includes('軒下奥')),'配置図の上段の見出しに「軒下奥」が出ていない',out.topHeads);
+  expect(!out.topHeads.some(t=>t.includes('軒下①')||t.includes('軒下②')),'配置図の上段の見出しに旧名が残っている',out.topHeads);
+  await scHead.context.close();
 
   // 設定タブ
   sc=await openScene(browser,{state:s2,tab:'設定'});
