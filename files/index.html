@@ -1743,10 +1743,37 @@ function addMasterRow(d){
   const tb=document.querySelector("#masterTable tbody");
   const tr=document.createElement("tr");
   tr.innerHTML=`
-    <td><input value="${esc(d.name)}" placeholder="品名" oninput="onMasterChange()"></td>
+    <td><input value="${esc(d.name)}" placeholder="品名" oninput="onMasterChange()" onchange="setTimeout(sortMasterRows)"></td>
     <td><input type="number" inputmode="numeric" min="1" value="${esc(d.snp)}" placeholder="SNP" oninput="onMasterChange()"></td>
     <td><button class="btn-mini" onclick="this.closest('tr').remove();onMasterChange()">削除</button></td>`;
   tb.appendChild(tr);
+}
+// 品名の並べ方。伝票入力の候補（acNames）と同じ順にする
+function compareMasterName(a,b){
+  const ga=/^[A-Za-z]/.test(a)?0:1, gb=/^[A-Za-z]/.test(b)?0:1;
+  if(ga!==gb) return ga-gb;
+  return a.localeCompare(b,"ja",{numeric:true});
+}
+/* 品名の並びから、並べ替え後の行番号の順を返す。品名が空の行は末尾。
+   sort は安定なので、同じ品名の行は元の順のまま残る。
+   同じ品名でSNPが複数あるときは先の行のSNPが既定値になるので、この順を崩さない */
+function masterRowOrder(names){
+  return names.map((name,i)=>({name:name.trim(),i}))
+    .sort((a,b)=>(!a.name||!b.name) ? (!a.name)-(!b.name) : compareMasterName(a.name,b.name))
+    .map(o=>o.i);
+}
+/* 品目マスタの行を品名順に並べ替える。品名の入力を終えたときに呼ぶ。
+   change はフォーカスが移る前に起きるので setTimeout で移った後に動かし、
+   行を動かして外れたフォーカスを戻す */
+function sortMasterRows(){
+  const tb=document.querySelector("#masterTable tbody");
+  const rows=[...tb.rows];
+  const order=masterRowOrder(rows.map(tr=>tr.querySelector("input").value));
+  if(order.every((v,i)=>v===i)) return;
+  const focused=document.activeElement;
+  order.forEach(i=>tb.appendChild(rows[i]));
+  if(focused && tb.contains(focused) && document.activeElement!==focused) focused.focus();
+  onMasterChange();
 }
 function readMaster(){
   const list=[];
@@ -2399,11 +2426,7 @@ function acVisible(){ return !!acInput && !acBox().hidden; }
    ひらがな・カタカナは五十音で正しく並ぶ。登録順のままだと探しにくいのでここで整える */
 function acNames(){
   const names=[]; MASTER.forEach(m=>{ if(!names.includes(m.name)) names.push(m.name); });
-  return names.sort((a,b)=>{
-    const ga=/^[A-Za-z]/.test(a)?0:1, gb=/^[A-Za-z]/.test(b)?0:1;
-    if(ga!==gb) return ga-gb;
-    return a.localeCompare(b,"ja",{numeric:true});
-  });
+  return names.sort(compareMasterName);
 }
 // フォーカスしたとき。まだ何も選んでいない状態で開く
 function acOpen(inp){
@@ -4251,6 +4274,7 @@ function unknownItems(){
 function registerItems(list){
   if(!list.length) return;
   list.forEach(m=>addMasterRow(m));
+  sortMasterRows();
   onMasterChange();   // 保存・候補更新・パレット数の再計算
 }
 // 「▶ 自動配置を作成」の入口。手動調整があるときだけ確認する。
